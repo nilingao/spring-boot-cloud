@@ -9,7 +9,6 @@ import cn.com.tzy.springbootstarterfreeswitch.common.socket.AgentCommon;
 import cn.com.tzy.springbootstarterfreeswitch.enums.fs.AgentStateEnum;
 import cn.com.tzy.springbootstarterfreeswitch.model.fs.AgentVoInfo;
 import cn.com.tzy.springbootstarterfreeswitch.redis.RedisService;
-import cn.com.tzy.springbootstarterfreeswitch.service.SipService;
 import cn.com.tzy.springbootstartersocketio.pool.EventListener;
 import cn.com.tzy.springbootstartersocketio.pool.NamespaceListener;
 import com.corundumstudio.socketio.AckRequest;
@@ -52,7 +51,6 @@ public class AgentInStatusEvent implements EventListener<AgentInStatusData> {
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,RestResult.result(RespCode.CODE_2.getValue(),String.format("客服 ： %s ,未登录",agentKey)));
             return;
         }else if(data.getUpdateStatus() == null || data.getUpdateStatus()== ConstEnum.Flag.NO.getValue()){
-            SipService.getMediaServerService().findMediaServerForMinimumLoad(agentVoInfo);//刷新缓存
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,RestResult.result(RespCode.CODE_0.getValue(),"客服信息获取成功",agentVoInfo));
             return;
         }
@@ -60,7 +58,6 @@ public class AgentInStatusEvent implements EventListener<AgentInStatusData> {
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,RestResult.result(RespCode.CODE_2.getValue(),"客服当前无法更新状态"));
             return;
         }
-        SipService.getMediaServerService().findMediaServerForMinimumLoad(agentVoInfo);//刷新缓存
         //更变状态为空闲状态
         if(Arrays.asList(AgentStateEnum.LOGIN, AgentStateEnum.BUSY_OTHER).contains(agentVoInfo.getAgentState())){
             agentVoInfo.setAgentState(AgentStateEnum.READY);

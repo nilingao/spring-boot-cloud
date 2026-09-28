@@ -38,3 +38,5 @@ logs
 .fastRequest/
 .codex
 */spring-boot-face/conf/
+.qoder
+.codegraph

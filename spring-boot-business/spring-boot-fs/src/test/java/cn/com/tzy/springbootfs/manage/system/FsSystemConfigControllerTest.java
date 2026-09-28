@@ -27,7 +27,6 @@ class FsSystemConfigControllerTest {
     private MockMvc mockMvc;
 
     private PlatformManageService platformService;
-    private MediaServerManageService mediaServerService;
     private FsGatewayManageService fsGatewayService;
     private RouteGatewayManageService routeGatewayService;
     private RouteGroupManageService routeGroupService;
@@ -36,7 +35,6 @@ class FsSystemConfigControllerTest {
     @BeforeEach
     void setUp() {
         platformService = mock(PlatformManageService.class);
-        mediaServerService = mock(MediaServerManageService.class);
         fsGatewayService = mock(FsGatewayManageService.class);
         routeGatewayService = mock(RouteGatewayManageService.class);
         routeGroupService = mock(RouteGroupManageService.class);
@@ -44,7 +42,6 @@ class FsSystemConfigControllerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                 new PlatformManageController(platformService),
-                new MediaServerManageController(mediaServerService),
                 new FsGatewayManageController(fsGatewayService),
                 new RouteGatewayManageController(routeGatewayService),
                 new RouteGroupManageController(routeGroupService),
@@ -74,25 +71,6 @@ class FsSystemConfigControllerTest {
     }
 
     // ---- /api/fs/media_server ----
-
-    @Test
-    void mediaServerPageUsesPost() throws Exception {
-        when(mediaServerService.page(any())).thenReturn(PageResult.result(RespCode.CODE_0.getValue(), "ok"));
-        mockMvc.perform(post("/api/fs/media_server/page").contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void mediaServerDefaultUsesPost() throws Exception {
-        when(mediaServerService.setDefault("s1")).thenReturn(RestResult.result(RespCode.CODE_0.getValue(), "ok"));
-        mockMvc.perform(post("/api/fs/media_server/default").param("id", "s1")).andExpect(status().isOk());
-    }
-
-    @Test
-    void mediaServerRemoveUsesDelete() throws Exception {
-        when(mediaServerService.remove("s1")).thenReturn(RestResult.result(RespCode.CODE_0.getValue(), "ok"));
-        mockMvc.perform(delete("/api/fs/media_server/remove").param("id", "s1")).andExpect(status().isOk());
-    }
 
     // ---- /api/fs/fs_gateway ----
 

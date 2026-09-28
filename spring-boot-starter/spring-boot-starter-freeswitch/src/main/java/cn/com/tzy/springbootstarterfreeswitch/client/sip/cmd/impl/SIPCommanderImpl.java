@@ -1,7 +1,6 @@
 package cn.com.tzy.springbootstarterfreeswitch.client.sip.cmd.impl;
 
 import cn.com.tzy.springbootcomm.common.vo.RespCode;
-import cn.com.tzy.springbootstarterfreeswitch.client.media.client.MediaClient;
 import cn.com.tzy.springbootstarterfreeswitch.client.sip.SipServer;
 import cn.com.tzy.springbootstarterfreeswitch.client.sip.cmd.SIPCommander;
 import cn.com.tzy.springbootstarterfreeswitch.client.sip.cmd.SipSendMessage;
@@ -11,15 +10,11 @@ import cn.com.tzy.springbootstarterfreeswitch.enums.sip.TransportType;
 import cn.com.tzy.springbootstarterfreeswitch.exception.SsrcTransactionNotFoundException;
 import cn.com.tzy.springbootstarterfreeswitch.model.fs.AgentVoInfo;
 import cn.com.tzy.springbootstarterfreeswitch.redis.RedisService;
-import cn.com.tzy.springbootstarterfreeswitch.redis.impl.sip.SsrcConfigManager;
 import cn.com.tzy.springbootstarterfreeswitch.redis.impl.sip.SsrcTransactionManager;
 import cn.com.tzy.springbootstarterfreeswitch.redis.subscribe.sip.message.SipMessageHandle;
 import cn.com.tzy.springbootstarterfreeswitch.redis.subscribe.sip.message.SipSubscribeEvent;
-import cn.com.tzy.springbootstarterfreeswitch.service.SipService;
-import cn.com.tzy.springbootstarterfreeswitch.service.sip.MediaServerVoService;
 import cn.com.tzy.springbootstarterfreeswitch.vo.result.RestResultEvent;
 import cn.com.tzy.springbootstarterfreeswitch.vo.sip.EventResult;
-import cn.com.tzy.springbootstarterfreeswitch.vo.sip.MediaServerVo;
 import cn.com.tzy.springbootstarterfreeswitch.vo.sip.SipTransactionInfo;
 import cn.com.tzy.springbootstarterfreeswitch.vo.sip.SsrcTransaction;
 import gov.nist.javax.sip.message.SIPResponse;
@@ -48,34 +43,26 @@ public class SIPCommanderImpl implements SIPCommander {
     @Override
     public void streamByeCmd(SipServer sipServer, AgentVoInfo agentVoInfo, String stream, String callId, String typeName, SipSubscribeEvent okEvent, SipSubscribeEvent errorEvent) throws InvalidArgumentException, SipException, ParseException, SsrcTransactionNotFoundException {
         SsrcTransactionManager ssrcTransactionManager = RedisService.getSsrcTransactionManager();
-        MediaServerVoService mediaServerService = SipService.getMediaServerService();
-        SsrcTransaction ssrcTransaction = ssrcTransactionManager.getParamOne(agentVoInfo.getAgentKey(), callId, stream,typeName);
-        if(ssrcTransaction == null){
-            log.info("[视频流停止]未找到视频流信息，设备：{}, 流ID: {}", agentVoInfo.getDeviceId(), stream);
-            if(errorEvent != null){
-                errorEvent.response(new EventResult<RestResultEvent>(new RestResultEvent(RespCode.CODE_2.getValue(),"未找到视频流信息")));
+        SsrcTransaction ssrcTransaction = ssrcTransactionManager.getParamOne(agentVoInfo.getAgentKey(), callId, stream, typeName);
+        if (ssrcTransaction == null) {
+            log.info("[视频流停止] 未找到视频流信息，设备：{}, 流ID: {}", agentVoInfo.getDeviceId(), stream);
+            if (errorEvent != null) {
+                errorEvent.response(new EventResult<>(new RestResultEvent(RespCode.CODE_2.getValue(), "未找到视频流信息")));
             }
             return;
         }
         SipTransactionInfo sipTransactionInfo = ssrcTransaction.getSipTransactionInfo();
-        if(sipTransactionInfo == null){
-            log.info("[视频流停止]当前流未请求成功，无法关闭，设备：{}, 流ID: {}", agentVoInfo.getDeviceId(), stream);
-            if(errorEvent != null){
-                errorEvent.response(new EventResult<RestResultEvent>(new RestResultEvent(RespCode.CODE_2.getValue(),"当前流未请求成功，无法关闭")));
+        if (sipTransactionInfo == null) {
+            log.info("[视频流停止] 当前流未请求成功，无法关闭，设备：{}, 流ID: {}", agentVoInfo.getDeviceId(), stream);
+            if (errorEvent != null) {
+                errorEvent.response(new EventResult<>(new RestResultEvent(RespCode.CODE_2.getValue(), "当前流未请求成功，无法关闭")));
             }
             return;
         }
-        SsrcConfigManager ssrcConfigManager = RedisService.getSsrcConfigManager();
-        ssrcConfigManager.releaseSsrc(ssrcTransaction.getMediaServerId(),ssrcTransaction.getSsrc());
-        ssrcTransactionManager.remove(agentVoInfo.getAgentKey(),ssrcTransaction.getStream());
+        // 清理通话状态（纯 SIP 模式不需要 ZLM SSRC 释放）
+        ssrcTransactionManager.remove(agentVoInfo.getAgentKey(), ssrcTransaction.getStream());
         String localIp = sipServer.getLocalIp(agentVoInfo.getFsHost());
         SipConfigProperties sipConfigProperties = sipServer.getSipConfigProperties();
-        MediaServerVo mediaServerVo = mediaServerService.findOnLineMediaServerId(ssrcTransaction.getMediaServerId());
-        if(mediaServerVo != null){
-            MediaClient.closeRtpServer(mediaServerVo,ssrcTransaction.getStream());
-            MediaClient.closeStreams(mediaServerVo,"__defaultVhost__",ssrcTransaction.getApp(),ssrcTransaction.getStream());
-        }
-        //构建器
         Request request = SIPRequestProvider.builder(sipServer, null, Request.BYE,null)
                 .createSipURI(agentVoInfo.getCalled(), agentVoInfo.getRemoteAddress())
                 .addViaHeader(localIp, sipConfigProperties.getPort(),TransportType.UDP.getName(), false)
