@@ -4,7 +4,19 @@ trigger: always_on
 
 # 逆龙傲（spring-boot-cloud）开发基线铁律
 
-> 常驻最小集。项目概况、完整规范、缺失清单、fs 表归属见 `.qoder/rules/project-conventions.md`。
+> 常驻最小集。完整规范已按章拆为 9 个按需分册（同目录），**需要时才加载对应那一份**：
+>
+> | 分册 | 什么时候看 |
+> |---|---|
+> | `project-overview.md` | 技术栈与版本、模块划分、运行环境、业务定位 |
+> | `naming-conventions.md` | 类/包/URL/表/字段/索引/枚举命名、历史拼写可改否 |
+> | `architecture-patterns.md` | 功能落哪个模块、是否反模式、依赖、配置、Git、部署 |
+> | `coding-standards.md` | 响应/主键/审计/时间/Lombok/分页/查询构造/树、注释文档 |
+> | `layered-templates.md` | 照抄 Service/Controller/Mapper XML/Convert/Feign 骨架 |
+> | `security-validation.md` | 参数校验、网关鉴权、限流、锁、租户、脱敏 |
+> | `exception-logging.md` | 异常与错误码、日志切面、操作日志、缓存事件 |
+> | `testing-database.md` | 写/跑测试、建表 SQL 与表结构 |
+> | `gaps-and-fs-tables.md` | 项目里根本不存在的机制（别编）、fs 41 张表页面归属 |
 
 ## 1. 响应与错误（不可违反）
 
@@ -133,4 +145,4 @@ MapStruct Convert + `@DeleteMapping("remove")` + TDD。
 金额字段约定、防重提交注解、注解式分布式锁（Redisson）、方法级权限注解、
 覆盖率门禁（JaCoCo）、代码风格工具（Checkstyle/Spotless）、DB 版本管理（Flyway）、
 API 版本化（`/v1/`）、国际化（i18n）、行级数据权限。
-完整清单见 `.qoder/rules/project-conventions.md` 第十一节。
+完整清单见 `.qoder/rules/gaps-and-fs-tables.md`。
