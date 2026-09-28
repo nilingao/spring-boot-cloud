@@ -44,8 +44,11 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.el.ExpressionFactory;
 import javax.el.ValueExpression;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -88,13 +91,16 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                     .taskTenantId(TenantContextHolder.getTenantId().toString())
                     .orderByTaskCreateTime().desc()
                     .taskCandidateOrAssigned(String.valueOf(userId)).listPage(pageModel.getStartRow(), pageModel.getPageSize());
+            //批量获取流程实例，避免在循环中逐条查询
+            Map<String, ProcessInstance> instanceMap = findProcessInstanceMap(tasks.stream()
+                    .map(Task::getProcessInstanceId).collect(Collectors.toSet()));
             List<NotNullMap> maps = new ArrayList<>();
             for (Task task: tasks) {
-                ProcessInstance processInstance = getProcessEngine().getRuntimeService().createProcessInstanceQuery().processInstanceId(task.getProcessInstanceId()).singleResult();
+                ProcessInstance processInstance = instanceMap.get(task.getProcessInstanceId());
                 NotNullMap map = new NotNullMap();
-                map.put("instanceId",processInstance.getId());
-                map.put("instanceName",processInstance.getName());
-                map.put("isSuspended",processInstance.isSuspended());
+                map.put("instanceId",task.getProcessInstanceId());
+                map.put("instanceName",processInstance == null ? null : processInstance.getName());
+                map.put("isSuspended",processInstance != null && processInstance.isSuspended());
                 map.put("taskId",task.getId());
                 map.put("taskName",task.getName());
                 map.put("assignee",task.getAssignee());
@@ -131,22 +137,27 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                     .includeProcessVariables()
                     .orderByProcessInstanceStartTime().desc()
                     .listPage(pageModel.getStartRow(), pageModel.getPageSize());
+            //批量获取每个实例最新的任务节点，避免在循环中逐条查询
+            Map<String, HistoricTaskInstance> taskInstanceMap = findLatestInstanceTaskMap(historicProcessInstances.stream()
+                    .map(HistoricProcessInstance::getId).collect(Collectors.toList()));
+            //仅未结束的实例需要查询运行时挂起状态，同样批量获取
+            Map<String, ProcessInstance> runningInstanceMap = findProcessInstanceMap(historicProcessInstances.stream()
+                    .filter(instance -> instance.getEndTime() == null)
+                    .map(HistoricProcessInstance::getId).collect(Collectors.toSet()));
             List<NotNullMap> maps = new ArrayList<>();
             for (HistoricProcessInstance instance: historicProcessInstances) {
                 NotNullMap map = new NotNullMap();
-                HistoricTaskInstance taskInstance = findInstanceTask(instance.getId());
+                HistoricTaskInstance taskInstance = taskInstanceMap.get(instance.getId());
                 map.put("instanceId",instance.getId());
                 map.put("instanceName",instance.getName());
-                map.put("taskId",taskInstance.getId());
-                map.put("taskName",taskInstance.getName());
+                map.put("taskId",taskInstance == null ? null : taskInstance.getId());
+                map.put("taskName",taskInstance == null ? null : taskInstance.getName());
                 map.put("isSuspended",false);
-                if(instance.getEndTime() == null){
-                    ProcessInstance processInstance = getProcessEngine().getRuntimeService().createProcessInstanceQuery().processInstanceId(instance.getId()).singleResult();
-                    if(processInstance != null){
-                        map.put("isSuspended",processInstance.isSuspended());
-                    }
+                ProcessInstance processInstance = runningInstanceMap.get(instance.getId());
+                if(processInstance != null){
+                    map.put("isSuspended",processInstance.isSuspended());
                 }
-                map.put("tackComment",findCommentTaskEntity(taskInstance.getId()));
+                map.put("tackComment",taskInstance == null ? null : findCommentTaskEntity(taskInstance.getId()));
                 map.put("instanceComment",findCommentInstanceEntity(instance.getId()));
                 map.put("processVariables", instance.getProcessVariables());
                 map.put("processDefinitionName",instance.getProcessDefinitionName());
@@ -183,20 +194,23 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                     .orderByHistoricTaskInstanceStartTime().desc()
                     .listPage(pageModel.getStartRow(), pageModel.getPageSize());
 
+            //批量获取历史流程实例，避免在循环中逐条查询
+            Map<String, HistoricProcessInstance> instanceMap = findHistoricProcessInstanceMap(historicTaskInstances.stream()
+                    .map(HistoricTaskInstance::getProcessInstanceId).collect(Collectors.toSet()));
             List<NotNullMap> maps = new ArrayList<>();
             for (HistoricTaskInstance task: historicTaskInstances) {
                 NotNullMap map = new NotNullMap();
-                HistoricProcessInstance processInstance = getProcessEngine().getHistoryService().createHistoricProcessInstanceQuery().processInstanceId(task.getProcessInstanceId()).singleResult();
-                map.put("instanceId",processInstance.getId());
-                map.put("instanceName",processInstance.getName());
+                HistoricProcessInstance processInstance = instanceMap.get(task.getProcessInstanceId());
+                map.put("instanceId",task.getProcessInstanceId());
+                map.put("instanceName",processInstance == null ? null : processInstance.getName());
                 map.put("taskId",task.getId());
                 map.put("taskName",task.getName());
                 map.put("processVariables", task.getProcessVariables());
-                map.put("processDefinitionName",processInstance.getProcessDefinitionName());
-                map.put("processDefinitionId",processInstance.getProcessDefinitionId());
+                map.put("processDefinitionName",processInstance == null ? null : processInstance.getProcessDefinitionName());
+                map.put("processDefinitionId",processInstance == null ? null : processInstance.getProcessDefinitionId());
                 map.put("tackComment",findCommentTaskEntity(task.getId()));
-                map.put("instanceComment",findCommentInstanceEntity(processInstance.getId()));
-                map.put("businessKey",processInstance.getBusinessKey());
+                map.put("instanceComment",findCommentInstanceEntity(task.getProcessInstanceId()));
+                map.put("businessKey",processInstance == null ? null : processInstance.getBusinessKey());
                 map.putDateTime("startTime",task.getStartTime());
                 map.putDateTime("endTime",task.getEndTime());
                 maps.add(map);
@@ -220,6 +234,8 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
             List<ProcessDefinition> processDefinitionList = getProcessEngine().getRepositoryService().createProcessDefinitionQuery()
                     .latestVersion()
                     .processDefinitionTenantId(TenantContextHolder.getTenantId().toString())
+                    //必须显式指定排序，否则分页结果顺序不稳定，翻页会出现重复或遗漏
+                    .orderByProcessDefinitionKey().asc()
                     .listPage(pageModel.getStartRow(), pageModel.getPageSize());
             List<NotNullMap> maps = new ArrayList<>();
             for (ProcessDefinition processDefinition: processDefinitionList) {
@@ -235,8 +251,8 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
             }
             result = PageResult.result(RespCode.CODE_0.getValue(),null,maps,(int) count);
         } catch (Exception e) {
-            log.error("获取历史流程错误:",e);
-            result = PageResult.result(RespCode.CODE_2.getValue(),"获取历史流程错误");
+            log.error("获取流程定义列表错误:",e);
+            result = PageResult.result(RespCode.CODE_2.getValue(),"获取流程定义列表错误");
         }
         return result;
     }
@@ -251,20 +267,23 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                     .taskTenantId(TenantContextHolder.getTenantId().toString())
                     .orderByTaskCreateTime().desc()
                     .listPage(pageModel.getStartRow(), pageModel.getPageSize());
+            //批量获取流程实例，避免在循环中逐条查询
+            Map<String, ProcessInstance> instanceMap = findProcessInstanceMap(tasks.stream()
+                    .map(Task::getProcessInstanceId).collect(Collectors.toSet()));
             List<NotNullMap> maps = new ArrayList<>();
             for (Task task: tasks) {
-                ProcessInstance processInstance = getProcessEngine().getRuntimeService().createProcessInstanceQuery().processInstanceId(task.getProcessInstanceId()).singleResult();
+                ProcessInstance processInstance = instanceMap.get(task.getProcessInstanceId());
                 NotNullMap map = new NotNullMap();
-                map.put("instanceId",processInstance.getId());
-                map.put("instanceName",processInstance.getName());
-                map.put("isSuspended",processInstance.isSuspended());
+                map.put("instanceId",task.getProcessInstanceId());
+                map.put("instanceName",processInstance == null ? null : processInstance.getName());
+                map.put("isSuspended",processInstance != null && processInstance.isSuspended());
                 map.put("taskId",task.getId());
                 map.put("taskName",task.getName());
                 map.put("assignee",task.getAssignee());
                 map.put("businessKey",task.getBusinessKey());
                 map.put("processVariables",task.getProcessVariables());
                 map.put("processDefinitionId",task.getProcessDefinitionId());
-                map.put("processDefinitionName",processInstance.getProcessDefinitionName());
+                map.put("processDefinitionName",processInstance == null ? null : processInstance.getProcessDefinitionName());
                 map.put("tackComment",findCommentTaskEntity(task.getId()));
                 map.put("instanceComment",findCommentInstanceEntity(task.getProcessInstanceId()));
                 map.putDateTime("createTime",task.getCreateTime());
@@ -295,18 +314,21 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                     .includeProcessVariables()
                     .orderByProcessInstanceStartTime().desc()
                     .listPage(pageModel.getStartRow(), pageModel.getPageSize());
+            //批量获取每个实例最新的任务节点，避免在循环中逐条查询
+            Map<String, HistoricTaskInstance> instanceTaskMap = findLatestInstanceTaskMap(historicProcessInstances.stream()
+                    .map(HistoricProcessInstance::getId).collect(Collectors.toList()));
             List<NotNullMap> maps = new ArrayList<>();
             for (HistoricProcessInstance historicProcessInstance: historicProcessInstances) {
                 NotNullMap map = new NotNullMap();
-                HistoricTaskInstance instanceTask = findInstanceTask(historicProcessInstance.getId());
+                HistoricTaskInstance instanceTask = instanceTaskMap.get(historicProcessInstance.getId());
                 map.put("instanceId",historicProcessInstance.getId());
                 map.put("instanceName",historicProcessInstance.getName());
-                map.put("taskId",instanceTask.getId());
-                map.put("taskName",instanceTask.getName());
-                map.put("processVariables", instanceTask.getProcessVariables());
+                map.put("taskId",instanceTask == null ? null : instanceTask.getId());
+                map.put("taskName",instanceTask == null ? null : instanceTask.getName());
+                map.put("processVariables", instanceTask == null ? null : instanceTask.getProcessVariables());
                 map.put("processDefinitionName",historicProcessInstance.getProcessDefinitionName());
                 map.put("processDefinitionId",historicProcessInstance.getProcessDefinitionId());
-                map.put("tackComment",findCommentTaskEntity(instanceTask.getId()));
+                map.put("tackComment",instanceTask == null ? null : findCommentTaskEntity(instanceTask.getId()));
                 map.put("instanceComment",findCommentInstanceEntity(historicProcessInstance.getId()));
                 map.put("businessKey",historicProcessInstance.getBusinessKey());
                 map.putDateTime("startTime",historicProcessInstance.getStartTime());
@@ -434,6 +456,53 @@ public class ActivitiServcieImpl extends BaseWorkflowService implements Activiti
                 .orderByHistoricTaskInstanceStartTime().desc()
                 .listPage(0,1);
         return list.get(0);
+    }
+
+    /**
+     * 批量获取运行时流程实例，用于替代列表循环内的逐条查询
+     * @param instanceIds 流程实例编号集合
+     * @return 流程实例编号与运行时实例的映射，入参为空时返回空映射
+     */
+    private Map<String, ProcessInstance> findProcessInstanceMap(Set<String> instanceIds){
+        if(instanceIds == null || instanceIds.isEmpty()){
+            return Collections.emptyMap();
+        }
+        return getProcessEngine().getRuntimeService().createProcessInstanceQuery()
+                .processInstanceIds(instanceIds)
+                .list().stream()
+                .collect(Collectors.toMap(ProcessInstance::getId, Function.identity(), (first, second) -> first));
+    }
+
+    /**
+     * 批量获取历史流程实例，用于替代列表循环内的逐条查询
+     * @param instanceIds 流程实例编号集合
+     * @return 流程实例编号与历史实例的映射，入参为空时返回空映射
+     */
+    private Map<String, HistoricProcessInstance> findHistoricProcessInstanceMap(Set<String> instanceIds){
+        if(instanceIds == null || instanceIds.isEmpty()){
+            return Collections.emptyMap();
+        }
+        return getProcessEngine().getHistoryService().createHistoricProcessInstanceQuery()
+                .processInstanceIds(instanceIds)
+                .list().stream()
+                .collect(Collectors.toMap(HistoricProcessInstance::getId, Function.identity(), (first, second) -> first));
+    }
+
+    /**
+     * 批量获取每个流程实例下最新的任务节点，用于替代列表循环内的逐条查询
+     * @param instanceIds 流程实例编号集合
+     * @return 流程实例编号与其最新任务节点的映射，入参为空时返回空映射
+     */
+    private Map<String, HistoricTaskInstance> findLatestInstanceTaskMap(List<String> instanceIds){
+        if(instanceIds == null || instanceIds.isEmpty()){
+            return Collections.emptyMap();
+        }
+        //按开始时间倒序，键冲突时保留先出现的记录，即每个实例最新的任务节点
+        return getProcessEngine().getHistoryService().createHistoricTaskInstanceQuery()
+                .processInstanceIdIn(instanceIds)
+                .orderByHistoricTaskInstanceStartTime().desc()
+                .list().stream()
+                .collect(Collectors.toMap(HistoricTaskInstance::getProcessInstanceId, Function.identity(), (first, second) -> first));
     }
 
     @Override
