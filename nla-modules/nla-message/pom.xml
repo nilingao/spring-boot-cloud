@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.com.nla</groupId>
+        <artifactId>nla-modules</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>nla-message</artifactId>
+
+    <description>
+        nla-message 短信消息模块（表驱动 + sms4j，迁移自旧 spring-boot-sms）
+    </description>
+
+    <dependencies>
+
+        <!-- 通用工具 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-core</artifactId>
+        </dependency>
+
+        <!-- 接口文档 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-doc</artifactId>
+        </dependency>
+
+        <!-- 短信底座（sms4j + PlusSmsDao），本模块在其上实现表驱动动态注册与 4 个 SPI 自定义供应商 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-sms</artifactId>
+        </dependency>
+
+        <!-- 缓存服务（防重发、验证码回写） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-redis</artifactId>
+        </dependency>
+
+        <!-- 数据库服务 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-mybatis</artifactId>
+        </dependency>
+
+        <!-- 日志记录 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-log</artifactId>
+        </dependency>
+
+        <!-- excel 导出（发送记录） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-excel</artifactId>
+        </dependency>
+
+        <!-- 安全模块（LoginHelper、权限校验） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-security</artifactId>
+        </dependency>
+
+        <!-- web 服务 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-web</artifactId>
+        </dependency>
+
+        <!-- 翻译模块（字典翻译） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-translation</artifactId>
+        </dependency>
+
+        <!-- 脱敏模块（手机号） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-sensitive</artifactId>
+        </dependency>
+
+    </dependencies>
+
+</project>

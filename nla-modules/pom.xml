@@ -22,6 +22,7 @@
         <module>nla-system</module>
         <module>nla-workflow</module>
         <module>nla-ai</module>
+        <module>nla-message</module>
     </modules>
 
 </project>

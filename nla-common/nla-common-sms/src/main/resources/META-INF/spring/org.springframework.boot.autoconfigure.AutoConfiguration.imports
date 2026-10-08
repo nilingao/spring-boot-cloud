@@ -1,1 +1,2 @@
 cn.com.nla.common.sms.config.SmsAutoConfiguration
+cn.com.nla.common.sms.config.SmsSupplierAutoConfiguration

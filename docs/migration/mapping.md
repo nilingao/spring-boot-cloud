@@ -417,8 +417,8 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 批次 | 源模块（文件数） | 目标模块 | 要点 | 状态 |
 |---|---|---|---|---|
 | 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 表映射见下 | 待推进 |
-| 6.2 | `oa`(6) + `Leave` | `nla-modules/nla-oa` | 最轻，作为迁移范式验证 | 待推进 |
-| 6.3 | `sms`(47) | `nla-modules/nla-message` | `MobileMessage`/`MobileMessageTemplate`/`PublicNotice`/`ReadNoticeUser`/`SmsConfig`；短信走 `nla-common-sms`；`Quartz` 实体废弃 | 待推进 |
+| 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
+| 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 18 Pool + 18 Proxy 对象池包装 JNI，依赖 `nla-common-facesdk` | 待推进 |
 | 6.5 | `video`(80) | `nla-modules/nla-video` | GB28181 设备/通道/录像/云台，依赖 `nla-common-gb28181`；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进 |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo` | 待推进 |
@@ -465,6 +465,175 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
   - 物理删除前引用校验（`return R.fail("请先删除xxx")`）
   - 无逻辑删除、不建物理外键
   - 密码/密钥只写不读；手机号脱敏
+
+### 6.4 `oa` 废弃决策（批次 6.2 终止）
+
+**结论：`oa` 不迁移，旧 `spring-boot-oa` 废弃。** 本轮已建的 `nla-oa` 骨架（`pom.xml` +
+`nla-modules/pom.xml` 的 `<module>` + `nla-admin/pom.xml` 依赖）已全部回退干净，磁盘无残留。
+
+**理由——功能重复**：旧 `oa` 全部内容就是一张请假表 `oa_leave`（6 个 Java 文件：`Leave` 实体 +
+`LeaveParam` + `LeaveMapper` + `LeaveService/Impl` + `LeaveController`，5 接口
+find/insert/updateState/update_process_instance_id/delete）+ 一条 Activiti 请假流程。而基线
+`nla-workflow` 的 **`TestLeave` 已经是「请假 + WarmFlow」的完整实现**
+（`TestLeaveServiceImpl.submitAndFlowStart` 走 `WorkflowService.startCompleteTask`，外加
+processHandler/processTaskHandler/processDeleteHandler 三个 `@EventListener`），业务与流程都比旧
+oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的重复功能，无迁移价值。
+
+**附带核查成果——旧 `spring-boot-*` → 新 `nla-*` 迁移映射规则（对 6.1/6.3~6.7 后续批次直接复用）**：
+
+| 项 | 旧基类/写法 | 新基线 | 迁移规则 |
+|---|---|---|---|
+| 实体基类 | `LongIdEntity`（`@TableId AUTO` 自增）+ `Base` | `BaseEntity`（**无 id、无 tenantId**） | 实体自带 `@TableId(value="id") Long id`（雪花，DDL 去 `auto_increment`）；审计 5 列 create_dept/create_by/create_time/update_by/update_time 自动填充 |
+| 时间类型 | `java.util.Date` + `@DateTimeFormat`/`@JsonFormat` 双注解 | `LocalDateTime` | 直接换类型，去掉两个格式注解（基线用全局 Jackson 配置） |
+| 租户 | `tenant_id`（默认公共租户 1L） | **基线全局禁用多租户**（application.yml 无 tenant 配置、`sys_user` 无 `tenant_id`） | 旧实体 `tenantId` 字段一律去掉，不留孤立租户列 |
+| 当前登录人 | `JwtUtils.getUserId()` + Feign（`UserServiceFeign.getInfo` + `findUserConnectDepartment`） | `LoginHelper.getUserId()/getUsername()/getDeptId()/getDeptName()`（从 SaToken 会话直接取） | 用户/部门填充改 `LoginHelper`，**彻底消除这类 Feign 调用** |
+| 校验分组 | `BaseModel` 内部注解 `add/edit/delete`（小写） | `AddGroup/EditGroup`（大写，jakarta.validation） | `@Validated(AddGroup.class)` |
+| 流程类业务 | Activiti + `process_instance_id`/`state` 字段 | WarmFlow + `BusinessStatusEnum`（DRAFT/WAITING/FINISH…） | 走 `nla-workflow` 的 `TestLeave` 模式（归阶段 7） |
+
+**旧 `spring-boot-oa` 处置**：按分级清理策略保留到阶段 6 全部完成后，随其他旧 `spring-boot-*`
+业务模块一并删除（本轮不动老项目一行）。`sql/sys_oa-基类sql.sql` 同理，见 9 节。
+
+### 6.5 全量重估：迁移边界重划
+
+**触发**：oa 因「基线 TestLeave 已覆盖」废弃，暴露「凭文件数直觉会严重误判迁移量」。据此对 7 个旧业务模块做两端全景对照（旧实体/表 × 基线已有能力），重划边界。
+
+**方法**：旧实体清单（`springbootentity/dome/{module}` + 模块内 domain）逐一对照基线（`nla-common` 25 starter + `nla-system` 22 个 `sys_*` + `nla-workflow`），判定四类处置：`已覆盖免迁` / `需迁独有` / `需技术封装(阶段3)` / `废弃`。
+
+#### 6.5.1 逐模块处置总表
+
+| 批次 | 模块 | 旧实体 | 已覆盖免迁 | 废弃 | 需迁独有 | 需技术封装 |
+|---|---|---|---|---|---|---|
+| 6.1 | bean+sys | 22 | 14 | 4 | **4** | — |
+| 6.2 | oa | 1 | — | 1 | 0 | — |
+| 6.3 | sms | 6 | 1 | 1 | **3**(+1待定) | **表驱动引擎**整体迁移；初判"非sms4j"，**终采方案B(sms4j 3.3.5 表驱动+SPI)，已落地，见 6.6.1** |
+| 6.4 | face | 1+116文件 | — | — | **1**(Person,余待核) | **nla-common-facesdk**(≈64文件JNI) |
+| 6.5 | video | 12 | — | — | **12** | **nla-common-gb28181** |
+| 6.6 | fs | 41 | — | — | **41** | **nla-common-freeswitch** |
+| 6.7 | pay | 0表(7 SDK Bean) | — | — | 0 | **nla-common-pay** |
+| 阶段7 | activiti | — | WarmFlow覆盖 | Activiti废弃 | 0 | nla-workflow |
+
+- **6.1 免迁 14**：user/dept/role/menu/post + 4 关联表(user_role/role_menu/user_post/user_dept) + config/dict×2/log/oauthClient → 全部对应基线 `sys_*` 完整 CRUD。
+- **6.1 废弃 4**：Tenant/TenantConnectMenu（基线禁用多租户）、DepartmentConnectMenu/PositionConnectMenu（基线用角色授权，不用部门/岗位直连菜单）。
+- **6.1 需迁 4**：Mini/MiniUser/UserSet（微信小程序）、Area（行政区划，台账已定保留业务表）。
+- **6.3 需迁 3**：MobileMessage/MobileMessageTemplate/SmsConfig（短信业务层）；PublicNotice→SysNotice 免迁、Quartz→nla_job 废弃、ReadNoticeUser(公告已读)待迁移时判(基线 SysNotice 无已读机制,评估 SysMessage 或简化)。**关键：SmsConfig 是表驱动配置源(非 yml)，短信引擎 basic+core 共22类需整体迁移，详见 6.6**。
+
+**净需迁业务表 ≈ 61 张**（bean4+sms3+face1+video12+fs41），fs 一家占 41（67%）。而非旧工程「数百文件」的直觉。
+
+#### 6.5.2 三个核心洞察
+
+1. **文件数 ≠ 迁移量**：bean 98文件→仅 4 独有表；face 116文件→业务表≈1(Person)+64文件是 JNI 封装(sdk26/pool17/proxy16/config5)；pay 27文件→0表(纯 SDK 配置对象)。文件数大头是 controller/service/bo/vo/mapper 与技术封装。
+
+2. **阶段3 技术封装是 6.4~6.7 硬前置(关键路径)**：facesdk/gb28181/freeswitch/pay 四个 `nla-common-*` 不建，四批次无法落地。而 **6.1 bean / 6.3 sms 不依赖阶段3，可立即做**。
+
+3. **数据迁移是隐藏大头**：bean 的 user/dept/role/menu/dict 代码免迁，但**存量数据要迁到基线 `sys_*`**——字段映射、主键自增→雪花、密码格式(旧加密 vs 基线 BCrypt)、关联表重建、租户列剥离。6.1 需单列「数据迁移子任务」。
+
+#### 6.5.3 重划后迁移路线
+
+| 优先级 | 批次 | 依赖 | 体量 |
+|---|---|---|---|
+| 可立即做 | 6.3 sms(3短信表) | nla-common-sms(已就绪) | 易 |
+| 可立即做 | 6.1 bean(4独有表+数据迁移) | 无 | 中(数据迁移重) |
+| 需先阶段3 | 6.5 video(12表) | nla-common-gb28181 | 中 |
+| 需先阶段3 | 6.4 face(JNI封装+Person) | nla-common-facesdk | 中(封装重) |
+| 需先阶段3 | 6.6 fs(41表) | nla-common-freeswitch | 难(最大) |
+| 需先阶段3 | 6.7 pay | nla-common-pay | 特殊(暂未开发) |
+
+**废弃/免迁清单(明确不做)**：oa 全部、Tenant×2、部门/岗位直连菜单×2、sms 的 Quartz 与 PublicNotice、activiti(→WarmFlow)、bean 14 个 sys_* 覆盖表的代码(仅迁数据)。
+
+### 6.6 `sms` 表驱动短信引擎（批次 6.3 关键补充）
+
+**核查纠正**：6.5 初判 sms「用 nla-common-sms 作发送底座」有误。旧 sms 是**完全自研的表驱动引擎**，与基线 sms4j（yml 驱动）机制根本不同，**不可直接套用**。
+
+**引擎架构（basic 9 + core 13 = 22 类）**：
+- `sms-basic`：SmsModel/MessageTemplate/SendModel 接口 + Result/Param/NameValuePair 模型 + SmsTypeEnum/SignPlaceEnum/SmsConstant
+- `sms-core`：`AbstractSmsHttpClientManager`(模板方法骨架) + 8 渠道 client(单例) + HttpClientUtils/SignatureUtils
+- 业务层：`SmsSendManager extends AbstractSmsHttpClientManager`，实现 findSmsModelList/findMobileMessageTemplateLast 从表供数
+
+**send() 核心流程**：查启用渠道 → 多个则随机负载 → 套模板变量替换 → 按 smsType 路由 8 client → **失败遍历所有渠道故障转移** → 落 MobileMessage 记录 + 验证码回写 Redis。
+
+**与基线 sms4j(3.3.5) 的本质区别**：
+| 维度 | 旧引擎 | 基线 nla-common-sms(sms4j) |
+|---|---|---|
+| 配置源 | **数据库表**(动态) | yml(启动加载) |
+| 渠道 | 8 自研 client | sms4j 内置供应商 |
+| 多渠道路由 | **随机负载 + 故障转移** | 无(单供应商) |
+| 覆盖 | 含短信网/创蓝网/维纳多/商务领航/云通讯等 sms4j 不含 | 阿里/腾讯/华为等 |
+
+**迁移策略（已决策）**：**方案B —— 以 sms4j 3.3.5 为发送底座，改造为「表驱动 + SPI 保留全部 8 渠道」**。
+用户明确两点铁律：① **三表是运行时配置源**（渠道启停/账号密码/签名/余额/模板/发送记录全在表里，**不写 yml、不靠启动固定加载**）；② 5 个小众渠道仍在用，功能须完全等价，用 SPI 自定义供应商保留。
+
+**三表在表驱动引擎中的作用（务必牢记，非 yml）**：
+| 表 | 实体 | 作用 | 映射到 sms4j |
+|---|---|---|---|
+| `sms_sms_config` | SmsConfig | **渠道账号表**：每行=一个短信通道(smsType 渠道类型/account/password/sign 签名/signPlace 签名左右/balance 余额/isActive 启用)。运行时读此表决定「用哪些渠道、如何鉴权」 | 每行 → 一个 `BaseConfig` 子类实例，`configId`=id、`supplier`=smsType 对应供应商 |
+| `sms_mobile_message_template` | MobileMessageTemplate | **模板表**：configId 绑渠道/code 模板号/type 模板类型/content 含变量占位/variable 变量定义(JSON)。发送时按 type+configId 取最新模板做变量替换 | 供 `SmsSendManager` 组 `LinkedHashMap` 传 `sendMessage(phone,templateId,params)` |
+| `sms_mobile_message` | MobileMessage | **发送记录表**：每次发送落库(mobile/content/status/msgId/callbackStatus 回执/resendNum 重发/handleTime)。审计 + 回执追踪 | 发送后由 `SmsSendManager` 写入 |
+
+→ **表驱动 = 改表即改行为**：新增/停用渠道、换账号密码、调签名，都是改 `sms_sms_config` 表；同 type 多条 isActive=1 即多渠道路由/负载的数据来源。**这正是 sms4j `SmsReadConfig` 的用途**。
+
+**sms4j 3.3.5 关键 API（已从本地 jar `javap` 核实，非臆测）**：
+- 表驱动接口 `org.dromara.sms4j.core.datainterface.SmsReadConfig`：
+  `BaseConfig getSupplierConfig(String configId)` + `List<BaseConfig> getSupplierConfigList()` —— **实现它即可从数据库表供数**。
+- 工厂 `org.dromara.sms4j.core.factory.SmsFactory`（全静态）：
+  `createSmsBlend(SmsReadConfig)` 注册全部 / `createSmsBlend(SmsReadConfig, configId)` 注册单条 /
+  `getSmsBlend(configId)` 按渠道精确取 / `getSmsBlend()` 负载均衡取 / `getListBySupplier(supplier)` /
+  `reload(configId, SmsReadConfig)` 热重载单条 / `reloadAll(SmsReadConfig)` 热重载全部 / `unregister(configId)` 注销。
+  → **改表后调 reload/reloadAll 即可热更新，无需重启**（对齐基线「AFTER_COMMIT 定向刷新缓存、禁止 delAll」铁律）。
+- SPI 三件套（自定义供应商）：
+  `{X}Config extends org.dromara.sms4j.provider.config.BaseConfig`（基类已含 configId/accessKeyId/accessKeySecret/signature/sdkAppId/templateId/weight/factory/proxy 字段）；
+  `{X}SmsImpl extends org.dromara.sms4j.provider.service.AbstractSmsBlend<{X}Config>`（基类已内置 `SmsHttpUtils http`，只需实现 5 个 abstract sendMessage/massTexting）；
+  `{X}Factory implements BaseProviderFactory<{X}SmsImpl,{X}Config>`（`createSms/getConfigClass/getSupplier`），启动时 `ProviderFactoryHolder.registerFactory(...)` 注册。
+
+**8 渠道 → sms4j 3.3.5 精确映射（javap 核实内置供应商后修正，比初判乐观）**：
+| 旧渠道(smsType) | 旧端点 | sms4j 内置 | 处置 |
+|---|---|---|---|
+| 阿里云大于(5) | dysmsapi.aliyuncs.com | `aliyun` AlibabaConfig(requestUrl/action/version/regionId) | ✅ 内置直用 |
+| 腾讯云(8) | tencentcloudapi v20210111 | `tencent` TencentConfig(territory/service/sdkAppId) | ✅ 内置直用 |
+| 云通讯/容联(7) | CCPRestSmsSDK | `cloopen` CloopenConfig(baseUrl) | ✅ 内置(实现期验证 SDK→HTTP 差异) |
+| ~~创蓝网(2)~~ | 222.73.117.156/msg/HttpBatchSendSM | — | ❌ **已废弃**：用户明确「不要老的创蓝网了」，不迁移（smsType=2 保留空位不复用） |
+| 网易易盾(6) | sms.dun.163.com/v2/sendsms(secretId+签名) | `netease`=网易**云信**(codeUrl/verifyUrl) | ❌ 易盾≠云信，SPI 自定义 |
+| 短信网(1) | web.duanxinwang.cc/asmx/smsservice.aspx | 无 | ❌ SPI 自定义 |
+| 维纳多(3) | yl.mobsms.net(SunJCE 加密) | 无 | ❌ SPI 自定义 |
+| 商务领航(4) | access.xx95.net:8886/SendSmsEx(account 用 \| 分割) | 无 | ❌ SPI 自定义 |
+
+→ 净结论（创蓝网废弃后剩 **7 渠道**）：**3 内置直用(aliyun/tencent/cloopen) + 4 SPI(dxw 短信网/wnd 维纳多/swlh 商务领航/wyyd 网易易盾)**，无待验证项。
+
+**推进顺序（用户定）**：先 **b6 表驱动发送骨架**（domain 三实体 + mapper 查询 + 4 SPI 供应商 + DbSmsReadConfig/SmsChannelManager/SmsSendManager 主链），跑通核心可行性后再补 **b5 三表管理 CRUD**（bo/vo/service/controller）。
+
+**方案B 架构分层（依赖流向 nla-message → nla-common-sms，符合 starter→common 铁律）**：
+- **nla-common-sms（技术层，可复用）**：
+  - 4 个 SPI 自定义供应商 `Dxw/Wnd/Swlh/Wyyd(易盾)`，各 `{X}Config+{X}SmsImpl+{X}Factory`；把旧 `SmsHttpClient` 的 HTTP 重试、签名左右位置(`handleSign`)、`parseTemplateCode` 逻辑搬进 `AbstractSmsBlend.sendMessage`（基类已提供 `SmsHttpUtils http`）；
+  - `SmsSupplierRegistrar`（`@AutoConfiguration`）：启动 `ProviderFactoryHolder.registerFactory(4 个自定义 Factory)`；
+  - aliyun/tencent/cloopen 直接复用 sms4j 内置，不重写（创蓝网 chuanglan 已废弃，见上表）。
+- **nla-message（业务层）**：
+  - 三表 CRUD（domain/bo/vo/mapper/service/controller，按 6.4 规则：LongIdEntity→BaseEntity+雪花、Date→LocalDateTime、去 tenant_id、add/edit→AddGroup/EditGroup）；
+  - `DbSmsReadConfig implements SmsReadConfig`：`getSupplierConfigList()` 查 `sms_sms_config` 中 isActive=1 行 → 按 smsType 组装对应 `{X}Config`（account→accessKeyId、password→accessKeySecret、sign→signature、id→configId、smsType→supplier）；
+  - `SmsChannelManager`：启动 `SmsFactory.createSmsBlend(dbSmsReadConfig)`；表变更后 `@TransactionalEventListener(AFTER_COMMIT)` 触发 `reload/reloadAll/unregister`（**定向刷新，禁止 delAll**）；
+  - `SmsSendManager`（对齐旧同名类职责）：模板变量替换（含 VERIFICATION_CODE 自动生成 6 位、REDIS_CODE 取缓存时长）、按 type 选渠道（`getSmsBlend()` 负载 or `getListBySupplier` 遍历故障转移）、Redis 防重发、落 `sms_mobile_message`、验证码回写 Redis；
+  - `SmsController`（extends ApiController、RestResult、@Validated 分组、@ApiLog）。
+
+**迁移量修正**：sms ≠「3 表」，而是「3 表 + 表驱动适配层(DbSmsReadConfig/SmsChannelManager/SmsSendManager) + 4 个 SPI 供应商」。不依赖阶段3 的 4 个封装，可独立推进；体量中等（4 个 SPI 渠道是主要工作量，aliyun/tencent/cloopen 复用内置大幅减负）。
+
+### 6.6.1 批次 6.3 交付结果（已落地）
+
+按用户定的推进顺序 b6→b5→b7→b8 完成，`nla-admin -am` 全量编译 `MVN_EXIT=0`。均为未提交新增（`git status` 中 `nla-modules/nla-message/`、`nla-common-sms/supplier/`、`SmsSupplierAutoConfiguration.java`、`script/sql/nla_message.sql` 全为 `??`，`.imports` 为 `M`）。
+
+**nla-common-sms（技术层，新增 14 类 + 改 1 处）**：
+- `supplier/` 目录：`SmsSignUtils`(签名左右位置 `handleSign`) + 4 个 SPI 供应商 `dxw`(短信网)/`swlh`(商务领航)/`wnd`(维纳多)/`wyyd`(网易易盾)，各 `{X}Config`+`{X}SmsImpl`+`{X}Factory`（12 类），把旧 `SmsHttpClient` 的 HTTP、签名、模板号解析逻辑搬进 `AbstractSmsBlend.sendMessage`；
+- `config/SmsSupplierAutoConfiguration`(`@AutoConfiguration`)：启动 `ProviderFactoryHolder.registerFactory` 注册 4 个自定义 Factory；改 `META-INF/spring/...AutoConfiguration.imports` 追加该自动配置；
+- 基线既有 `SmsAutoConfiguration`/`PlusSmsDao`/`SmsExceptionHandler`(+测试) 未动；aliyun/tencent/cloopen 复用 sms4j 内置，创蓝网废弃。
+
+**nla-message（业务层，整模块新建 28 类）**：
+- 三表 `domain`/`bo`/`vo`/`mapper`（`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`，按 6.4 规则：`LongIdEntity`→`BaseEntity`+雪花、`Date`→`LocalDateTime`、去 `tenant_id`）；
+- 三表管理 CRUD `I*Service`+`*ServiceImpl`+`*Controller`：`SmsConfig` 写后定向 `refresh`/`remove` 通道、`password` 只写不读（编辑留空保持原值，依赖 `updateStrategy=NOT_NULL`）；`MobileMessage` 记录型仅 list/export/remove/clean（无 add/edit）；URL `/sms/{config,template,record}`，权限 `sms:{config,template,record}:*`；
+- 表驱动主链 `sms/`：`DbSmsReadConfig`(implements sms4j `SmsReadConfig`，实时读 `sms_sms_config`) + `SmsChannelManager`(`@EventListener(ApplicationReadyEvent)` 初始化 + `refresh`/`remove`/`refreshAll` 定向热更，对齐"AFTER_COMMIT 定向刷新、禁 delAll") + `SmsSendManager`(选活跃且含该 type 模板的渠道、随机负载 + 故障转移、落 `sms_mobile_message`) + `SmsSendResult` + `SmsSendBo` + `SmsChannelEnum`/`SmsConstant`。
+
+**DDL** `script/sql/nla_message.sql`：三表，雪花主键无 `auto_increment`、审计 5 列；`sms_sms_config`/`sms_mobile_message_template` 带 `del_flag bigint` 逻辑删除，`sms_mobile_message` 追加型物理删除；`sms_sms_config` 新增 `app_id` 列承载腾讯云 sdkAppId / 容联云 appId；创蓝网 `sms_type=2` 空位保留不复用。
+
+**遗留待决策（未做，需用户确认）**：
+1. **发送入口未接**：`SmsSendManager` 目前是内部 Bean，无 REST controller 暴露，也尚未被 `nla-system` 登录/注册/重置验证码流程调用 —— 单体化后短信走内部服务调用还是需独立发送接口，待定；
+2. **菜单权限 SQL 未生成**：3 个管理端 controller 的 `@SaCheckPermission("sms:*:*")` 在 `sys_menu`/`sys_role_menu` 无对应记录，前端菜单与鉴权挂不上；
+3. **`MobileMessageVo.mobile` 未脱敏**：未加 `@Sensitive`，如需符合"手机号脱敏"铁律可补。
 
 ---
 
@@ -796,7 +965,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **3** | 自建技术封装 | ⬜ 未开始 | 6 个自建模块（freeswitch/gb28181/pay/facesdk/socketio/mq），约 680 文件 |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
-| **6** | 业务模块迁移 | ⬜ 未开始 | 7 批次，见第 6 节 |
+| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.1/6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
 | **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全量回归未做 |
@@ -883,7 +1052,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 |---|---|
 | `sys_bean-基类sql.sql`、`sys_bean_初始化.sql` | 6.1 `bean_*` → `sys_*` 表映射与存量数据迁移 |
 | `sys_area.sql`、`sys_area_1.sql`（679273 行） | 6.1；`sys_area` 是 bean 独有表，**计划明确要求保留为业务表** |
-| `sys_oa-基类sql.sql` | 6.2 |
+| `sys_oa-基类sql.sql` | **oa 已废弃**（见 6.4），请假由 `nla-workflow` 的 `test_leave` 覆盖，随旧模块清理 |
 | `sys_face.sql` | 6.4 |
 | `sys_video.sql` | 6.5 |
 | `freeswitch.sql` | 6.6（fs 呼叫中心 41 表） |

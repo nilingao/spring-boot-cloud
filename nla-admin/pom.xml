@@ -104,6 +104,12 @@
             <artifactId>nla-workflow</artifactId>
         </dependency>
 
+        <!--  短信消息模块  -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-message</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>
