@@ -1,138 +1,336 @@
-<div align="center"> <a href="https://github.com/anncwb/vue-vben-admin"> <img alt="VbenAdmin Logo" width="200" height="200" src="https://anncwb.github.io/anncwb/images/logo.png"> </a> <br> <br>
+<div align="center">
 
-[![license](https://img.shields.io/github/license/anncwb/vue-vben-admin.svg)](LICENSE)
-<h1>逆龙傲</h1>
+# 逆龙傲 NLA Cloud
+
+**单体多模块后台管理系统**
+
+[![license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![jdk](https://img.shields.io/badge/JDK-21-green.svg)](#)
+[![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](#)
+
 </div>
 
+---
+
+> ## ⚠️ 当前分支状态
+>
+> 你正在看的是 **`6.0.0-nla`** 分支 —— 一次**架构升级进行中**的分支。
+>
+> - 工程骨架、通用基座（25 个 `nla-common-*`）、支撑脚本**已完成并通过全量编译**
+> - 旧版 9 大业务域（呼叫中心 / 视频监控 / 人脸识别 / 支付 / 短信 / OA / 工作流等）
+>   **尚未迁入**，仍在下方"旧代码"列出的目录中等待迁移
+> - 旧微服务版本请切到 **`5.0.0-dev`** 分支查看
+>
+> 迁移的完整映射关系、进度台账与有意偏离上游的每一处改动，见
+> **[docs/migration/mapping.md](docs/migration/mapping.md)**。
 
 ## 简介
 
-逆龙傲 是一个免费丶面向开源 微服务系统架构，可用于架构搭建，学习参考。
+`逆龙傲`（NLA Cloud）是一个免费、开源的后台管理系统，可用于架构搭建与学习参考。
 
-## 特性
-- **数据库**：mysql5.7
-- **spring全家桶**：spring-boot:2.3.2.RELEASE  spring-cloud:Hoxton.SR9 
-- **认证授权**：spring-security , oauth2 , jwt
-- **统一网关丶鉴权**：spring-cloud-starter-gateway
-- **熔断限流**：spring-cloud-starter-alibaba-sentinel
-- **分布式事务**：seata AT模式
-- **服务监控-日志**：skywalking
-- **服务之间通讯**：spring-cloud-starter-openfeign
-- **静态资源服务**：minio
-- **系统缓存**：redis
-- **注册中心、配置中心**：nacos
-- **搜索引擎**：elasticsearch7
-- **分布式定时器**：xxl-job , quartz
-- **消息队列**：rabbitmq
-- **工作流**：activiti7
-- **人脸认证识别**：Seetaface6
-- **发送短信**：目前只测腾讯云，还有其他等待测试
-- **国标28181**：对GB28181 相关实现视频系统监控等功能
-- **前后端通讯**：netty-socketio
-- **在线接口文档**：swagger2
+`6.0.0-nla` 是它的架构升级版本：从 Spring Cloud 微服务集群（Nacos + Gateway + Feign + Seata + Sentinel）
+收敛为**单体多模块**架构，认证从 Spring Security OAuth2 + JWT 换为 Sa-Token，
+工作流从 Activiti 换为 WarmFlow，定时任务从 XXL-JOB / Quartz 换为 SnailJob。
 
-## 模块说明
-~~~md
-├─.build
-│  ├─docker    docker打包脚本
-│  └─jenkins   jenkins自动化部署脚本
-├─.lib-service                                                         [ 1.此包文件过大，无法上传，已被移除，需要可自行下载，文件在最下方 ]
-│  ├─allatori  代码混淆打包工具
-│  ├─rabbitmq-plugins  mq创建docker脚本 及 延迟队列插件 3.9.0
-│  └─skywalking-agent  微服务链路追踪 agent 相关jar
-├─.run   idea 远程docker部署脚本
-├─spring-boot-business  项目具体业务模块
-│  ├─spring-boot-activiti  工作流底层模块
-│  │  └─start liunx项目运行相关脚本
-│  ├─spring-boot-bean 项目基础业务模块 如：用户丶权限丶部门丶菜单丶角色等相关逻辑
-│  │  └─start liunx项目运行相关脚本
-│  ├─spring-boot-face 人脸识别模块 人脸模块底层为 人脸识别算法SeetaFace6（主要是免费） 已有liunx版本与Windows版本 
-│  │  ├─conf  人脸识别模块所需第三方包：核心                                 [ 2.此包文件过大，无法上传，已被移除，需要可自行下载，文件在最下方 ]
-│  │  └─start liunx项目运行相关脚本
-│  ├─spring-boot-oa 工作流业务模块 用于工作流实际业务模块 目前只有：请假流程。此处只给举例，其他业务自行开发！
-│  │  └─start liunx项目运行相关脚本
-│  └─spring-boot-sms 本应是短信模块，因服务不足模块合并，模块包含 ：短信发送模块丶netty-sockit模块丶job定时器模块丶redis订阅模块
-│     └─start liunx项目运行相关脚本
-│  └─spring-boot-video 国标28181模块,模块功能 ：分屏调度丶国标设备实时播放丶历史回放丶云台控制丶流媒体管理丶国标级联丶拉流管理丶推流管理等模块
-│     └─start liunx项目运行相关脚本
-├─spring-boot-client 相关服务接口提供模块
-│  ├─spring-boot-app 小程序端接口模块
-│  │  └─start ....
-│  └─spring-boot-web-api web端接口模块
-│     └─start ....
-├─spring-boot-common 公共底层数据结构模块
-│  ├─spring-boot-comm 所有服务底层公共模块
-│  └─spring-boot-entity 业务底层公共模块  如：vo丶model丶param丶entity等相关实体
-├─spring-boot-feign 各个服务相互调用 feign 服务
-│  ├─spring-boot-feign-activiti 工作流底层对外开放相关接口
-│  ├─spring-boot-feign-bean 基础业务对外开放相关接口
-│  ├─spring-boot-feign-face 人脸识别模块对外开放相关接口
-│  ├─spring-boot-feign-oa 工作流业务模块对外开放相关接口
-│  ├─spring-boot-feign-sms 短信发送模块对外开放相关接口
-│  └─spring-boot-feign-sso 统一认证鉴权对外开放相关接口
-├─spring-boot-service 第三方模块服务 此模块只用于本地启动，也可自行用官方服务启动。
-│  ├─spring-boot-service-nacos nacos服务
-│  ├─spring-boot-service-seata 分布式事务服务
-│  ├─spring-boot-service-sentinel 熔断限流服务
-│  └─spring-boot-service-xxl-job xxl-job服务
-├─spring-boot-starter 相关模块底层依赖
-│  ├─spring-boot-starter-autopoi POI导入导出功能底层 使用 easypoi-spring-boot-starter 包并进行二次封装，有使用举例。
-│  ├─spring-boot-starter-cloud 所有运行模块公共加载配置模块 如：controller公共继承类，请求路径丶请求参数打印功能。
-│  ├─spring-boot-starter-elasticsearch 引擎搜索elasticsearch加载配置模块 使用 easy-es-boot-starter 包
-│  ├─spring-boot-starter-feign feign相关加载配置模块
-│  ├─spring-boot-starter-logs 日志封装相关加载配置模块
-│  │  ├─spring-boot-starter-logs-basic 日志注解 及 枚举
-│  │  └─spring-boot-starter-logs-core  日志核心实现逻辑，使用AOP切面
-│  ├─spring-boot-starter-minio minio静态资源 加载配置模块
-│  ├─spring-boot-starter-mybatis mybatis加载配置模块  主要 1.统一字段自动填充 比如：创建人，修改人   2.租户相关配置
-│  ├─spring-boot-starter-nacos nacos加载配置模块 naocs 负载均衡配置   现在默认走 NacosRule naocs权重策略
-│  ├─spring-boot-starter-netty  对netty进行二次业务封装，更加方便简便的使用。项目中有举例
-│  ├─spring-boot-starter-quartz  定时器加载配置模块 -------已弃用  改用 xxl-job
-│  ├─spring-boot-starter-rabbitmq 消息队列加载配置模块 对mq相关操作进行封装
-│  ├─spring-boot-starter-redis redis缓存加载配置模块 1.redis操作工具类  2.发布订阅模块封装  3.redis整合spring-cache配置
-│  ├─spring-boot-starter-security-oauth 认证授权加载配置模块
-│  │  ├─spring-boot-starter-security-oauth-basic 认证授权底层封装基础类
-│  │  └─spring-boot-starter-security-oauth-core  认证授权配置 主要分布 1.授权服务相关配置  2.整合gateway统一认证配置
-│  ├─spring-boot-starter-sentinel 熔断限流加载配置模块
-│  ├─spring-boot-starter-sms 短信模块加载配置模块
-│  │  ├─spring-boot-starter-sms-basic 短信模块底层基础类
-│  │  └─spring-boot-starter-sms-core  短信模块相关配置
-│  ├─spring-boot-starter-socket-io netty-socket加载配置模块  主要对netty-socket进行二次封装根据特殊要求更简便配置调用
-│  ├─spring-boot-starter-swagger  swagger2加载配置模块
-│  ├─spring-boot-starter-video  对接GBT 28181-2016 公共安全视频监控联网系统 相关模块实现 借鉴wvp平台代码进行整理改编
-│  │   ├─spring-boot-starter-video-basic 国标28181相应实体基础类
-│  │   └─spring-boot-starter-video-core  国标28181底层通讯 实现进行封装 核心包
-│  └─spring-boot-starter-xxl-job  xxl-job加载配置模块
-├─spring-boot-system 
-│  ├─spring-boot-gateway 服务统一网关丶鉴权模块
-│  │  └─start  ....
-│  ├─spring-boot-pay 支付模块  ----暂未开发
-│  │  └─start  ....
-│  └─spring-boot-sso 统一认证模块
-│     └─start  ....
-└─sql 项目基础模块sql
+### 为什么改单体
 
+旧版 46 个子模块拆成 11 个可独立部署的服务（`.run/` 下原有 11 份部署配置），
+但实际因服务器资源不足被迫合并运行
+（`spring-boot-sms` 模块就同时承载了短信、netty-socket、job、redis 订阅四种职责）。
+微服务带来的注册中心、网关、分布式事务、链路追踪成本远高于收益，因此本版收敛为单体。
 
-~~~
-## 预览
-- [ 在线地址 ](https://www.nilongao.cn) https://www.nilongao.cn/spring-cloud/
-- 测试账号: nilongao/nilongao
+## 技术栈
 
-<p align="center">
-    <img alt="NiLongAo Logo" width="100%" src="https://nilongao.github.io/NiLongAo/images/home.jpg">
-    <img alt="NiLongAo Logo" width="100%" src="https://nilongao.github.io/NiLongAo/images/privilege.jpg">
-</p>
+| 分类 | 选型 | 版本 |
+|---|---|---|
+| 基础框架 | Spring Boot | 4.1.1 |
+| JDK | — | 21 |
+| 认证授权 | Sa-Token + JWT | 1.46.0 |
+| 持久层 | MyBatis-Plus / MyBatis-Plus-Join | 3.5.17 / 1.5.9 |
+| 数据库 | MySQL | 8.0+ |
+| 多数据源 | dynamic-datasource | 4.5.0 |
+| 缓存与分布式锁 | Redisson / Lock4j | 4.7.0 / 2.2.7 |
+| 对象存储 | AWS S3 SDK（兼容 MinIO / 阿里云 OSS / 腾讯云 COS） | 2.55.4 |
+| 工作流 | Warm-Flow | 1.8.9 |
+| 规则编排 | LiteFlow | 2.16.2.1 |
+| 定时任务 | SnailJob | 2.0.2 |
+| AI | Spring AI / SnailAI | 2.0.1 / 1.1.1 |
+| 搜索引擎 | Easy-ES + Elasticsearch | 3.0.2 / 7.17.28 |
+| MQTT | mica-mqtt | 2.6.12 |
+| 短信 | SMS4J | 3.3.5 |
+| Excel | Apache Fesod | 2.0.2-incubating |
+| 对象映射 | MapStruct-Plus | 1.5.3 |
+| 接口文档 | SpringDoc OpenAPI + therapi（JavaDoc 零注解生成） | 3.1.1 / 0.15.0 |
+| 服务监控 | Spring Boot Admin | 4.1.2 |
+| 工具库 | Hutool | 5.8.47 |
+| 社交登录 | JustAuth | 3.0.1 |
+| 序列化 | Fory | 1.7.4 |
+| IP 定位 | ip2region（离线库） | 3.3.7 |
+| 加密 | BouncyCastle | 1.86 |
 
+## 模块结构
 
-## 前端整合示例
-- [vue3-admin-cloud](https://github.com/NiLongAo/vue-admin-cloud) - 基于 SpringCloud Alibaba 的微服务中后台快速开发平台
+```
+nla-cloud/
+├── nla-admin/                  启动入口 cn.com.nla.NlaApplication
+│   └── src/main/resources/     application*.yml / logback-nla.xml / banner.txt / i18n / ip2region
+├── nla-api/                    跨模块契约：cn.com.nla.{module}.api + api.domain(DTO) + api.model
+├── nla-common/                 通用基座（25 个子模块）
+│   ├── nla-common-bom              全部 common 坐标清单，供根 POM import
+│   ├── nla-common-core             核心工具 / 常量 / 异常 / 统一响应 R
+│   ├── nla-common-web              Web 基座、全局异常处理器
+│   ├── nla-common-mybatis          持久层、分页 PageQuery、多租户、数据权限
+│   ├── nla-common-redis            Redisson 缓存与分布式锁
+│   ├── nla-common-json             Jackson 增强
+│   ├── nla-common-doc              SpringDoc + therapi 接口文档
+│   ├── nla-common-log              操作日志切面 @Log
+│   ├── nla-common-satoken          Sa-Token 认证
+│   ├── nla-common-security         权限注解 @SaCheckPermission
+│   ├── nla-common-encrypt          字段加密
+│   ├── nla-common-sensitive        数据脱敏 @Sensitive
+│   ├── nla-common-excel            Fesod 导入导出
+│   ├── nla-common-oss              S3 协议对象存储
+│   ├── nla-common-sms              SMS4J 短信
+│   ├── nla-common-mail             邮件
+│   ├── nla-common-social           JustAuth 社交登录
+│   ├── nla-common-translation      字段翻译
+│   ├── nla-common-job              SnailJob 客户端
+│   ├── nla-common-ai               Spring AI 基座
+│   ├── nla-common-mcp              MCP 协议
+│   ├── nla-common-mqtt             mica-mqtt
+│   ├── nla-common-elasticsearch    Easy-ES
+│   ├── nla-common-liteflow         LiteFlow 规则编排
+│   └── nla-common-push             消息推送
+├── nla-modules/                业务模块
+│   ├── nla-system                  系统管理：用户 / 角色 / 菜单 / 部门 / 岗位 / 字典 / 租户 / 客户端
+│   ├── nla-workflow                WarmFlow 工作流
+│   ├── nla-gen                     代码生成
+│   ├── nla-job                     定时任务业务
+│   ├── nla-ai                      AI 业务
+│   └── nla-demo                    功能示例（Excel / 加解密 / 脱敏 / 幂等 / 限流等用法参考）
+├── nla-extend/                 独立运行的服务端
+│   ├── nla-monitor-admin           Spring Boot Admin 监控中心
+│   ├── nla-snailjob-server         SnailJob 调度中心
+│   └── nla-snailai-server          SnailAI 服务端
+├── script/
+│   ├── bin/                        nla.sh / nla.bat 启停脚本
+│   ├── docker/                     docker-compose.yml / database.yml / nginx / redis
+│   ├── sql/                        建表脚本，4 种方言共 14 份（MySQL / Oracle / PostgreSQL / SQLServer）
+│   └── leave/                      工作流请假示例流程定义（6 份 JSON）
+├── docs/migration/             迁移台账
+└── .run/                       IDEA Docker 镜像构建配置（4 份，buildOnly）
+```
+
+## 环境要求
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| JDK | **21** | 必须。根 POM `java.version=21` + `maven.compiler.release=21`，用了虚拟线程等 21 特性 |
+| Maven | 3.9+ | 实测于 3.9.9；`flatten-maven-plugin` 需 Maven 3.x。工程自带 `mvnw` / `mvnw.cmd` 兜底 |
+| MySQL | 8.0+ | 库名默认 `nla-cloud`；也支持 Oracle / PostgreSQL / SQLServer |
+| Redis | 见下 | 缓存、分布式锁、限流均依赖；compose 中用的是 `redis:8.6.3` |
+
+> 工程没有 `maven-enforcer-plugin`，不会在构建时校验上述版本，版本不对只会在运行期报错。
+
+## 快速开始
+
+### 1. 建库
+
+```sql
+CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+> **排序规则必须用 `utf8mb4_unicode_ci`。**
+> `nla_system.sql` / `nla_job.sql` / `nla_workflow.sql` 建表时**不写** `COLLATE`，直接继承库默认值；
+> 而 `nla_ai.sql` 的每张表都**显式**写了 `COLLATE=utf8mb4_unicode_ci`。
+> 若把库建成 `utf8mb4_general_ci`，两批表的排序规则就不一致，
+> 跨表 join 时会报 `Illegal mix of collations`。
+
+按顺序导入 `script/sql/`（MySQL 方言）：
+
+| 脚本 | 内容 |
+|---|---|
+| `nla_system.sql` | 系统管理全部表 + 初始化数据（用户 / 角色 / 菜单 / 字典 / 租户） |
+| `nla_job.sql` | SnailJob 调度相关表 |
+| `nla_workflow.sql` | WarmFlow 工作流表 |
+| `nla_ai.sql` | AI 会话与知识库表 |
+
+Oracle / PostgreSQL / SQLServer 用户改用对应子目录下的同名脚本。
+
+### 2. 改配置
+
+编辑 `nla-admin/src/main/resources/application-dev.yml`：
+
+- 数据源 `url` / `username` / `password`
+- Redis 连接信息
+- OSS、短信、AI 等按需开启（默认注释或留空）
+
+`application-prod.yml` 为生产环境同结构配置。默认激活 `dev`（根 POM `profiles.active`）。
+
+### 3. 编译
+
+```bash
+mvn -B -DskipTests clean install
+```
+
+预期输出 **BUILD SUCCESS**，reactor 共 40 个条目。
+
+### 4. 启动
+
+主服务：运行 `nla-admin` 模块的 `cn.com.nla.NlaApplication`。
+
+可选的独立服务端（按需启动）：
+
+| 模块 | 用途 |
+|---|---|
+| `nla-extend/nla-snailjob-server` | 定时任务调度中心，启用 `nla-common-job` 时必须启动 |
+| `nla-extend/nla-monitor-admin` | 服务监控中心 |
+| `nla-extend/nla-snailai-server` | AI 服务端，启用 `nla-ai` 时需要 |
+
+### 5. 端口
+
+| 服务 | 端口 | 说明 |
+|---|---|---|
+| `nla-admin` | **8080** | 主服务，`context-path: /` |
+| `nla-snailjob-server` | 8800 | 调度中心 |
+| `nla-snailai-server` | 8900 | AI 服务端（含 SSE / WebSocket） |
+| `nla-monitor-admin` | 9090 | 监控中心，路径 `/admin` |
+
+接口文档：`http://localhost:8080/swagger-ui/index.html`
+
+### 6. 默认账号
+
+主服务（`sys_user`，来自 `nla_system.sql`）：
+
+| 账号 | 密码 | 数据权限 |
+|---|---|---|
+| `admin` | `admin123` | 全部数据 |
+| `test` | `666666` | 本部门及以下 |
+| `test1` | `666666` | 仅本人 |
+
+SnailAI 服务端（`sai_user`，来自 `nla_ai.sql`）：`admin` / `admin123`
+
+> 初始化密码仅供本地开发。**部署到任何可被外部访问的环境前必须修改**，
+> 并同步更换 `application.yml` 中 `api-decrypt` 的 RSA 公私钥
+> （当前是仓库里公开可见的示例密钥，不可用于生产）。
+
+## Docker 部署
+
+`script/docker/docker-compose.yml` 是完整编排，共 9 个服务：
+
+| 服务 | 镜像 | 说明 |
+|---|---|---|
+| `mysql` | `mysql:8.4.9` | 数据库 |
+| `redis` | `redis:8.6.3` | 缓存 |
+| `minio` | `pgsty/minio` | 对象存储（S3 协议） |
+| `nginx-web` | `nginx:1.31.1` | 反向代理 |
+| `nla-server1` / `nla-server2` | `nla/nla-server:1.0.0` | 主服务，**双实例**，由 nginx 负载 |
+| `nla-monitor-admin` | `nla/nla-monitor-admin:1.0.0` | 监控中心 |
+| `nla-snailjob-server` | `nla/nla-snailjob-server:1.0.0` | 调度中心 |
+| `nla-snailai-server` | `nla/nla-snailai-server:1.0.0` | AI 服务端 |
+
+```bash
+cd script/docker
+docker compose up -d
+```
+
+注意主服务镜像名是 `nla-server`（而非 `nla-admin`）—— 它由 `nla-admin` 模块打包产出。
+镜像 tag `1.0.0` 与工程 `revision` 保持一致，改版本号时需同步改 compose 与 `.run/`。
+
+`nginx.conf` 已配好 `/snail-ai/` 的 SSE 与 WebSocket 代理
+（`proxy_read_timeout 86400s`、`proxy_buffering off`、`Upgrade` / `Connection` 头透传）。
+
+`script/docker/database.yml` 是**另一回事**：里面是 Oracle 12c / SQLServer 2017 /
+PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需启动，
+对应的建表脚本在 `script/sql/` 的同名方言子目录。
+
+`.run/` 下有 4 份 IDEA Docker 镜像构建配置（`nla-server` / `nla-monitor-admin` /
+`nla-snailjob-server` / `nla-snailai-server`），均为 `buildOnly` 模式，只构建不推送、也不启动容器，
+产出的镜像 tag 正好对应 compose 里的 `image:`。真正拉起服务仍靠上面的 `docker compose up -d`。
+
+## 开发约定
+
+以下是本工程强制执行的约定，新增代码请遵守。完整清单见
+`.qoder/rules/` 下的 6 份规范文档（`backend-crud` / `backend-common-infrastructure` /
+`backend-engineering` / `backend-javadoc` / `backend-module-enhancement` / `backend-query-permission`）。
+
+- **统一响应** `R<T>`，成功码 `200`；业务失败 `return R.fail("中文提示")`，不抛异常
+- **分页**统一 `PageQuery` 入参 + `PageResult<T>` 出参（`total` + `rows`，用 `PageResult.build(list, total)` 构造）
+- **构造器注入** `@RequiredArgsConstructor` + `private final`，不用字段 `@Autowired`
+- **日志**用 `@Slf4j`
+- **操作日志**方法加 `@Log(title=, businessType=)`
+- **权限**用 `@SaCheckPermission("模块:资源:动作")` 注解式鉴权
+- **对象转换**用 MapStruct-Plus 的 `@AutoMapper` + `MapstructUtils.convert()`，不写 `*Convert` 接口
+- **时间类型**用 `LocalDateTime`，不用 `java.util.Date`
+- **接口文档**靠 JavaDoc 自动生成（therapi），不写 `@ApiModelProperty`
+- **写操作**必须 `@Transactional(rollbackFor = Exception.class)`
+- **逻辑删除**：`mybatis-plus.enableLogicDelete: true` 已全局开启，实体加 `@TableLogic private String delFlag`
+  （对应列 `del_flag`）。这是与 `5.0.0-dev` 的**重大差异**，旧版是物理删除 + 删除前引用校验
+- **缓存刷新**用 `@TransactionalEventListener(phase = AFTER_COMMIT)`，定向刷新，禁止全量清空
+- **命名**：实体无后缀、入参 `*Bo`、出参 `*Vo`、Service 接口 `I*Service`、Mapper `*Mapper`
+- **索引前缀**必须 `idx_` / `un_` / `uni_idx_` / `fk_` —— 全局异常处理器靠正则解析这些前缀
+  来生成唯一键冲突的中文提示
+- **敏感字段**（密码 / 密钥）只写不读：列表不返回、详情返回 `null`、修改时空值保持原值、日志不打印明文
+
+## 旧代码
+
+以下目录是 `5.0.0-dev` 微服务版本的遗留代码，**尚未迁移，计划在本分支删除**
+（迁移完成前保留以便对照）：
+
+| 目录 | 内容 |
+|---|---|
+| `spring-boot-business/` | 7 个业务服务：activiti / bean / face / fs / oa / sms / video |
+| `spring-boot-client/` | app（小程序端）/ web-api（Web 聚合端） |
+| `spring-boot-common/` | comm（公共底层）/ entity（实体） |
+| `spring-boot-feign/` | 7 个 Feign 契约模块 |
+| `spring-boot-service/` | nacos / seata / sentinel / xxl-job 本地服务端 |
+| `spring-boot-starter/` | 21 个技术封装 starter |
+| `spring-boot-system/` | gateway / pay / sso |
+| `sql/` | 10 份旧建表脚本 |
+| `.lib-service/` | allatori / rabbitmq-plugins / skywalking-agent |
+
+共 46 个子模块、1847 个 Java 文件。各业务域到 `nla-modules/*` 的映射关系见
+[mapping.md 第 6 节](docs/migration/mapping.md#6-业务模块映射)。
+
+## 迁移进度
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| 0 | 前置环境（JDK 21 / Maven / 依赖可拉取） | ✅ |
+| 1 | 工程骨架（根 POM / 全部模块 POM / 启动类 / 配置 / script） | ✅ |
+| 2 | 通用基座 25 个 `nla-common-*` | ✅ |
+| 3 | 自建技术封装 6 个（freeswitch / gb28181 / pay / facesdk / socketio / mq） | ⬜ |
+| 4 | 数据层重写（实体 / Bo / Vo / DDL / 91 个 Mapper XML） | ⬜ |
+| 5 | 认证鉴权与租户（OAuth2 → Sa-Token） | ⬜ |
+| 6 | 业务模块迁移（7 批次） | ⬜ |
+| 7 | 工作流与调度替换（Activiti → WarmFlow） | ⬜ |
+| 8 | client 聚合层扁平化（废弃 43 个 Feign） | ⬜ |
+| 9 | 部署与全量验证 | 🟡 部分完成 |
+
+详见 [mapping.md 第 8 节](docs/migration/mapping.md#8-阶段进度台账)。
+
+## 前端
+
+`5.0.0-dev` 配套的前端是 [vue-admin-cloud](https://github.com/NiLongAo/vue-admin-cloud)
+（基于 Spring Cloud Alibaba）。
+
+本分支的接口契约已全面变更（成功码 `0`→`200`、URL 前缀、分页结构、字段名），
+前端需**另立改造任务线**同步适配，不在本仓库范围内。
 
 ## 备注
-- 由于项目文件过大，将部分大文件剔除，有需要者，自行下载
-- 剔除文件：模块中已说明
-- [大文件下载地址 ](https://pan.xunlei.com/s/VNdi9s7-6nE1U-Ht5U_xgKyWA1)  提取码：rapu，解压码：spring-boot-cloud
+
+- 旧版因项目文件过大剔除了部分大文件（人脸模型、混淆工具、SkyWalking Agent）。
+  这些文件随对应模块迁移时会重新评估处理方式，需要旧版大文件的请到 `5.0.0-dev` 分支查看说明。
+- 旧版在线演示 <https://www.nilongao.cn/spring-cloud/>（测试账号 `nilongao` / `nilongao`）
+  对应的是 `5.0.0-dev` 微服务版本，与本分支无关。
+
 ## 交流
-`逆龙傲` 是完全开源免费的项目，在帮助开发者更方便地进行中大型管理系统开发，同时也提供 QQ 交流群使用问题欢迎在群内提问。
+
+`逆龙傲` 是完全开源免费的项目，旨在帮助开发者更方便地进行中大型管理系统开发。
+使用问题欢迎在 QQ 群内提问：
+
 - QQ 群 `715528092`
 
+## 许可
 
+[Apache License 2.0](LICENSE)
