@@ -675,7 +675,7 @@ agent 照做只会读文件失败或写出错误 import。
 > ⚠️ **IDE 侧影响**：skill 的调用名由 `$ruoyi-plus-ai-coding` 变为 `$nla-plus-ai-coding`，
 > 需要重新加载工作区才能生效。
 
-### 7.7 上游遗留：SQL 排序规则不统一（阶段 4 必须处理）
+### 7.7 排序规则统一到 `utf8mb4_cs_0900_ai_ci`
 
 上游建表脚本在字符集声明上不一致，本工程忠实复制后继承了这个差异：
 
@@ -684,15 +684,104 @@ agent 照做只会读文件失败或写出错误 import。
 | `nla_system.sql` | **完全不写**，建表时继承库默认值 |
 | `nla_job.sql` | 同上 |
 | `nla_workflow.sql` | 同上 |
-| `nla_ai.sql` | **每张表都显式写** `COLLATE=utf8mb4_unicode_ci` |
+| `nla_ai.sql` | 上游**每张表都显式写** `COLLATE=utf8mb4_unicode_ci`，**本工程已统一改写** |
 
-后果：若把库建成 `utf8mb4_general_ci`，`nla_ai` 的表与其他三批表排序规则不一致，
-跨表 join 时报 `Illegal mix of collations`。
+混用不是理论风险，已在目标服务器 `1.82.217.118:3401`（MySQL 8.0.23）实测：
 
-**当前约定**：建库统一用 `utf8mb4` + `utf8mb4_unicode_ci`（已写入 README）。
+```sql
+SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
+     = CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci;
+-- ERROR 1267 (HY000): Illegal mix of collations
+--   (utf8mb4_cs_0900_ai_ci,EXPLICIT) and (utf8mb4_unicode_ci,EXPLICIT) for operation '='
+```
 
-**阶段 4 重写业务表 DDL 时必须显式写 `COLLATE=utf8mb4_unicode_ci`**，
-不要再依赖库默认值 —— 否则部署环境的库字符集一旦不同就会重现这个问题。
+**当前约定**：全库统一 `utf8mb4` + `utf8mb4_cs_0900_ai_ci`（用户拍板，已写入 README）。
+`nla_ai.sql` 的 22 处显式声明已由 `.migration/fix-ai-collation.ps1` 改写为该值，
+改写后 `utf8mb4_unicode_ci` 残留 **0** 处、`utf8mb4_cs_0900_ai_ci` 命中 **22** 处（23 张表中
+`sai_user` 上游本就不写 `COLLATE`，继承库默认值），`verify-encoding.ps1` 复核中文完好（cjk=1844 未变）。
+
+#### 7.7.1 更正：`cs` 是捷克语代码，不是 case-sensitive
+
+命名规则是 `utf8mb4_<语言>_0900_<ai|as>_<ci|cs>`，大小写敏感性只看**结尾**的 `_ci`/`_cs`。
+迁移过程中一度误判 `utf8mb4_cs_0900_ai_ci` 为大小写敏感，已实测纠正：
+
+| 排序规则 | `SELECT 'a' = 'A'` | 结论 |
+|---|---|---|
+| `utf8mb4_cs_0900_ai_ci` | **1** | 大小写**不**敏感（`cs` = Czech） |
+| `utf8mb4_unicode_ci` | 1 | 大小写不敏感 |
+| `utf8mb4_0900_as_cs` | 0 | 这才是大小写敏感 |
+
+所以选它不影响登录、字典查询这类依赖大小写不敏感的逻辑。
+对 CJK 文本，两者都是 UCA 排序、按码点权重比较，中文排序行为实质相同。
+
+#### 7.7.2 ⚠️ `regen-sql.ps1` 尚未同步这条规则
+
+它是 14 份 SQL 的唯一事实来源，**下次重生 SQL 会把 `nla_ai.sql` 的 22 处改回
+`utf8mb4_unicode_ci`**，静默重现 ERROR 1267。该脚本仍含中文字面量、仍靠 BOM
+（见 10.1 遗留风险），改它之前必须先转纯 ASCII。
+**在那之前：重生 SQL 后必须重跑 `fix-ai-collation.ps1 -Apply`，并用 `probe-collation.ps1` 验收。**
+
+**阶段 4 重写业务表 DDL 时同样必须显式写 `COLLATE=utf8mb4_cs_0900_ai_ci`**，
+不要再依赖库默认值 —— 否则部署环境的库排序规则一旦不同就会重现这个问题。
+
+### 7.8 工作流分库（WarmFlow 动态表名方案）
+
+> 用户需求（原文）：**工作流需要使用分库，业务库在 `nla_workflow`**。上游 RuoYi-Vue-Plus
+> 无此能力（workflow 表与 `sys_*` 同在主库），属有意偏离。
+
+#### 7.8.1 WarmFlow 不支持分库（实测三条证据）
+
+扒 `warm-flow-*` 全部 jar（1.8.9，`D:\develop\Maven\repository\org\dromara\warm`）：
+
+| # | 证据 | 检测方式 |
+|---|---|---|
+| 1 | 配置项无 `schema`/`database`/`table-prefix`，仅 `data-source-type`（ORM 方言）、`tenant-handler-path`（`tenant_id` 行级多租户） | 解析 `plugin-modes-sb` 的 `configuration-metadata.json`，19 个属性无一涉及库名 |
+| 2 | 8 张引擎表名硬编码在实体 `@TableName`，裸表名无库前缀 | 扫 `orm/entity/Flow*.class` |
+| 3 | 全部 jar **0 处** `SqlSessionFactory`，复用宿主的，宿主连哪个库就发哪个库 | 全 jar 字节搜索 |
+
+对比：Activiti（`activiti.datasource.jdbc-url`）、Flowable（`setDataSource`+schema）都原生支持独立引擎数据源，**WarmFlow 无此扩展点**。
+
+#### 7.8.2 方案选型
+
+| 方案 | 覆盖引擎三方 mapper | 事务 | 结论 |
+|---|---|---|---|
+| `@DS` 切数据源 | ❌ 引擎 mapper 在 jar 里加不了注解；官方也「不建议 mapper 加 `@DS`」；19 处 `FlowEngine.xxxService()` 走默认库 | 跨库非原子 | 否决 |
+| `@TableName(schema=…)` | ❌ 引擎实体在三方 jar | — | 否决 |
+| 每库独立 `SqlSessionFactory` | ❌ WarmFlow 复用宿主，无法隔离 | — | 否决 |
+| **动态表名拦截器** | ✅ 改写在**共享 SQL 链**上，引擎+自有 mapper 全覆盖 | 单连接原子 | **采用** |
+| 拆独立微服务 | ✅ 但监听器回调 `sys_user` 强耦合 | — | 不划算 |
+
+采用 MP `DynamicTableNameInnerInterceptor`，把 12 张表（8 引擎 + 4 自有 `flow_category`/`flow_spel`/`flow_instance_biz_ext`/`test_leave`）改写成 `nla_workflow.<表>`，`sys_*` 不加前缀落主库。同实例跨 schema 是 MySQL 原生能力：一条连接、事务原子、业务零注解。此为社区 MP 分库主流做法（掘金「动态表名的正确打开方式」：动态表名与多数据源不冲突）。
+
+#### 7.8.3 实现与配置化
+
+| 文件 | 职责 |
+|---|---|
+| `config/WarmFlowConfig.java` | `InitializingBean`，把动态表名拦截器插在分页插件之前（MP 官方顺序）；`resolveTables()` 决定生效白名单 |
+| `config/WorkflowProperties.java` | `@ConfigurationProperties("nla.workflow")`，含 `schema` + `tables` |
+| `application-{dev,prod}.yml` | `nla.workflow.schema: nla_workflow` + `tables` 显式 12 张 |
+
+**配置化取舍**：采纳社区「白名单放 yml」，但**不采纳 ThreadLocal 动态后缀**——那是为「按时间分表」设计，而 WarmFlow 大量异步回调（`WorkflowGlobalListener.publishEvent`、`AFTER_COMMIT` 缓存刷新），ThreadLocal 在线程切换时丢上下文会让 `flow_*` 落回主库（社区「避坑指南」亦警告）。本工程用**静态 schema 前缀**（启动固化进拦截器闭包）天然免疫。两点增强：① `tables` 留空回退内置默认 12 张（防漏配静默失效）；② 精确匹配而非社区 `startsWith`（避免误伤 `flow_xxx_bak`）。
+
+#### 7.8.4 验证
+
+- **单测 `WarmFlowConfigTest` 9/9 绿**：12 表全限定、主库表不动、增删改/join/子查询改写、同形列名不误伤、空库名回退、幂等、yml 配置覆盖默认清单。
+- **真实启动冒烟**（`@Value` 版）：`Started in 21.33s`，日志 `工作流分库已启用：12 张表限定到库 [nla_workflow]，插入拦截器链位置 1`，`sys_oss_config` 落主库成功，零异常。
+- ⚠️ **配置化后（`@ConfigurationProperties` 版）的真实 yml 绑定尚未冒烟复验**：核心逻辑已被单测覆盖，绑定 `List<String>` 为 Spring Boot 基础能力，风险低；如需实证，重启冒烟查 actuator `configprops` 的 `nla.workflow.tables`（日志「12 张」无法区分 yml 绑定与兜底，须用 configprops 或哨兵表区分）。
+
+> `flow_form` 本工程未建表，登记在白名单无副作用；将来建表即自动分库。
+
+#### 7.8.5 为何只有工作流需要分库（job/ai 对照核查）
+
+`nla-admin` 同样打包了 `nla-job`、`nla-ai`，对应表在独立库 `nla_job`（`sj_*`）、`nla_ai`（`sai_*`），乍看是同类跨库隐患。实测**不是**——部署形态与工作流根本不同：
+
+| 模块 | admin 内的形态 | 谁访问业务表 | 结论 |
+|---|---|---|---|
+| `nla-workflow` | WarmFlow 引擎 + 8 个 Mapper **直连** `flow_*` | **admin 进程本身** | 需动态表名改写（见 7.8.3） |
+| `nla-job` | 仅 SnailJob **客户端执行器**（`*Task`/`*Executor`）+ `BillDTO`（record，无 `@TableName`），**0 个 Mapper** | 独立进程 `nla-snailjob-server`（自带数据源 → `nla_job`） | admin 不碰 `sj_*`，无需处理 |
+| `nla-ai` | 仅 `SnailAiController`，注入 `OpenApiUserClient` **SDK**（HTTP/RPC），**0 个 Mapper** | 独立进程 `nla-snailai-server`（自带数据源 → `nla_ai`） | admin 不碰 `sai_*`，无需处理 |
+
+证据：两模块 `src` 下无任何 `@TableName`/`BaseMapperPlus`/`@DS`/`Mapper<`；`nla-snailjob-server` 的 `application-{dev,prod}.yml` 数据源为 `jdbc:mysql://localhost:3306/nla_job`，`nla-snailai-server` 为 `.../nla_ai`。**故动态表名拦截器只需覆盖 `flow_*`/`test_leave` 共 12 张，无需扩展到 `sj_*`/`sai_*`。**
 
 ---
 
@@ -814,6 +903,7 @@ agent 照做只会读文件失败或写出错误 import。
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
 | `build.ps1` | 唯一编译入口。设 `JAVA_HOME` + 全路径 mvn，日志落 `.migration/build.log` | ✅ |
+| `test-workflow.ps1` | 跑 `WarmFlowConfigTest` 分库契约测试（`-pl nla-modules/nla-workflow`，无 `-am`，需上游模块已 install），日志落 `.migration/test-workflow.log` | ✅ |
 | `add-bom.ps1` | 给含 CJK 字面量的脚本补 UTF-8 BOM。**PowerShell 5.1 会按 GBK 读无 BOM 的 .ps1** | ✅ |
 | `audit-brand.ps1` | 全仓品牌残留审计，带白名单与命中计数 | ✅ |
 | `regen-sql.ps1` | 14 份 SQL 的唯一事实来源（上游 → 替换链 → 8 条规则 → 校验 → 写盘） | ✅ |
@@ -834,6 +924,8 @@ agent 照做只会读文件失败或写出错误 import。
 | `probe-script-ledger.ps1` | 将本节索引与 `.migration/` 实际文件对账，分别列出"已登记但丢失"与"存在但未登记" | ✅ |
 | `probe-skill-brand.ps1` | 绕开审计的行内/目录白名单，对 ai-coding skill 目录做**原始**品牌暴露量化，按文件与模式列出命中（改名前的调查工具，见 7.6.1） | ✅ |
 | `rename-ai-skill.ps1` | ai-coding skill 改名与修复的唯一事实来源：目录 `ruoyi-plus-ai-coding` → `nla-plus-ai-coding`，10 条带 min 断言的替换规则，保护 2 条真实上游链接（见 7.6.1） | ✅ |
+| `probe-collation.ps1` | 全仓扫描 `utf8mb4_unicode_ci`，按文件列出命中数并**区分可改文件与老项目只读文件**（老项目命中必须保持不动，见 7.7） | ✅ |
+| `fix-ai-collation.ps1` | 把 `nla_ai.sql` 的 22 处显式 `COLLATE` 统一为 `utf8mb4_cs_0900_ai_ci`；带 min 断言与残留 0 校验，保留原 BOM 状态，`-Apply` 才写盘（见 7.7）。⚠️ `regen-sql.ps1` 重生后必须重跑 | ✅ |
 
 ### 10.1 脚本编写的四条踩坑教训
 

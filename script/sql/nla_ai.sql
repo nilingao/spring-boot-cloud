@@ -39,7 +39,7 @@ CREATE TABLE sai_openapi_user
     UNIQUE KEY uk_app_external (app_id, external_id),
     INDEX            idx_open_id (open_id),
     INDEX            idx_platform_user (platform_user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_cs_0900_ai_ci
   COMMENT='OpenAPI 外部用户映射表';
 
 
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS sai_model_provider
     UNIQUE KEY uk_provider_key (provider_key)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = 'AI模型提供商表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'AI模型提供商表';
 
 CREATE INDEX idx_provider_key ON sai_model_provider (provider_key);
 CREATE INDEX idx_is_enabled ON sai_model_provider (is_enabled);
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS sai_model_config
     KEY fk_provider_id (provider_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = 'AI模型配置表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'AI模型配置表';
 
 CREATE INDEX idx_provider_model_type ON sai_model_config (provider_id, model_type);
 CREATE INDEX idx_model_type_enabled ON sai_model_config (model_type, is_enabled);
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS sai_model_usage_stat
     KEY fk_stat_model_id (model_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '模型使用统计表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '模型使用统计表';
 
 CREATE INDEX idx_model_id ON sai_model_usage_stat (model_id);
 CREATE INDEX idx_user_id ON sai_model_usage_stat (user_id);
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS sai_agent
     update_dt               TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体表';
 
 CREATE INDEX idx_agent_creator ON sai_agent (creator_id);
 CREATE INDEX idx_agent_featured ON sai_agent (is_featured);
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS sai_agent_conversation
     UNIQUE KEY uk_conv_id (conversation_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体对话表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体对话表';
 
 CREATE INDEX idx_agent_conv_agent ON sai_agent_conversation (agent_id);
 CREATE INDEX idx_agent_conv_user ON sai_agent_conversation (user_id);
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS sai_agent_conversation_record
     create_dt       TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体对话消息记录';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体对话消息记录';
 
 CREATE INDEX idx_agent_rec_conv ON sai_agent_conversation_record (conversation_id);
 
@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS sai_agent_usage_stat
     UNIQUE KEY uk_agent_user_date (agent_id, user_id, stat_date)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体使用统计';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体使用统计';
 
 CREATE INDEX idx_usage_agent ON sai_agent_usage_stat (agent_id);
 CREATE INDEX idx_usage_date ON sai_agent_usage_stat (stat_date);
@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS sai_user_agent
     UNIQUE KEY uk_user_agent (user_id, agent_id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci COMMENT = '用户订阅的智能体';
+  COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '用户订阅的智能体';
 
 CREATE INDEX idx_user_agent_user ON sai_user_agent (user_id);
 
@@ -263,7 +263,7 @@ CREATE TABLE sai_rag
     update_dt                 TIMESTAMP             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  COLLATE = utf8mb4_cs_0900_ai_ci;
 
 -- 4.2 RAG 文档表
 CREATE TABLE sai_rag_document
@@ -294,7 +294,7 @@ CREATE TABLE sai_rag_document
     update_dt    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  COLLATE = utf8mb4_cs_0900_ai_ci;
 
 CREATE INDEX idx_rag_doc_rag ON sai_rag_document (rag_id);
 CREATE INDEX idx_rag_content_hash ON sai_rag_document (rag_id, content_hash);
@@ -321,7 +321,7 @@ CREATE TABLE sai_rag_document_image
     update_dt     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  COLLATE = utf8mb4_cs_0900_ai_ci;
 
 CREATE INDEX idx_rag_doc_image_rag ON sai_rag_document_image (rag_id);
 CREATE INDEX idx_rag_doc_image_document ON sai_rag_document_image (document_id);
@@ -345,7 +345,7 @@ CREATE TABLE sai_rag_chunk
     update_dt       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  COLLATE = utf8mb4_cs_0900_ai_ci;
 
 CREATE INDEX idx_rag_chunk_rag ON sai_rag_chunk (rag_id);
 CREATE INDEX idx_rag_chunk_document ON sai_rag_chunk (document_id);
@@ -377,7 +377,7 @@ CREATE TABLE IF NOT EXISTS sai_mcp_server
     update_dt        TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = 'MCP服务配置表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'MCP服务配置表';
 
 CREATE INDEX idx_mcp_server_creator ON sai_mcp_server (creator_id);
 
@@ -391,7 +391,7 @@ CREATE TABLE IF NOT EXISTS sai_agent_mcp_server
     UNIQUE KEY uk_agent_mcp (agent_id, mcp_server_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体MCP服务关联表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体MCP服务关联表';
 
 CREATE INDEX idx_agent_mcp_agent ON sai_agent_mcp_server (agent_id);
 CREATE INDEX idx_agent_mcp_server ON sai_agent_mcp_server (mcp_server_id);
@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS sai_skill
     update_dt     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = 'Skill技能包表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'Skill技能包表';
 
 CREATE INDEX idx_skill_creator ON sai_skill (creator_id);
 
@@ -438,7 +438,7 @@ CREATE TABLE IF NOT EXISTS sai_skill_file
     KEY idx_skill_id (skill_id) COMMENT '技能ID索引'
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = 'Skill支撑文件内容表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'Skill支撑文件内容表';
 
 -- 6.3 智能体与Skill关联表（多对多）
 CREATE TABLE IF NOT EXISTS sai_agent_skill
@@ -450,7 +450,7 @@ CREATE TABLE IF NOT EXISTS sai_agent_skill
     UNIQUE KEY uk_agent_skill (agent_id, skill_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '智能体Skill关联表';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '智能体Skill关联表';
 
 CREATE INDEX idx_agent_skill_agent ON sai_agent_skill (agent_id);
 CREATE INDEX idx_agent_skill_skill ON sai_agent_skill (skill_id);
@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS sai_app
     UNIQUE KEY uk_app_id (app_id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci COMMENT = '客户端应用';
+  COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '客户端应用';
 
 -- 7.2 AI客户端实例节点
 CREATE TABLE IF NOT EXISTS sai_client_node
@@ -496,7 +496,7 @@ CREATE TABLE IF NOT EXISTS sai_client_node
     INDEX idx_app_expire (app_id, expire_dt)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci COMMENT = 'AI客户端实例节点';
+  COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = 'AI客户端实例节点';
 
 
 -- ============================================================
@@ -517,7 +517,7 @@ CREATE TABLE IF NOT EXISTS sai_store_instance
     update_dt  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '存储实例';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '存储实例';
 
 CREATE INDEX idx_store_instance_category ON sai_store_instance (category);
 CREATE INDEX idx_store_instance_type ON sai_store_instance (type);
@@ -542,7 +542,7 @@ CREATE TABLE IF NOT EXISTS sai_resource
     INDEX idx_creator (creator_id)
     ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4
-    COLLATE = utf8mb4_unicode_ci COMMENT = '通用资源存储';
+    COLLATE = utf8mb4_cs_0900_ai_ci COMMENT = '通用资源存储';
 
 
 -- ============================================================

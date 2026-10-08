@@ -138,14 +138,21 @@ nla-cloud/
 ### 1. 建库
 
 ```sql
-CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
 ```
 
-> **排序规则必须用 `utf8mb4_unicode_ci`。**
+> **全库排序规则必须统一为 `utf8mb4_cs_0900_ai_ci`。**
 > `nla_system.sql` / `nla_job.sql` / `nla_workflow.sql` 建表时**不写** `COLLATE`，直接继承库默认值；
-> 而 `nla_ai.sql` 的每张表都**显式**写了 `COLLATE=utf8mb4_unicode_ci`。
-> 若把库建成 `utf8mb4_general_ci`，两批表的排序规则就不一致，
-> 跨表 join 时会报 `Illegal mix of collations`。
+> `nla_ai.sql` 上游原本每张表都**显式**写 `COLLATE=utf8mb4_unicode_ci`，本工程已把 22 处统一改为
+> `utf8mb4_cs_0900_ai_ci`。两批表排序规则不一致时，跨表比较会直接报
+> `ERROR 1267 Illegal mix of collations`（已在 MySQL 8.0.23 实测复现）。
+>
+> 名字里的 `cs` 是**捷克语语言代码**，不是 case-sensitive；大小写敏感性由结尾的 `_ci` 决定，
+> 所以它和 `utf8mb4_unicode_ci` 一样**不区分大小写**（实测 `'a' = 'A'` 返回 1），
+> 不影响登录、字典查询这类逻辑。详见 [mapping.md 7.7](docs/migration/mapping.md#77-排序规则统一到-utf8mb4_cs_0900_ai_ci)。
+>
+> ⚠️ 重生 SQL（`.migration/regen-sql.ps1`）会把这 22 处改回 `utf8mb4_unicode_ci`，
+> 重生后必须重跑 `.migration/fix-ai-collation.ps1 -Apply`。
 
 按顺序导入 `script/sql/`（MySQL 方言）：
 

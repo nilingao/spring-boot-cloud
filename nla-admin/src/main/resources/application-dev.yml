@@ -99,9 +99,9 @@ spring:
           type: ${spring.datasource.type}
           driverClassName: com.mysql.cj.jdbc.Driver
           # jdbc 参数说明：rewriteBatchedStatements=true 批处理优化 大幅提升批量插入更新删除性能(对数据库有性能损耗 使用批量操作应考虑性能问题)
-          url: jdbc:mysql://localhost:3306/nla-cloud?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          url: jdbc:mysql://1.82.217.118:3401/nla_system?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
           username: root
-          password: root
+          password: ${NLA_DB_PASSWORD:root}
 #        # 从库数据源
 #        slave:
 #          lazy: true
@@ -144,17 +144,38 @@ spring:
         # 多久检查一次连接的活性
         keepaliveTime: 30000
 
+--- # 工作流分库
+nla:
+  workflow:
+    # 工作流表所在的库，与上方 master 同一个 MySQL 实例；留空表示与主库同库
+    schema: nla_workflow
+    # 需要限定到上述库的表名白名单（精确匹配，大小写不敏感）；
+    # 留空则使用内置默认清单，仅当 WarmFlow 升级新增引擎表或本模块新增自有 flow_* 表时才需增删
+    tables:
+      - flow_definition
+      - flow_node
+      - flow_skip
+      - flow_instance
+      - flow_task
+      - flow_his_task
+      - flow_user
+      - flow_form
+      - flow_category
+      - flow_spel
+      - flow_instance_biz_ext
+      - test_leave
+
 --- # redis 单机配置(单机与集群只能开启一个另一个需要注释掉)
 spring.data:
   redis:
     # 地址
-    host: localhost
+    host: 1.82.217.118
     # 端口，默认为6379
     port: 6379
     # 数据库索引
-    database: 0
+    database: 4
     # redis 密码必须配置
-    password: nla123
+    password: ${NLA_REDIS_PASSWORD:nla123}
     # 连接超时时间
     timeout: 10s
     # 是否开启ssl
