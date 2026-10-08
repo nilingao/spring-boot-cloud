@@ -1,0 +1,29 @@
+package cn.com.nla.workflow.api.event;
+
+import lombok.Data;
+
+import java.io.Serial;
+import java.io.Serializable;
+
+/**
+ * 删除流程监听
+ *
+ * @author TZY
+ */
+@Data
+public class ProcessDeleteEvent implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 流程定义编码
+     */
+    private String flowCode;
+
+    /**
+     * 业务id
+     */
+    private String businessId;
+
+}

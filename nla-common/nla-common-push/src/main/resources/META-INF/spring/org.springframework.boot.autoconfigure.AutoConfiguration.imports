@@ -1,0 +1,3 @@
+cn.com.nla.common.push.config.MessageAutoConfiguration
+cn.com.nla.common.push.config.MessageSseConfiguration
+cn.com.nla.common.push.config.MessageWebSocketConfiguration

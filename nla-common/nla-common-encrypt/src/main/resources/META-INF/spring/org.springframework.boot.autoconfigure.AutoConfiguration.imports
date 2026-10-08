@@ -1,0 +1,3 @@
+cn.com.nla.common.encrypt.config.EncryptorAutoConfiguration
+cn.com.nla.common.encrypt.config.ApiDecryptAutoConfiguration
+

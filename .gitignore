@@ -1,9 +1,15 @@
-HELP.md
+######################################################################
+# Build Tools
+
+.gradle
+/build/
+!gradle/wrapper/gradle-wrapper.jar
+
 target/
 !.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
 
+######################################################################
+# IDE
 
 ### STS ###
 .apt_generated
@@ -12,8 +18,6 @@ target/
 .project
 .settings
 .springBeans
-.sts4-cache
-*.ttc
 
 ### IntelliJ IDEA ###
 .idea
@@ -21,21 +25,68 @@ target/
 *.iml
 *.ipr
 
+### VS CODE ###
+.vscode
+
+### JRebel ###
+rebel.xml
+
 ### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
+nbproject/private/
+build/*
+nbbuild/
+nbdist/
+.nb-gradle/
+
+######################################################################
+# Others
+*.log
+*.log.gz
+*.xml.versionsBackup
+*.swp
+
+!*/build/*.java
+!*/build/*.html
+!*/build/*.xml
+
+.flattened-pom.xml
+
+application-local.yml
+application-ga.yml
+
+######################################################################
+# NLA Cloud 项目特有规则（自 5.0.0-dev 迁移保留）
+
+### Spring Initializr 生成的帮助文件 ###
+HELP.md
+
+### target / build 内的源码目录不忽略 ###
+!**/src/main/**/target/
+!**/src/test/**/target/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### logs ###
+### STS4 缓存与打包临时字体文件 ###
+.sts4-cache
+*.ttc
+
+### NetBeans 产物 ###
+/dist/
+
+### 运行日志目录 ###
 logs
-### 大文件取消上传 ###
+
+### 本地大文件与工具缓存：离线依赖 jar、接口调试记录、索引缓存 ###
 .lib-service/
 .fastRequest/
 .codex
-*/spring-boot-face/conf/
 .codegraph
+.qoder/
+
+### 迁移脚手架脚本与中间产物，不入库（`.build/` 是项目 CI 脚本目录，切勿忽略） ###
+.migration/
+
+### 人脸识别模型与 native 库（体积大，随部署包外置） ###
+nla-modules/nla-face/conf/
+# 旧工程同名目录在 5.0.0-dev 里同样不入库（406MB 模型），保留到阶段 6 删除前继续忽略
+spring-boot-business/spring-boot-face/conf/

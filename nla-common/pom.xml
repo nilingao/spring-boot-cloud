@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>nla-cloud</artifactId>
+        <groupId>cn.com.nla</groupId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>nla-common</artifactId>
+    <packaging>pom</packaging>
+
+    <description>
+        common 通用模块
+    </description>
+
+    <modules>
+        <module>nla-common-bom</module>
+        <module>nla-common-social</module>
+        <module>nla-common-core</module>
+        <module>nla-common-doc</module>
+        <module>nla-common-excel</module>
+        <module>nla-common-job</module>
+        <module>nla-common-log</module>
+        <module>nla-common-mail</module>
+        <module>nla-common-mybatis</module>
+        <module>nla-common-oss</module>
+        <module>nla-common-redis</module>
+        <module>nla-common-satoken</module>
+        <module>nla-common-security</module>
+        <module>nla-common-sms</module>
+        <module>nla-common-elasticsearch</module>
+        <module>nla-common-web</module>
+        <module>nla-common-translation</module>
+        <module>nla-common-sensitive</module>
+        <module>nla-common-json</module>
+        <module>nla-common-encrypt</module>
+        <module>nla-common-push</module>
+        <module>nla-common-liteflow</module>
+        <module>nla-common-mqtt</module>
+        <module>nla-common-ai</module>
+        <module>nla-common-mcp</module>
+    </modules>
+
+</project>

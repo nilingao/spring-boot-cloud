@@ -1,0 +1,4 @@
+cn.com.nla.common.web.config.CaptchaConfig
+cn.com.nla.common.web.config.FilterConfig
+cn.com.nla.common.web.config.I18nConfig
+cn.com.nla.common.web.config.ResourcesConfig
