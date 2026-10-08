@@ -769,7 +769,6 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 - **真实启动冒烟**（`@Value` 版）：`Started in 21.33s`，日志 `工作流分库已启用：12 张表限定到库 [nla_workflow]，插入拦截器链位置 1`，`sys_oss_config` 落主库成功，零异常。
 - ⚠️ **配置化后（`@ConfigurationProperties` 版）的真实 yml 绑定尚未冒烟复验**：核心逻辑已被单测覆盖，绑定 `List<String>` 为 Spring Boot 基础能力，风险低；如需实证，重启冒烟查 actuator `configprops` 的 `nla.workflow.tables`（日志「12 张」无法区分 yml 绑定与兜底，须用 configprops 或哨兵表区分）。
 
-> `flow_form` 本工程未建表，登记在白名单无副作用；将来建表即自动分库。
 
 #### 7.8.5 为何只有工作流需要分库（job/ai 对照核查）
 
