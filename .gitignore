@@ -81,7 +81,12 @@ logs
 .fastRequest/
 .codex
 .codegraph
-.qoder/
+### Qoder：rules 与 skills 属交付物（README 直接引用 rules），本地安装的第三方 skill 与缓存不入库 ###
+### 用 `.qoder/*` 而非 `.qoder/`：后者会使子目录的取反规则失效 ###
+.qoder/*
+!.qoder/rules/
+!.qoder/skills/
+.qoder/skills/ruoyi-plus-ai-coding/
 
 ### 迁移脚手架脚本与中间产物，不入库（`.build/` 是项目 CI 脚本目录，切勿忽略） ###
 .migration/

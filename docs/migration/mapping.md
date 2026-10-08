@@ -582,10 +582,19 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 998 files` / `scanned(text)=985  hits=0  allowlisted=6  file-exceptions=6`**
+**`scanning 998 files` / `scanned(text)=988  hits=0  allowlisted=7  file-exceptions=6`**
 
-审计范围含 `.qoder`：它虽在 `.gitignore` 里（L84），但其下 12 份文件在 ignore 规则生效前
-就已提交，git 仍持续跟踪，属交付物。**注意 `Grep` 工具尊重 `.gitignore`，对该目录会返回
+> 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
+> 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
+> `.gitignore` 而非空串，导致 `.gitignore` / `.editorconfig` / `.gitattributes`
+> 三份 dotfile 从未被扫过（已用 `probe-audit-blindspot.ps1` 量化：在 998 份范围内
+> 共 7 份未被扫，其中 4 份是 `.xdb` / `.xlsx` 真二进制，跳过合理）。
+> 修复方式：文件名只有一个前导点时按无扩展名文本处理，兼容将来的 `.dockerignore` 等。
+
+审计范围含 `.qoder`：本次提交后其下有 12 份入库文件（6 份 `rules/backend-*.md`
++ 6 份 `skills/ponytail*/SKILL.md`），属交付物。其中 6 份 ponytail SKILL.md 是在
+`.qoder/` 被整体 ignore 之前就提交、靠 git 持续跟踪留下的；6 份规则文档则需靠
+上面新的取反规则才能正常入库。**注意 `Grep` 工具尊重 `.gitignore`，对该目录会返回
 假阴性的 0 匹配**，必须走 `Get-ChildItem` 的脚本才能扫到 —— 这条教训就是靠它发现
 `.qoder/rules/backend-*.md` 里 9 处真实品牌残留的。
 
@@ -594,7 +603,7 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 | 模式 | 命中数 | 理由 |
 |---|---|---|
 | `gitee\.com/dromara/warm-flow` | 3 | warm-flow 是第三方开源项目，这 3 处是工作流库结构说明中引用其真实来源地址。改写会指向不存在的仓库 |
-| `skills/ruoyi-plus-ai-coding` | 3 | 本地安装的 skill 保留自己的目录名（见下方目录例外），指向其 reference 文档的规则只能照实写 |
+| `skills/ruoyi-plus-ai-coding` | 4 | 本地安装的 skill 保留自己的目录名（见下方目录例外），指向其 reference 文档的规则只能照实写；3 处在 `.qoder/rules/backend-*.md`，1 处在 `.gitignore`（就是把它排除入库的那条规则本身） |
 
 文件级例外（`$allowFiles`，1 份 / 计 6 次跳过中的 1 项）：
 
@@ -606,7 +615,19 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 
 | 路径 | 理由 |
 |---|---|
-| `.qoder/skills/ruoyi-plus-ai-coding` | 该 skill 是本地安装的、**不受 git 跟踪**（在 `.qoder/` 被 ignore 之后才出现），名字不会进仓库。改名会弄坏 IDE 的 skill 注册，没有收益 |
+| `.qoder/skills/ruoyi-plus-ai-coding` | 该 skill 是本地安装的、**不受 git 跟踪**，名字不会进仓库。改名会弄坏 IDE 的 skill 注册，没有收益 |
+
+`.gitignore` 已把上述意图写明，不再靠 `git add -f` 绕过（否则以后新增规则会被静默忽略）：
+
+```gitignore
+.qoder/*                            # 用 .qoder/* 而非 .qoder/，后者会使子目录取反失效
+!.qoder/rules/                      # 6 份规范文档，README 直接引用
+!.qoder/skills/                     # 已入库的 ponytail 系列
+.qoder/skills/ruoyi-plus-ai-coding/  # 本地安装的第三方 skill
+```
+
+四个用例已用 `git check-ignore -v --no-index` 逐个验证：`rules/` 与 `skills/ponytail/`
+可跟踪，`skills/ruoyi-plus-ai-coding/` 与任意 `.qoder/cache/*` 被忽略。
 
 审计扫描的 11 个模式：`(?i)ruoyi`、`(?i)dromara(?!\.(warm|sms4j|mica|easy))`、`(?i)lion\s?li`、
 `(?i)lionli`、`(?i)crazylionli`、`ry-vue`、`\bry_(vue|job|workflow|ai)\b`、`logback-plus`、
@@ -658,7 +679,7 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 | 验收项 | 结果 |
 |---|---|
 | `mvn -B -DskipTests clean install` | ✅ **BUILD SUCCESS 40/40**，`MVN_EXIT=0`，耗时 2:52 |
-| 全仓品牌残留 | ✅ `scanned(text)=985  hits=0  allowlisted=6  file-exceptions=6`（含 `.qoder` 目录） |
+| 全仓品牌残留 | ✅ `scanned(text)=988  hits=0  allowlisted=7  file-exceptions=6`（含 `.qoder` 目录与 3 份 dotfile） |
 | 模块对齐上游 | ✅ 34 子模块文件数全对齐 |
 | SQL 对齐上游 | ✅ 14 份全对齐，差异全部收敛到 8 条已记录规则 |
 | 支撑文件对齐 | ✅ `present=32  missing=10  ours-only=0`（missing 10 = `.gitee` 4 + `.claude` 6，均见 7.5） |
@@ -767,6 +788,7 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
 | `verify-encoding.ps1` | 中文完整性守卫：对关键交付物做严格 UTF-8 解码 + 字节级往返比对，并扫 9 个 GBK 乱码特征字，统计 CJK 字符数 | ✅ |
+| `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 
 ### 10.1 脚本编写的四条踩坑教训
 
@@ -787,8 +809,8 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 - **`-like '??*'` 里的 `?` 是单字符通配符** —— 想筛 `git status --porcelain` 的未跟踪行
   不能用它，会匹配全部行；改用 `.Substring(0,2) -eq '??'`。
 - **`Get-Content` 默认按 ANSI/GBK 解码无 BOM 的 UTF-8 文件** —— 实测本文件
-  （801 行、纯 LF、无 BOM）被读成 **655 行**，凭空少了 146 行；同一文件加
-  `-Encoding UTF8` 得 801、`[IO.File]::ReadAllText` 得 802（含末尾空段）。
+  （纯 LF、无 BOM）被 `Get-Content` 读成 **655 行**，而加 `-Encoding UTF8` 得 801 行、
+  `[IO.File]::ReadAllText` 按 LF 切得 802 段（含末尾空段），凭空少了 146 行。
   **读数、比对、写回一律显式指定 UTF-8**（`Get-Content -Encoding UTF8` 或
   `[IO.File]::ReadAllText/ReadAllBytes`）；`Set-Content` 默认编码同样会损坏中文。
   已用 `verify-encoding.ps1` 对 13 份关键交付物做字节级往返比对，全部 `roundtrip=True`、
