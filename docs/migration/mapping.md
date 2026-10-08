@@ -781,26 +781,38 @@ bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`be
 | `regen-support-cfg.ps1` | docker-compose / nginx.conf / 4 个 `.run` 的唯一事实来源 | ✅ |
 | `probe-yml-diff.ps1` | `nla-admin` 9 份资源与上游的规范化逐行差异 | ✅ |
 | `probe-sql-diff.ps1` | 14 对 SQL 的差异 | ✅ |
-| `probe-sql-brand.ps1` | 上游 SQL 的品牌行行号定位 | ✅ |
+| `probe-sql-brand.ps1` | 上游 SQL 的品牌行行号定位 | — ⚠️ **已丢失**，需时从 `regen-sql.ps1` 的 8 条规则反推 |
 | `probe-cfg-diff.ps1` | docker-compose / nginx 的差异 | ✅ |
 | `probe-support-parity.ps1` | 支撑文件（`.run` / `.gitee` / `.claude`）的存在性对齐 | ✅ |
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对关键交付物做严格 UTF-8 解码 + 字节级往返比对，并扫 9 个 GBK 乱码特征字，统计 CJK 字符数 | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 18 份关键交付物做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
+| `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
+| `probe-codepoints.ps1` | 从现有文件字节里提取 CJK 字面量的 `\uXXXX` 码点，用于把脚本改成纯 ASCII 时不靠记忆拼转义 | ✅ |
+| `probe-script-ledger.ps1` | 将本节索引与 `.migration/` 实际文件对账，分别列出"已登记但丢失"与"存在但未登记" | ✅ |
 
 ### 10.1 脚本编写的四条踩坑教训
 
 1. **不要用 Bash 工具跑内联 PowerShell** —— `$`、引号、反引号会被剥离，`&&` 不被 5.1 支持。
    一切含这些字符的逻辑写入 `.ps1`，用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 执行。
-2. **含中文的脚本必须有 UTF-8 BOM** —— 且 `SearchReplace` 会剥掉 BOM，
-   每次编辑后必须重跑 `add-bom.ps1`。需要 BOM 的：`regen-sql.ps1`、`audit-brand.ps1`、
-   `probe-sql-brand.ps1`。
+2. **脚本一律写成纯 ASCII，不要依赖 BOM** —— PowerShell 5.1 会把无 BOM 的 `.ps1` 按
+   ANSI（zh-CN 机器上是 GBK）解析，中文字面量会被弄坏，甚至直接语法报错。
+   `SearchReplace` 会剥掉 BOM，而且实测发现**未做任何编辑时 BOM 也会自行消失**
+   （`audit-brand.ps1` 4943→4940、`verify-encoding.ps1` 2825→2822，正好各少 3 字节），
+   所以"每次改完重跑 `add-bom.ps1`"并不可靠。
+   **永久解法：把中文字面量改写为正则 `\uXXXX` 转义**（`audit-brand.ps1` 的 `若依`
+   → `\u82e5\u4f9d`，`verify-encoding.ps1` 的 9 个乱码特征字同理），用
+   `probe-codepoints.ps1` 从现有文件取码点、`probe-bom.ps1` 验收 `CJK=False`。
+   ⚠️ **遗留风险**：`regen-sql.ps1`（7610 字节，`BOM=True`）仍含中文字面量、仍靠 BOM。
+   它是 14 份 SQL 的唯一事实来源，下次需要重生 SQL 前必须先把它改成纯 ASCII。
 3. **函数定义必须在调用之前** —— PowerShell 不做前向解析，否则运行时报未识别。
-4. **不要依赖 `.migration/` 内脚本的持久性** —— 该目录已 gitignore，中途出现过脚本与中间
-   产物丢失（`probe-yml-diff.ps1` 曾被迫重写）。关键结论必须写进本文档，
-   脚本只当可再生的一次性工具。
+4. **不要依赖 `.migration/` 内脚本的持久性** —— 该目录已 gitignore，已确认丢失过：
+   `probe-yml-diff.ps1`（被迫重写）与 `probe-sql-brand.ps1`（至今缺失）；
+   另外 `audit-brand.ps1` 与 `verify-encoding.ps1` 的 BOM 也在无人编辑的情况下自行消失。
+   **关键结论必须写进本文档**，脚本只当可再生的一次性工具；
+   每次引用本节索引前先跑 `probe-script-ledger.ps1` 对账。
 
 附带三条工具级陷阱：
 
