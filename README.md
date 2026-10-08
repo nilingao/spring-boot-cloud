@@ -118,7 +118,8 @@ nla-cloud/
 │   ├── sql/                        建表脚本，4 种方言共 14 份（MySQL / Oracle / PostgreSQL / SQLServer）
 │   └── leave/                      工作流请假示例流程定义（6 份 JSON）
 ├── docs/migration/             迁移台账
-└── .run/                       IDEA Docker 镜像构建配置（4 份，buildOnly）
+├── .run/                       IDEA Docker 镜像构建配置（4 份，buildOnly）
+└── .qoder/                     工程规范：rules/（6 份）+ skills/（nla-plus-ai-coding 与 ponytail 系列）
 ```
 
 ## 环境要求
@@ -253,6 +254,8 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 以下是本工程强制执行的约定，新增代码请遵守。完整清单见
 `.qoder/rules/` 下的 6 份规范文档（`backend-crud` / `backend-common-infrastructure` /
 `backend-engineering` / `backend-javadoc` / `backend-module-enhancement` / `backend-query-permission`）。
+`.qoder/skills/nla-plus-ai-coding/references/` 下另有后端、前端与典型场景三份细化文档，
+`backend-engineering` 规则会按任务类型引导读取。
 
 - **统一响应** `R<T>`，成功码 `200`；业务失败 `return R.fail("中文提示")`，不抛异常
 - **分页**统一 `PageQuery` 入参 + `PageResult<T>` 出参（`total` + `rows`，用 `PageResult.build(list, total)` 构造）
