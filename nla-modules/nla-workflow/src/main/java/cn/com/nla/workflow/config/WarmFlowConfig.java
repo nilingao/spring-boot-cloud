@@ -42,31 +42,6 @@ import java.util.Set;
 @Slf4j
 public class WarmFlowConfig implements InitializingBean {
 
-    /**
-     * WarmFlow 引擎表，表名取自 warm-flow-mybatis-plus-core 各实体的 {@code @TableName}。
-     * <p>
-     * {@code flow_form} 本工程未建表（不使用表单功能），登记在此不会有副作用。
-     */
-    private static final Set<String> ENGINE_TABLES = Set.of(
-        "flow_definition", "flow_node", "flow_skip", "flow_instance",
-        "flow_task", "flow_his_task", "flow_user", "flow_form");
-
-    /**
-     * 本模块自有表，与工作流引擎表同库。
-     */
-    private static final Set<String> MODULE_TABLES = Set.of(
-        "flow_category", "flow_spel", "flow_instance_biz_ext", "test_leave");
-
-    /**
-     * yml 未显式配置 {@code nla.workflow.tables} 时使用的默认白名单（引擎表 + 自有表）。
-     */
-    private static final Set<String> DEFAULT_TABLES;
-
-    static {
-        Set<String> all = new HashSet<>(ENGINE_TABLES);
-        all.addAll(MODULE_TABLES);
-        DEFAULT_TABLES = Collections.unmodifiableSet(all);
-    }
 
     private final MybatisPlusInterceptor mybatisPlusInterceptor;
 
@@ -130,7 +105,7 @@ public class WarmFlowConfig implements InitializingBean {
     private Set<String> resolveTables() {
         List<String> configured = properties.getTables();
         if (configured == null || configured.isEmpty()) {
-            return DEFAULT_TABLES;
+            return Collections.emptySet();
         }
         Set<String> tables = new HashSet<>();
         for (String table : configured) {
@@ -138,6 +113,6 @@ public class WarmFlowConfig implements InitializingBean {
                 tables.add(table.trim().toLowerCase(Locale.ROOT));
             }
         }
-        return tables.isEmpty() ? DEFAULT_TABLES : tables;
+        return tables;
     }
 }
