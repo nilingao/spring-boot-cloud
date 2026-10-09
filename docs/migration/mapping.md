@@ -416,7 +416,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 | 批次 | 源模块（文件数） | 目标模块 | 要点 | 状态 |
 |---|---|---|---|---|
-| 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 表映射见下 | 待推进 |
+| 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 基线覆盖复核后**仅 `sys_area` 需迁**（mini/mini_user→`sys_social`+`sys_user`、user_set→`sys_user.status`+超管角色，不新建）；老数据丢弃、流B 数据迁移取消；表映射见下，交付见 6.1.1 | ✅ 完成 |
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 18 Pool + 18 Proxy 对象池包装 JNI，依赖 `nla-common-facesdk` | 待推进 |
@@ -436,7 +436,33 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `sys_dictionary_*` | `sys_dict_*` |
 | `bean_*_connect_*` | `sys_user_role` / `sys_role_menu` / `sys_user_post` / `sys_role_dept` |
 
-bean 独有表**保留为业务表**，不并入 `sys_*`：`bean_user_set`、`bean_mini`、`bean_mini_user`、`sys_area`。
+bean 独有表初判 4 张（`bean_user_set`/`bean_mini`/`bean_mini_user`/`sys_area`），**基线覆盖复核后仅 `sys_area` 为真实缺口需迁**：mini/mini_user 由 `sys_social`+`sys_user` 覆盖、user_set 由 `sys_user.status`+超管角色覆盖，均不新建。详见 6.1.1。
+
+#### 6.1.1 批次 6.1 交付结果（已落地）
+
+**范围收窄（关键决策）**：6.5.1 初判 bean「需迁 4 表」（Mini/MiniUser/UserSet/Area）。实施前对基线 22 个 `sys_*` 逐一做覆盖复核，据用户「如果没有的则需要迁移」指令，**真实缺口仅 `sys_area` 1 表**：
+
+| 旧表 | 基线等价物 | 结论 |
+|---|---|---|
+| `bean_mini`（小程序 openId/nick_name/avatar_url/phone/gender/login_last_time） | `sys_social`（openId/userId/nickName/avatar/source/unionId…）+ `sys_user`（phonenumber/sex/login_date） | 已覆盖，**不新建** |
+| `bean_mini_user`（小程序↔用户绑定 userId） | `sys_social.user_id` 绑定关系 | 已覆盖，**不新建** |
+| `bean_user_set`（is_admin/is_enabled，1:1 附设置；旧 `UserSetServiceImpl` 为空实现、无独有逻辑） | `sys_user.status`（启停）+ 超级管理员角色（is_admin） | 已覆盖，**不新建** |
+| `sys_area`（国标行政区划参考数据） | 基线无 | **缺口 → 迁移** |
+
+**老数据一律丢弃（流B 取消）**：用户明确「老数据一概不要了，全按照新的框架走，都是些测试数据」。故 6.5.2 洞察3 与 6.5.3 所列「bean 数据迁移子任务」（存量 user/dept/role/menu/dict 迁到基线 `sys_*`、密码 Shiro 盐值→BCrypt、菜单 Arco varchar-id 模型→RuoYi M/C/F、role_menu 逗号列表→一行一对）**整条取消**，不做流B 数据迁移。
+
+**`sys_area` 迁移实现（只读参考表）**：
+- **实体特殊处理**：国标行政区划为只读、批量导入的参考数据，故 `SysArea` **不继承 `BaseEntity`**（无审计列），`@TableId(value="area_id", type=IdType.INPUT)`（地区Id 由外部国标数据提供，非雪花）；
+- 分层齐全：`SysArea`/`SysAreaBo`（纯查询，无 `@AutoMapper`）/`SysAreaVo`（`@AutoMapper`）/`SysAreaMapper`（`BaseMapperPlus`，**无 `@DataPermission`**——全局参考数据）/`ISysAreaService`+`SysAreaServiceImpl`/`SysAreaController`；
+- **迁移旧 `AreaServiceImpl` 三段核心逻辑**：`findAreaAll`(树)→`selectAreaTree`（改用基线 `TreeBuildUtils.buildMultiRoot`）、`findAllAreaName`(名称图)→`selectAreaNameMap`（`@Cacheable(CacheNames.SYS_AREA)` + `StreamUtils.toMap`）、`findAddress`(地址拼接)→`findAddress`（`SpringUtils.getAopProxy(this)` 命中缓存）；
+- Controller `/system/area` 4 端点**只读**：`list`/`tree`/`{areaId}`/`address`，权限 `system:area:list`（list/tree）+ `system:area:query`（getInfo/address）；无写入故不加 `@Log`/`@RepeatSubmit`；
+- `CacheNames` 新增 `SYS_AREA = "sys_area#30d"`。
+
+**DDL** `script/sql/nla_system_ext.sql`（独立新文件，不追加到 91.9KB 基线 `nla_system.sql`，保持基线种子干净、便于上游再同步）：`sys_area` 建表（`area_id` 主键无自增 + 4 索引 `idx_area_code`/`idx_parent_id`/`idx_level`/`idx_area_name`）+ 菜单权限（「行政区划」C 菜单 `1761400000000002100` + 查询 F 按钮 `1761400000000002101`，挂系统管理 `1761400000000000001` 下 `order_num=12`）+ 2 条 `sys_role_menu` 授权（普通角色 `1761300000000000003`）；号段 `2100` 与短信号段 `2000`（`nla_message.sql`）无冲突。
+
+**延后项**：`sys_area` 国标数据批量导入（旧库 67 万余行 / 91MB）延后处理，不随脚本入库；Easy-ES 全文检索（旧 `bean_sys_area` 索引）延后至阶段4（`nla-common-elasticsearch`）再评估。
+
+**验证**：`nla-modules/nla-system -am` 编译 `MVN_EXIT=0`；`SysAreaMapper` 的 IDE 自动装配告警为 MyBatis `@MapperScan` 运行时注册的静态分析假阳性，与基线全部 mapper（如 `SysPostMapper` 同样无 `@Mapper` 注解）一致。
 
 ### 6.2 URL 与 action 词表映射
 
@@ -503,7 +529,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 | 批次 | 模块 | 旧实体 | 已覆盖免迁 | 废弃 | 需迁独有 | 需技术封装 |
 |---|---|---|---|---|---|---|
-| 6.1 | bean+sys | 22 | 14 | 4 | **4** | — |
+| 6.1 | bean+sys | 22 | 14 | 4 | **4→1**(仅 area,见 6.1.1) | — |
 | 6.2 | oa | 1 | — | 1 | 0 | — |
 | 6.3 | sms | 6 | 1 | 1 | **3**(+1待定) | **表驱动引擎**整体迁移；初判"非sms4j"，**终采方案B(sms4j 3.3.5 表驱动+SPI)，已落地，见 6.6.1** |
 | 6.4 | face | 1+116文件 | — | — | **1**(Person,余待核) | **nla-common-facesdk**(≈64文件JNI) |
@@ -514,10 +540,10 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 - **6.1 免迁 14**：user/dept/role/menu/post + 4 关联表(user_role/role_menu/user_post/user_dept) + config/dict×2/log/oauthClient → 全部对应基线 `sys_*` 完整 CRUD。
 - **6.1 废弃 4**：Tenant/TenantConnectMenu（基线禁用多租户）、DepartmentConnectMenu/PositionConnectMenu（基线用角色授权，不用部门/岗位直连菜单）。
-- **6.1 需迁 4**：Mini/MiniUser/UserSet（微信小程序）、Area（行政区划，台账已定保留业务表）。
+- **6.1 需迁 4→1**：初判 Mini/MiniUser/UserSet/Area，**基线覆盖复核后仅 Area 需迁**（Mini/MiniUser→`sys_social`+`sys_user`、UserSet→`sys_user.status`+超管角色；见 6.1.1）。
 - **6.3 需迁 3**：MobileMessage/MobileMessageTemplate/SmsConfig（短信业务层）；PublicNotice→SysNotice 免迁、Quartz→nla_job 废弃、ReadNoticeUser(公告已读)待迁移时判(基线 SysNotice 无已读机制,评估 SysMessage 或简化)。**关键：SmsConfig 是表驱动配置源(非 yml)，短信引擎 basic+core 共22类需整体迁移，详见 6.6**。
 
-**净需迁业务表 ≈ 61 张**（bean4+sms3+face1+video12+fs41），fs 一家占 41（67%）。而非旧工程「数百文件」的直觉。
+**净需迁业务表 ≈ 58 张**（bean1+sms3+face1+video12+fs41；bean 由初判 4 经基线覆盖复核实收窄为 1，见 6.1.1），fs 一家占 41（71%）。而非旧工程「数百文件」的直觉。
 
 #### 6.5.2 三个核心洞察
 
