@@ -187,6 +187,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- FreeSWITCH 呼叫中心封装(项目自建) -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-common-freeswitch</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

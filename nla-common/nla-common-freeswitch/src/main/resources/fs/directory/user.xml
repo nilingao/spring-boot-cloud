@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="freeswitch/xml">
+	<section name="directory">
+		<domain name="${user.domain}">
+			<params>
+				<param name="dial-string" value="#[[{^^:sip_invite_domain=${dialed_domain}:presence_id=${dialed_user}@${dialed_domain}}${sofia_contact(*/${dialed_user}@${dialed_domain})},${verto_contact(${dialed_user}@${dialed_domain})}]]#"/>
+				<param name="jsonrpc-allowed-methods" value="verto"/>
+			</params>
+			<variables>
+				<variable name="record_stereo" value="true"/>
+				<variable name="default_gateway" value="$${default_provider}"/>
+				<variable name="default_areacode" value="$${default_areacode}"/>
+				<variable name="transfer_fallback_extension" value="operator"/>
+			</variables>
+			<groups>
+				<group name="default">
+					<users>
+						<user id="${user.number}">
+							<params>
+								<param name="password" value="${user.password}"/>
+								<param name="vm-password" value="${user.password}"/>
+							</params>
+							<variables>
+								<variable name="toll_allow" value="domestic,international,local"/>
+								<variable name="accountcode" value="${user.number}"/>
+								<variable name="user_context" value="default"/>
+								<variable name="directory-visible" value="true"/>
+								<variable name="directory-exten-visible" value="true"/>
+								<variable name="limit_max" value="15"/>
+								<variable name="effective_caller_id_name" value="${user.number}"/>
+								<variable name="effective_caller_id_number" value="${user.number}"/>
+								<variable name="callgroup" value="techsupport"/>
+							</variables>
+						</user>
+					</users>
+				</group>
+			</groups>
+		</domain>
+	</section>
+</document>

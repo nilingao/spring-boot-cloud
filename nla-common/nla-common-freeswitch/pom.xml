@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.com.nla</groupId>
+        <artifactId>nla-common</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>nla-common-freeswitch</artifactId>
+
+    <description>
+        nla-common-freeswitch FreeSWITCH 呼叫中心技术封装(ESL 客户端 + SIP UA + 事件处理),项目自建
+    </description>
+
+    <dependencies>
+        <!-- 核心模块(R / ServiceException / 工具类 / hutool) -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-core</artifactId>
+        </dependency>
+
+        <!-- 序列化模块 -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-json</artifactId>
+        </dependency>
+
+        <!-- 缓存模块(SIP/FS 状态与订阅通知) -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-redis</artifactId>
+        </dependency>
+
+        <!-- FreeSWITCH ESL 核心库(非 starter,自写 @AutoConfiguration) -->
+        <dependency>
+            <groupId>link.thingscloud</groupId>
+            <artifactId>freeswitch-esl</artifactId>
+        </dependency>
+
+        <!-- JAIN SIP 协议栈 -->
+        <dependency>
+            <groupId>javax.sip</groupId>
+            <artifactId>jain-sip-ri</artifactId>
+        </dependency>
+
+        <!-- velocity 模板引擎(FreeSWITCH 配置生成) -->
+        <dependency>
+            <groupId>org.apache.velocity</groupId>
+            <artifactId>velocity-engine-core</artifactId>
+        </dependency>
+
+        <!-- hutool HTTP(话单回调推送,替代旧 forest) -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-http</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="freeswitch/xml">
+    <section name="dialplan" description="Regex/XML Dialplan">
+        <context name="default">
+            <extension name="call">
+                <condition field="destination_number" expression="^(.+)$">
+                    <action application="set" data="dialed_extension=$1"/>
+                    <action application="set" data="call_timeout=30"/>
+                    <action application="park"/>
+                </condition>
+            </extension>
+        </context>
+        <context name="public">
+            <extension name="call">
+                <condition field="destination_number" expression="^(.+)$">
+                    <action application="set" data="dialed_extension=$1"/>
+                    <action application="set" data="call_timeout=30"/>
+                    <action application="park"/>
+                </condition>
+            </extension>
+        </context>
+    </section>
+</document>

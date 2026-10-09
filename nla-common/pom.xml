@@ -41,6 +41,8 @@
         <module>nla-common-mqtt</module>
         <module>nla-common-ai</module>
         <module>nla-common-mcp</module>
+        <!-- 以下为项目自建技术封装(非上游模块) -->
+        <module>nla-common-freeswitch</module>
     </modules>
 
 </project>

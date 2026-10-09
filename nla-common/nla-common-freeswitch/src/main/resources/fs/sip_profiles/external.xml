@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="freeswitch/xml">
+  <section name="configuration" description="Various Configuration">
+  <configuration name="sofia.conf" description="sofia Endpoint">
+    <global_settings>
+      <param name="log-level" value="0"/>
+      <param name="debug-presence" value="0"/>
+    </global_settings>
+    <profiles>
+      <profile name="external">
+        <gateways>
+          #foreach($_gateway in $gateway)
+            <gateway name="${_gateway.id}">
+              <param name="realm" value="${_gateway.realm}"/>
+              #if($_gateway.register == 0)
+                <param name="register" value="false"/>
+              #else
+                <param name="register" value="true"/>
+                <param name="username" value="${_gateway.username}"/>
+                <param name="password" value="${_gateway.password}"/>
+              #end
+              <param name="register-transport" value="${_gateway.transport}"/>
+              <param name="retry-seconds" value="${_gateway.retrySeconds}"/>
+              <param name="ping" value="25"/>
+            </gateway>
+          #end
+        </gateways>
+        <aliases>
+        </aliases>
+        <domains>
+          <domain name="all" alias="false" parse="true"/>
+        </domains>
+        <settings>
+          <param name="debug" value="0"/>
+          <param name="sip-trace" value="no"/>
+          <param name="sip-capture" value="no"/>
+          <param name="rfc2833-pt" value="101"/>
+          #if($config.externalPort && $config.externalPort != '')
+          <param name="sip-port" value="${config.externalPort}"/>
+          #else
+          <param name="sip-port" value="$${external_sip_port}"/>
+          #end
+          <param name="dialplan" value="XML"/>
+          <param name="context" value="public"/>
+          <param name="dtmf-duration" value="2000"/>
+          #if($config.audioCode && $config.audioCode != '' || $config.videoCode  && $config.videoCode != '')
+          <param name="inbound-codec-prefs" value="${config.audioCode},${config.videoCode}"/>
+          <param name="outbound-codec-prefs" value="${config.audioCode},${config.videoCode}"/>
+          #else
+          <param name="inbound-codec-prefs" value="$${global_codec_prefs}"/>
+          <param name="outbound-codec-prefs" value="$${outbound_codec_prefs}"/>
+          #end
+          <param name="hold-music" value="$${hold_music}"/>
+          <param name="rtp-timer-name" value="soft"/>
+          <param name="local-network-acl" value="localnet.auto"/>
+          <param name="manage-presence" value="false"/>
+          <param name="inbound-codec-negotiation" value="generous"/>
+          <param name="nonce-ttl" value="60"/>
+          <param name="auth-calls" value="false"/>
+          <param name="inbound-late-negotiation" value="true"/>
+          <param name="inbound-zrtp-passthru" value="true"/>
+          #if($config.remoteIp  && $config.remoteIp != '')
+          <param name="rtp-ip" value="${config.remoteIp}"/>
+          <param name="sip-ip" value="${config.remoteIp}"/>
+          #else
+          <param name="rtp-ip" value="$${local_ip_v4}"/>
+          <param name="sip-ip" value="$${local_ip_v4}"/>
+          #end
+          #if($config.iceStart == 1)
+          <param name="ext-rtp-ip" value="${config.stunAddress}"/>
+          <param name="ext-sip-ip" value="${config.stunAddress}"/>
+          #else
+          <param name="ext-rtp-ip" value="$${external_rtp_ip}"/>
+          <param name="ext-sip-ip" value="$${external_rtp_ip}"/>
+          #end
+          <param name="rtp-timeout-sec" value="300"/>
+          <param name="rtp-hold-timeout-sec" value="1800"/>
+          <param name="tls" value="$${external_ssl_enable}"/>
+          <param name="tls-only" value="false"/>
+          <param name="tls-bind-params" value="transport=tls"/>
+          <param name="tls-sip-port" value="$${external_tls_port}"/>
+          <param name="tls-passphrase" value=""/>
+          <param name="tls-verify-date" value="true"/>
+          <param name="tls-verify-policy" value="none"/>
+          <param name="tls-verify-depth" value="2"/>
+          <param name="tls-verify-in-subjects" value=""/>
+          <param name="tls-version" value="$${sip_tls_version}"/>
+          <param name="odbc-dsn" value="$${mysql_in_to}" />
+        </settings>
+      </profile>
+    </profiles>
+    </configuration>
+  </section>
+</document>
