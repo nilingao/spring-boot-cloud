@@ -85,3 +85,51 @@ create table sms_mobile_message (
     key idx_sms_message_type   (type),
     key idx_sms_message_ct     (create_time)
 ) engine=innodb comment = '短信发送记录表';
+
+
+-- ----------------------------
+-- 4、菜单权限
+-- 依赖：需先执行 nla_system.sql（建 sys_menu / sys_role_menu 表并初始化角色），本脚本在其后运行
+-- 号段：menu_id 采用 1761400000000002000 独立号段（nla_system.sql 现有菜单最大 1761400000000001623，job/ai/workflow 无 sys_menu 插入，无冲突）
+-- 授权：超级管理员(role 1761300000000000001)自动可见全部菜单，无需授权；下列授权面向普通角色 1761300000000000003(test1)，与 nla_system.sql 种子约定一致
+-- 前端：component 路径(sms/config/index 等)为前端页面预留，Vue 页面由独立前端任务线补齐；后端 @SaCheckPermission 鉴权不依赖前端页面是否存在
+-- ----------------------------
+-- 短信管理目录
+insert into sys_menu values(1761400000000002000, '短信管理', 0, 6, 'sms', null, '', 'N', 'Y', 'M', '0', '0', '', 'message', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '短信管理目录');
+-- 短信管理菜单
+insert into sys_menu values(1761400000000002001, '渠道配置', 1761400000000002000, 1, 'config', 'sms/config/index', '', 'N', 'Y', 'C', '0', '0', 'sms:config:list', 'edit', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '短信渠道配置菜单');
+insert into sys_menu values(1761400000000002002, '短信模板', 1761400000000002000, 2, 'template', 'sms/template/index', '', 'N', 'Y', 'C', '0', '0', 'sms:template:list', 'form', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '短信模板菜单');
+insert into sys_menu values(1761400000000002003, '发送记录', 1761400000000002000, 3, 'record', 'sms/record/index', '', 'N', 'Y', 'C', '0', '0', 'sms:record:list', 'log', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '短信发送记录菜单');
+-- 渠道配置按钮
+insert into sys_menu values(1761400000000002010, '渠道查询', 1761400000000002001, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:config:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002011, '渠道新增', 1761400000000002001, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:config:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002012, '渠道修改', 1761400000000002001, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:config:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002013, '渠道删除', 1761400000000002001, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:config:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002014, '渠道导出', 1761400000000002001, 5, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:config:export', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 短信模板按钮
+insert into sys_menu values(1761400000000002020, '模板查询', 1761400000000002002, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:template:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002021, '模板新增', 1761400000000002002, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:template:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002022, '模板修改', 1761400000000002002, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:template:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002023, '模板删除', 1761400000000002002, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:template:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002024, '模板导出', 1761400000000002002, 5, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:template:export', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 发送记录按钮（记录型：删除/清空 + 导出，无增改查；清空复用 sms:record:remove）
+insert into sys_menu values(1761400000000002030, '记录删除', 1761400000000002003, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:record:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000002031, '记录导出', 1761400000000002003, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'sms:record:export', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+
+-- 角色菜单授权（普通角色 test1；超级管理员自动可见，无需授权）
+insert into sys_role_menu values (1761300000000000003, 1761400000000002000);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002001);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002002);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002003);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002010);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002011);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002012);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002013);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002014);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002020);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002021);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002022);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002023);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002024);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002030);
+insert into sys_role_menu values (1761300000000000003, 1761400000000002031);

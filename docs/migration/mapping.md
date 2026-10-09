@@ -616,7 +616,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 ### 6.6.1 批次 6.3 交付结果（已落地）
 
-按用户定的推进顺序 b6→b5→b7→b8 完成，`nla-admin -am` 全量编译 `MVN_EXIT=0`。均为未提交新增（`git status` 中 `nla-modules/nla-message/`、`nla-common-sms/supplier/`、`SmsSupplierAutoConfiguration.java`、`script/sql/nla_message.sql` 全为 `??`，`.imports` 为 `M`）。
+按用户定的推进顺序 b6→b5→b7→b8 完成，`nla-admin -am` 全量编译 `MVN_EXIT=0`，已提交 `fb74071`（含 `nla-modules/nla-message/`、`nla-common-sms/supplier/`、`SmsSupplierAutoConfiguration.java`、`script/sql/nla_message.sql`、`.imports`）。
 
 **nla-common-sms（技术层，新增 14 类 + 改 1 处）**：
 - `supplier/` 目录：`SmsSignUtils`(签名左右位置 `handleSign`) + 4 个 SPI 供应商 `dxw`(短信网)/`swlh`(商务领航)/`wnd`(维纳多)/`wyyd`(网易易盾)，各 `{X}Config`+`{X}SmsImpl`+`{X}Factory`（12 类），把旧 `SmsHttpClient` 的 HTTP、签名、模板号解析逻辑搬进 `AbstractSmsBlend.sendMessage`；
@@ -630,10 +630,12 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **DDL** `script/sql/nla_message.sql`：三表，雪花主键无 `auto_increment`、审计 5 列；`sms_sms_config`/`sms_mobile_message_template` 带 `del_flag bigint` 逻辑删除，`sms_mobile_message` 追加型物理删除；`sms_sms_config` 新增 `app_id` 列承载腾讯云 sdkAppId / 容联云 appId；创蓝网 `sms_type=2` 空位保留不复用。
 
-**遗留待决策（未做，需用户确认）**：
-1. **发送入口未接**：`SmsSendManager` 目前是内部 Bean，无 REST controller 暴露，也尚未被 `nla-system` 登录/注册/重置验证码流程调用 —— 单体化后短信走内部服务调用还是需独立发送接口，待定；
-2. **菜单权限 SQL 未生成**：3 个管理端 controller 的 `@SaCheckPermission("sms:*:*")` 在 `sys_menu`/`sys_role_menu` 无对应记录，前端菜单与鉴权挂不上；
-3. **`MobileMessageVo.mobile` 未脱敏**：未加 `@Sensitive`，如需符合"手机号脱敏"铁律可补。
+**收尾增量（本轮补齐 2 项，`nla-message -am` 编译 `MVN_EXIT=0`）**：
+- **菜单权限 SQL 已生成**：`script/sql/nla_message.sql` 追加「短信管理」目录 + 3 菜单（渠道配置/短信模板/发送记录）+ 12 按钮 + 16 条 `sys_role_menu` 授权；`menu_id` 用 `1761400000000002000` 独立号段（现有菜单最大 `1761400000000001623`，job/ai/workflow 无 `sys_menu` 插入，无冲突）；perms 与 3 controller 的 `@SaCheckPermission` 逐一对齐（config/template 各 list+query+add+edit+remove+export，record 仅 list+export+remove）；超级管理员自动可见，普通角色 `1761300000000000003` 按种子约定授权。前端 Vue 页面（`sms/{config,template,record}/index`）由独立前端任务线补齐，不影响后端鉴权。
+- **`MobileMessageVo.mobile` 已脱敏**：加 `@Sensitive(strategy = SensitiveStrategy.PHONE, perms = "sms:record:export")`，与 `SysUserVo.phoneNumber` 同构；语义 = 有导出权限者与超级管理员见原文、其余见掩码（Excel 导出经 fesod 读原始字段，与“可导出即可见原文”一致）。`nla-common-sensitive` 早在 pom 声明，无需改依赖。
+
+**仍待决策（需用户确认）**：
+1. **发送入口未接**：`SmsSendManager` 目前是内部 Bean，无 REST controller 暴露，也尚未被 `nla-system` 登录/注册/重置验证码流程调用 —— 单体化后短信走内部服务调用还是需独立发送接口，待定。
 
 ---
 

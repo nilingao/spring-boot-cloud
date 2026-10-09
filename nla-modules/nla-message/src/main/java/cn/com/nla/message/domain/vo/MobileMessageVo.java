@@ -1,5 +1,7 @@
 package cn.com.nla.message.domain.vo;
 
+import cn.com.nla.common.sensitive.annotation.Sensitive;
+import cn.com.nla.common.sensitive.core.SensitiveStrategy;
 import cn.com.nla.message.domain.MobileMessage;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
@@ -55,6 +57,7 @@ public class MobileMessageVo implements Serializable {
     /**
      * 手机号
      */
+    @Sensitive(strategy = SensitiveStrategy.PHONE, perms = "sms:record:export")
     @ExcelProperty(value = "手机号")
     private String mobile;
 
