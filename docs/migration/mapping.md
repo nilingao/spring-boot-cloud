@@ -393,7 +393,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 升级到 JDK 21 兼容版 | 待阶段 3 |
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | spring-amqp 走 Boot 4 版本；`MQConfig` 迁移 | 待阶段 3 |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1 | 待阶段 3 |
-| `starter-video`(201) | 自建 `nla-common-gb28181` | 见 5.1 | 待阶段 3 |
+| `starter-video`(201) | 自建 `nla-common-video` | 见 5.1 | 待阶段 3 |
 | `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
 
 ### 5.1 阶段 3 待建的 6 个自建封装
@@ -403,12 +403,69 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 | 模块 | 源 | 关键风险 |
 |---|---|---|
-| `nla-common-freeswitch` | `starter-freeswitch`(199) | `freeswitch-esl 1.6.7.RELEASE` 需验证 JDK 21；铁律沿用：管理接口禁止执行 FreeSWITCH CLI / 系统命令 / 文件删除 |
-| `nla-common-gb28181` | `starter-video`(201) | `sip 1.3.0-91`、`onvif 1.0.2`、`netty` 需升级到 Boot 4 兼容版；SIP 栈在 JDK 21 需实测注册/心跳/点播链路 |
-| `nla-common-pay` | `starter-pay`(163) | `alipay-easysdk`、`yungouos-pay-sdk`、`wx.binarywang`、`weixin-popular` 逐个升级验证；**金额字段约定项目内缺失**，不臆造精度方案 |
-| `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` 内嵌源码 | JNI `.so`(12) + `.csta` 模型路径外置；包名保持 `com.seeta.sdk`；基础镜像 `seetaface_face_work` 需重建 JDK 21 版；`LoadNativeCore.LOAD_NATIVE` 加载路径需实测 |
+| `nla-common-freeswitch` | `starter-freeswitch`(199) | `freeswitch-esl 1.6.7.RELEASE` **尖峰已验：核心库 JDK21 GO（Java8 字节码、0 处 `javax/*`）；starter 是 Boot2/`spring.factories` 产物，Boot4 不自动加载 → 自建 `@AutoConfiguration` 替代；netty 4.1→4.2 需实测；见 5.2**；铁律沿用：管理接口禁止执行 FreeSWITCH CLI / 系统命令 / 文件删除 |
+| `nla-common-video` | `starter-video`(201) | `sip 1.3.0-91`（Java7 字节码、无 `sun.*` 内部 API）、`onvif 1.0.2`（Java8、无 JAXB）**尖峰已验 JDK21 GO，见 5.2**；`netty` 由 Boot BOM 管理(4.2.17)；SIP 注册/心跳/点播链路需真实服务器实测（延后） |
+| `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
+| `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` 内嵌源码 | **尖峰已验 JDK21 GO，见 5.3.1**：29 `.java` 内嵌源码纯标准 JDK（0 处 `javax/*`/`sun/*`/removed API），137 native 方法 JNI ABI 与 JDK 解耦，`System.load` 机制无变化，18 `finalize` 废弃但 JDK21 功能正常；native 库 Linux`.so`+Windows`.dll` **双平台齐备→开发机可本地冒烟**；包名保持 `com.seeta.sdk`；基础镜像 `seetaface_face_work` 需重建 JDK 21 版（延后部署阶段） |
 | `nla-common-socketio` | `starter-socket-io` + `starter-netty` | netty-socketio JDK 21 兼容性 |
 | `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | spring-amqp Boot 4 版本 |
+
+### 5.2 阶段3 兼容性尖峰结论（freeswitch-esl / SIP 栈，JDK21+Boot4）
+
+**背景**：阶段3 的自建封装是 6.4~6.7 硬前置，其中 freeswitch / video 依赖外部协议库，能否在 JDK21+Boot4 存活是最大未知。本轮先做**静态兼容性尖峰**（依赖可拉取性 + 字节码版本 + jakarta 迁移面 + JDK 内部 API + 自动配置机制），退役未知后再投入完整封装。所有 artifact 已在本地仓（旧项目构建残留），无需下载；证据取自 `javap` / `jar tf` / `findstr` 实测。
+
+| 库 | 坐标:版本 | 字节码 | javax/jakarta 面 | 结论 |
+|---|---|---|---|---|
+| FreeSWITCH ESL 核心 | `link.thingscloud:freeswitch-esl:1.6.7.RELEASE` | **52 (Java8)** | **0 处 `javax/*`**（纯 netty ESL 客户端，53 类） | ✅ **GO**：Java8 字节码 JDK21 向后兼容可加载 |
+| FreeSWITCH ESL Starter | `link.thingscloud:freeswitch-esl-spring-boot-starter:1.6.7.RELEASE` | 52 | 仅 `META-INF/spring.factories`（**Boot2 机制，无 `.imports`**） | ⚠️ 自动配置在 Boot4 **不会被加载**；但方案本就**自建 `nla-common-freeswitch` 只依赖核心库 + 自写 `@AutoConfiguration`**，不复用其 starter → 已规避 |
+| JAIN-SIP RI | `javax.sip:jain-sip-ri:1.3.0-91` | **51 (Java7)** | 无 servlet/xml.bind/annotation 等；`javax.sip`/`javax.sdp` 是**独立 JAIN 规范命名空间**（从未迁 jakarta、不冲突）；**0 处 `sun.misc`/`sun.security`** | ✅ **GO**：无 JDK21 强封装风险 |
+| ONVIF | `be.teletask.onvif:onvif:1.0.2` | **52 (Java8)** | **无 JAXB**（`javax.xml.bind` 已从 JDK11 移除）——自带 `OnvifXMLBuilder`/`parsers` 处理 XML | ✅ **GO**：不触雷 JAXB 缺失 |
+
+**关键发现**：
+1. **freeswitch-esl starter 是 Boot 2.5 产物**（parent `freeswitch-esl-all` 锁 `spring-boot 2.5.0`、`java 1.8`、`netty 4.1.65`），自动配置走 `spring.factories`。Boot 3+ 已移除 `spring.factories` 的 `EnableAutoConfiguration` 支持 → 其 `FreeswitchEslAutoConfiguration` 在 Boot4 不自动生效。**对策**（与计划一致）：`nla-common-freeswitch` 依赖**核心库 `freeswitch-esl`**（非 starter），自写 basic+core 二段式 + 自有 `@AutoConfiguration`。
+2. **netty 版本落差（残留风险 LOW-MED）**：Boot 4.1.1 BOM 管理 **netty 4.2.17.Final**，而 freeswitch-esl 核心按 **netty 4.1.65** 编译（旧项目用 4.1.53）。netty 4.1→4.2 常见 transport/ByteBuf API 兼容，但 4.2 改了默认 buffer 分配器等 → 建 `nla-common-freeswitch` 时需编译 + ESL 连通实测确认。
+3. **log4j 1.x 需排除**：freeswitch/video 旧 POM 直接依赖 `log4j:log4j:1.2.17`（EOL、含 CVE）。自建封装时 **exclude 掉**，统一走 Boot 的 log4j2/logback。
+
+**尖峰未覆盖（延后）**：**运行时协议连通**（ESL 登录 FreeSWITCH、SIP 注册/心跳/点播）需真实服务器，本地无 FreeSWITCH/SIP 端点，**留到建 `nla-common-freeswitch`/`nla-common-video` 时有环境再冒烟**（对齐计划阶段3 验收「三个含 native/外部协议模块 JDK21 连通性冒烟」）。
+
+**净结论**：freeswitch-esl 核心 + jain-sip-ri + onvif 三者**静态层面 JDK21+Boot4 全部 GO**，最大未知已退役；6.6 fs(41表) 与 6.5 video(12表) 无底层库阻塞，可按计划自建封装推进。
+
+### 5.3 阶段3 兼容性尖峰结论（facesdk JNI / pay 8 SDK，JDK21+Boot4）
+
+**背景**：承接 5.2，退役阶段3 剩余两个未知——facesdk（JNI native，比纯 Java 协议库风险更高）与 pay（8 个老支付 SDK）。证据取自源码 `findstr` 扫描 + `javap` 字节码 + `jar` 解包实测，artifact 均已在本地仓。
+
+#### 5.3.1 facesdk（`com.seeta.sdk` 内嵌源码 + JNI）
+
+| 项 | 实测 | 结论 |
+|---|---|---|
+| 源码位置 | `spring-boot-face/.../com/seeta/sdk`，**29 个 `.java`** 内嵌（非外部 jar），包名须保持 `com.seeta.sdk`（native 库按此包名做 JNI 符号绑定） | ✅ 迁移即整包搬入 `nla-common-facesdk`，不改包名 |
+| native 库 | Linux `.so`(aarch64) + Windows `.dll`(amd64) + JNI 桥接库齐备；14 个 `.csta` 模型 | ✅ **双平台齐备**——Windows 开发机可本地冒烟（区别于 freeswitch/SIP 无端点） |
+| 加载机制 | `LoadNativeCore.LOAD_NATIVE(dllPath, SeetaDevice)`：读 `dll.properties`→按 OS(`os.name`)+arch(`os.arch`)定位→`System.load(绝对路径)` 逐个加载；导入**纯标准 JDK**（`java.io`/`nio.file`/`util`/`util.logging`/`stream`），**0 处 `javax/*`、`sun/*`、removed API** | ✅ **GO**：`System.load` 机制 JDK21 无变化 |
+| native 方法 | **137 个 `native` 方法**；JNI ABI 与 JDK 版本解耦（native 库按 `com.seeta.sdk` 符号编译，不依赖 JDK 内部 API） | ✅ GO |
+| `finalize()` | 18 处（`FaceDetector` 等用 `finalize()`→`dispose()` 清理 native 资源）；Java9 起废弃但 **JDK21 仍功能正常**（仅编译告警） | ⚠️ 可用；建议 pool/proxy 层显式 `dispose()`（旧代码已如此），`finalize` 作兜底 |
+| `javax.imageio`/`javax.swing` | 仅 `SeetafaceUtil.java` 用到——二者是**永久 JDK 包**（`java.desktop` 模块），**不迁 jakarta、不冲突** | ✅ GO |
+
+**facesdk 净结论**：✅ **GO**。JNI 静态层面 JDK21 无阻塞；native 库双平台齐备，`nla-common-facesdk` 建好后 **Windows 开发机即可冒烟**（无需真实服务器）。6.4 face(1表+116文件JNI) 无底层阻塞。基础镜像 `seetaface_face_work` 需重建 JDK21 版（延后到部署阶段）。
+
+#### 5.3.2 pay（8 子模块：alipay/jdpay/qqpay/unionpay/wxpay/paypal/xpay/starter）
+
+**外部 SDK 面比计划 L408 估计的小**——实测只有 2 个真实外部支付库 + servlet-api，其余子模块（jdpay/qqpay/unionpay/wxpay/paypal/xpay）**仅依赖内部 `pay-starter` + IJPay-Core**，无各自外部 SDK。
+
+| 库 | 坐标:版本 | 字节码 | javax/jakarta 面 | 结论 |
+|---|---|---|---|---|
+| IJPay 核心 | `com.github.javen205:IJPay-Core:2.9.11` | **52 (Java8)** | 23 类；仅 `HttpKit.getRequest()`+`IpKit.getIp(HttpServletRequest)` 碰 `javax.servlet`；`javax/crypto`/`imageio`/`net.ssl`/`xml` 均**永久 JDK 包**；**无自动配置文件**（纯 kit 库，无 spring.factories/.imports） | ⚠️ **条件 GO**（见下） |
+| 支付宝 SDK | `com.alipay.sdk:alipay-sdk-java:4.39.42.ALL` | **50 (Java6)** | 24005 类（纯 `com.alipay` API 模型集，**未 shade** fastjson/httpclient）；`javax/crypto`/`security`/`xml` 均永久 JDK 包；**0 处 risky javax、0 处 `sun.*`** | ✅ **GO** |
+| fastjson | `com.alibaba:fastjson` | — | 老 pay 源码**未 import** `com.alibaba.fastjson`（仅 alipay 传递，且 POM 已 `<exclusion>`） | ✅ **出范围**（pay 不用） |
+| servlet-api | `javax.servlet:javax.servlet-api` | — | 父 POM + IJPay 均依赖 `javax.servlet`（IJPay 中为 `provided` scope，不传递） | ⚠️ **须迁 `jakarta.servlet`** |
+
+**关键发现**：
+1. **javax.servlet 是唯一迁移面，且可绕过**：老 pay 大量调用的 `HttpKit.getDelegate().post/get/...`（出站 HTTP 客户端）**完全不碰 servlet**；碰 servlet 的只有 ①IJPay 的 `HttpKit.getRequest()`/`IpKit`（2 helper，`provided` scope 不传递），②老封装 `AliPayApi.toMap(HttpServletRequest)`（1 处）。JVM 懒解析下，只要**不调用**这些 servlet 方法，`HttpKit` 类照常加载、`getDelegate()` 正常工作。**对策**：`nla-common-pay` 封装**不用 `HttpKit.getRequest()`/`IpKit`**，回调读参改用 Boot4 的 `jakarta.servlet.http.HttpServletRequest`（controller 层已有）→ 手工转 Map，与 alipay notify 对接。`javax.servlet-api` 依赖删除（Boot4 web 已提供 jakarta.servlet-api）。
+2. **bouncycastle 建议升级**：IJPay-Core 传递 `bcprov-jdk15on:1.70`；本地仓已备 `bcprov-jdk18on`/`bcpkix-jdk18on`/`bcutil-jdk18on`。JDK21 下建议 exclude `jdk15on` 换 `jdk18on`（维护线），建封装时验证签名/加解密。
+3. **IJPay 传递依赖**（非 fastjson）：zxing 3.5.3（二维码）、slf4j-api 2.0.8（provided）、xk-time 3.2.4、bouncycastle。均 JDK21 可用。
+
+**pay 净结论**：✅ **GO（有条件）**。alipay-sdk-java 与 IJPay-Core 字节码 JDK21 向后兼容可加载，0 处 JDK 内部 API；唯一 `javax.servlet` 面在封装层绕过即可（不走 IJPay servlet helper，改用 jakarta）。6.7 pay(0表) 无底层阻塞——但按用户决策 pay「保持暂未开发现状」，`nla-common-pay` 优先级最低。
+
+**尖峰未覆盖（延后）**：pay 的**运行时联调**（支付宝/微信真实下单、回调验签）需商户密钥 + 外网，本地无凭据，留到实际开发 pay 时冒烟。
 
 ---
 
@@ -420,7 +477,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 18 Pool + 18 Proxy 对象池包装 JNI，依赖 `nla-common-facesdk` | 待推进 |
-| 6.5 | `video`(80) | `nla-modules/nla-video` | GB28181 设备/通道/录像/云台，依赖 `nla-common-gb28181`；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进 |
+| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，依赖 `nla-common-video`；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进 |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo` | 待推进 |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
 
@@ -533,7 +590,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | 6.2 | oa | 1 | — | 1 | 0 | — |
 | 6.3 | sms | 6 | 1 | 1 | **3**(+1待定) | **表驱动引擎**整体迁移；初判"非sms4j"，**终采方案B(sms4j 3.3.5 表驱动+SPI)，已落地，见 6.6.1** |
 | 6.4 | face | 1+116文件 | — | — | **1**(Person,余待核) | **nla-common-facesdk**(≈64文件JNI) |
-| 6.5 | video | 12 | — | — | **12** | **nla-common-gb28181** |
+| 6.5 | video | 12 | — | — | **12** | **nla-common-video** |
 | 6.6 | fs | 41 | — | — | **41** | **nla-common-freeswitch** |
 | 6.7 | pay | 0表(7 SDK Bean) | — | — | 0 | **nla-common-pay** |
 | 阶段7 | activiti | — | WarmFlow覆盖 | Activiti废弃 | 0 | nla-workflow |
@@ -549,7 +606,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 1. **文件数 ≠ 迁移量**：bean 98文件→仅 4 独有表；face 116文件→业务表≈1(Person)+64文件是 JNI 封装(sdk26/pool17/proxy16/config5)；pay 27文件→0表(纯 SDK 配置对象)。文件数大头是 controller/service/bo/vo/mapper 与技术封装。
 
-2. **阶段3 技术封装是 6.4~6.7 硬前置(关键路径)**：facesdk/gb28181/freeswitch/pay 四个 `nla-common-*` 不建，四批次无法落地。而 **6.1 bean / 6.3 sms 不依赖阶段3，可立即做**。
+2. **阶段3 技术封装是 6.4~6.7 硬前置(关键路径)**：facesdk/video/freeswitch/pay 四个 `nla-common-*` 不建，四批次无法落地。而 **6.1 bean / 6.3 sms 不依赖阶段3，可立即做**。
 
 3. **数据迁移是隐藏大头**：bean 的 user/dept/role/menu/dict 代码免迁，但**存量数据要迁到基线 `sys_*`**——字段映射、主键自增→雪花、密码格式(旧加密 vs 基线 BCrypt)、关联表重建、租户列剥离。6.1 需单列「数据迁移子任务」。
 
@@ -559,7 +616,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 |---|---|---|---|
 | 可立即做 | 6.3 sms(3短信表) | nla-common-sms(已就绪) | 易 |
 | 可立即做 | 6.1 bean(4独有表+数据迁移) | 无 | 中(数据迁移重) |
-| 需先阶段3 | 6.5 video(12表) | nla-common-gb28181 | 中 |
+| 需先阶段3 | 6.5 video(12表) | nla-common-video | 中 |
 | 需先阶段3 | 6.4 face(JNI封装+Person) | nla-common-facesdk | 中(封装重) |
 | 需先阶段3 | 6.6 fs(41表) | nla-common-freeswitch | 难(最大) |
 | 需先阶段3 | 6.7 pay | nla-common-pay | 特殊(暂未开发) |
@@ -990,7 +1047,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | ⬜ 未开始 | 6 个自建模块（freeswitch/gb28181/pay/facesdk/socketio/mq），约 680 文件 |
+| **3** | 自建技术封装 | 🟡 尖峰完成·封装未开始 | **兼容性尖峰已全部退役**（freeswitch-esl/SIP/onvif 见 5.2、facesdk/pay 见 5.3，均 JDK21+Boot4 GO）；6 个自建模块（freeswitch/video/pay/facesdk/socketio/mq，约 680 文件）**本体尚未开始建** |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.1/6.4~6.7 待推进 |
