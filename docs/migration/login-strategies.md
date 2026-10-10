@@ -1,6 +1,6 @@
 # 阶段 5.2：密码、验证码与账号状态契约
 
-本批执行现有密码、短信和邮箱登录策略的实际逻辑，补齐图形验证码生成、BCrypt 校验、失败计数、账号状态和 JWT 会话测试，并核对旧短信、小程序与二维码登录的功能映射。唯一生产改动是 `LoginHelper` 对缺失 User-Agent 的空值处理；`AllUrlHandler.getUrls()` 的鉴权路径匹配沿用基线。
+本批执行现有密码、短信和邮箱登录策略的实际逻辑，补齐图形验证码生成、BCrypt 校验、失败计数、账号状态和 JWT 会话测试，并核对旧短信、小程序与二维码登录的功能映射。5.2 批次唯一生产改动是 `LoginHelper` 对缺失 User-Agent 的空值处理；`AllUrlHandler.getUrls()` 的鉴权路径匹配沿用基线。本文的短信缺口记录对应 5.2 当时的状态，后续发送接入、统一缓存 key 与原子消费已在 [阶段 5.3](sms-login.md) 交付。
 
 ## 当前可验证的登录行为
 
@@ -58,4 +58,4 @@ mvn -o -B -pl nla-admin -am '-Dtest=LoginStrategyContractTest,AuthSecurityContra
 
 本批 JDK 21 / Maven 3.9.9 验证结果：新增 **41 项**，与阶段 5.1 的 50 项共同运行，**91 项全部通过，无失败、错误或跳过**；根工程 `mvn -o -B -DskipTests compile` **49/49 模块成功**。日志 `.migration/test-login-strategy-contract.log`、`.migration/build-login-strategy-reactor.log`；编码、变更范围和报告核对脚本 `.migration/audit-login-strategies.py`。
 
-下一批阶段 5.3 接通表驱动短信发送与登录验证：统一登录验证码缓存契约和成功消费行为，覆盖无渠道、模板缺失、发送失败、停用账号、重发与验证码复用场景，保持渠道配置来自业务表。小程序账号绑定、二维码状态和通知链路仍是独立待迁项；真实 MySQL/Redis/供应商、第三方授权和完整应用启动留对应环境验收。阶段 5 保持进行中，pay 继续暂缓。
+阶段 5.3 已接通表驱动短信发送与登录验证，统一登录验证码缓存契约与原子消费，补齐无渠道、模板缺失、发送失败、停用账号、重发与验证码复用场景，详见 [sms-login.md](sms-login.md)。小程序账号绑定、二维码状态和通知链路仍是独立待迁项；真实 MySQL/Redis/供应商、第三方授权和完整应用启动留对应环境验收。阶段 5 保持进行中，pay 继续暂缓。

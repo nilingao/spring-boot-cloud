@@ -15,6 +15,13 @@ import cn.com.nla.common.mybatis.core.mapper.LambdaCrudChainWrapper;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import cn.com.nla.common.satoken.utils.LoginHelper;
 import cn.com.nla.common.web.config.properties.CaptchaProperties;
+import cn.com.nla.message.domain.MobileMessage;
+import cn.com.nla.message.domain.MobileMessageTemplate;
+import cn.com.nla.message.domain.SmsConfig;
+import cn.com.nla.message.mapper.MobileMessageMapper;
+import cn.com.nla.message.sms.SmsConstant;
+import cn.com.nla.message.sms.core.SmsChannelManager;
+import cn.com.nla.message.sms.core.SmsSendManager;
 import cn.com.nla.system.domain.vo.SysClientVo;
 import cn.com.nla.system.domain.SysUser;
 import cn.com.nla.system.domain.vo.SysDeptVo;
@@ -47,6 +54,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
+import org.mockito.ArgumentCaptor;
+import org.dromara.sms4j.api.SmsBlend;
+import org.dromara.sms4j.api.entity.SmsResponse;
+import org.dromara.sms4j.core.factory.SmsFactory;
+import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.context.PayloadApplicationEvent;
@@ -67,6 +79,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -86,6 +99,7 @@ class LoginStrategyContractTest {
     private static final String PASSWORD = "test-password";
     private static final String HASH = BCrypt.hashpw(PASSWORD, BCrypt.gensalt(4));
     private static final String PHONE = "13800138000";
+    private static final String SMS_KEY = SmsConstant.verificationCodeKey(SmsConstant.TYPE_LOGIN, PHONE);
     private static final String EMAIL = "contract@example.com";
     private static final String ERROR_KEY = CacheNames.PWD_ERR_CNT_KEY + USERNAME;
     private static GenericApplicationContext context;
@@ -111,6 +125,13 @@ class LoginStrategyContractTest {
     private PasswordAuthStrategy passwordStrategy;
     private SmsAuthStrategy smsStrategy;
     private EmailAuthStrategy emailStrategy;
+    private RBucket<String> smsBucket;
+    private MockedStatic<SmsFactory> smsFactory;
+    private SmsChannelManager channels;
+    private MobileMessageMapper smsRecords;
+    private SmsBlend provider;
+    private MobileMessageTemplate smsTemplate;
+    private CaptchaController smsController;
 
     @BeforeAll
     static void prepareUtilities() {
@@ -178,6 +199,25 @@ class LoginStrategyContractTest {
             durations.remove(call.getArgument(0));
             return cache.remove(call.getArgument(0)) != null;
         });
+        redis.when(() -> RedisUtils.isExistsObject(anyString())).thenAnswer(call -> cache.containsKey(call.getArgument(0)));
+        redis.when(() -> RedisUtils.getTimeToLive(anyString())).thenAnswer(call ->
+            durations.getOrDefault(call.getArgument(0), Duration.ZERO).toMillis());
+        var redisClient = mock(RedissonClient.class);
+        @SuppressWarnings("unchecked")
+        RBucket<String> bucket = mock(RBucket.class);
+        smsBucket = bucket;
+        when(redisClient.<String>getBucket(SMS_KEY)).thenReturn(smsBucket);
+        redis.when(RedisUtils::getClient).thenReturn(redisClient);
+        when(smsBucket.compareAndSet(anyString(), isNull())).thenAnswer(call -> {
+            synchronized (cache) {
+                if (!call.getArgument(0).equals(cache.get(SMS_KEY))) {
+                    return false;
+                }
+                cache.remove(SMS_KEY);
+                durations.remove(SMS_KEY);
+                return true;
+            }
+        });
 
         users = mock(SysUserMapper.class);
         user = new SysUserVo();
@@ -223,6 +263,9 @@ class LoginStrategyContractTest {
     @AfterEach
     void restoreTokenState() {
         RequestContextHolder.setRequestAttributes(previousRequest);
+        if (smsFactory != null) {
+            smsFactory.close();
+        }
         if (redis != null) {
             redis.close();
         }
@@ -362,7 +405,7 @@ class LoginStrategyContractTest {
         captcha.setType(type);
         captcha.setNumberLength(1);
         captcha.setCharLength(4);
-        var controller = new CaptchaController(captcha, new MailProperties());
+        var controller = new CaptchaController(captcha, new MailProperties(), mock(SmsLoginCodeService.class));
         // 直接验证生成方法；限流切面的真实 Redis 行为不在此测试内。
         var generated = controller.getCodeImpl();
         assertTrue(generated.captchaEnabled());
@@ -382,7 +425,7 @@ class LoginStrategyContractTest {
 
     @Test
     void disabledCaptchaEndpointDoesNotGenerateOrCacheAnImage() {
-        var result = new CaptchaController(captcha, new MailProperties()).getCode();
+        var result = new CaptchaController(captcha, new MailProperties(), mock(SmsLoginCodeService.class)).getCode();
         assertEquals(200, result.getCode());
         assertFalse(result.getData().captchaEnabled());
         assertNull(result.getData().uuid());
@@ -421,7 +464,7 @@ class LoginStrategyContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"sms", "email"})
     void validCodeCreatesRealSessionAndClearsRetryCount(String grant) {
-        cache.put(GlobalConstants.CAPTCHA_CODE_KEY + identifier(grant), "1234");
+        cache.put(codeKey(grant), "1234");
         cache.put(ERROR_KEY, 2);
         assertSession(login(grant, "1234"));
         assertFalse(cache.containsKey(ERROR_KEY));
@@ -430,7 +473,7 @@ class LoginStrategyContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"sms", "email"})
     void wrongCodeIncrementsAccountRetryAndCannotBuildSession(String grant) {
-        cache.put(GlobalConstants.CAPTCHA_CODE_KEY + identifier(grant), "1234");
+        cache.put(codeKey(grant), "1234");
         UserException failure = assertThrows(UserException.class, () -> login(grant, "4321"));
         assertEquals("sms".equals(grant) ? LoginType.SMS.getRetryLimitCount() : LoginType.EMAIL.getRetryLimitCount(), failure.getCode());
         assertEquals(1, cache.get(ERROR_KEY));
@@ -446,7 +489,7 @@ class LoginStrategyContractTest {
     @ParameterizedTest
     @MethodSource("missingCodes")
     void missingOrExpiredCodeDoesNotCreateSessionOrIncrementRetry(String grant, String cachedCode) {
-        cache.put(GlobalConstants.CAPTCHA_CODE_KEY + identifier(grant), cachedCode);
+        cache.put(codeKey(grant), cachedCode);
         assertThrows(CaptchaExpireException.class, () -> login(grant, "1234"));
         assertFalse(cache.containsKey(ERROR_KEY));
         verify(loginService, never()).buildLoginUser(any());
@@ -456,11 +499,259 @@ class LoginStrategyContractTest {
     @ValueSource(strings = {"sms", "email"})
     void passwordLockAlsoRejectsCodeStrategiesWithoutReadingCode(String grant) {
         cache.put(ERROR_KEY, 5);
-        cache.put(GlobalConstants.CAPTCHA_CODE_KEY + identifier(grant), "1234");
+        cache.put(codeKey(grant), "1234");
         UserException failure = assertThrows(UserException.class, () -> login(grant, "1234"));
         assertEquals("sms".equals(grant) ? LoginType.SMS.getRetryLimitExceed() : LoginType.EMAIL.getRetryLimitExceed(), failure.getCode());
-        redis.verify(() -> RedisUtils.getCacheObject(GlobalConstants.CAPTCHA_CODE_KEY + identifier(grant)), never());
+        redis.verify(() -> RedisUtils.getCacheObject(codeKey(grant)), never());
         verify(loginService, never()).buildLoginUser(any());
+    }
+
+    /** 执行真实 Controller → Service → 发送引擎，仅渠道查询、供应商和 Redis 使用替身。 */
+    private void prepareSmsSending() {
+        channels = mock(SmsChannelManager.class);
+        smsRecords = mock(MobileMessageMapper.class);
+        provider = mock(SmsBlend.class);
+        var account = new SmsConfig();
+        account.setId(101L);
+        account.setSmsType(5);
+        smsTemplate = new MobileMessageTemplate();
+        smsTemplate.setType(SmsConstant.TYPE_LOGIN);
+        smsTemplate.setCode("5:login-template,8:other-template");
+        smsTemplate.setContent("验证码 VERIFICATION_CODE，有效期 REDIS_CODE 分钟");
+        smsTemplate.setVariable("{\"VERIFICATION_CODE\":\"\",\"REDIS_CODE\":\"\"}");
+        when(channels.findActiveConfigs(SmsConstant.TYPE_LOGIN)).thenReturn(List.of(account));
+        when(channels.findLastTemplate(101L, SmsConstant.TYPE_LOGIN)).thenReturn(smsTemplate);
+        SmsResponse response = mock(SmsResponse.class);
+        when(response.isSuccess()).thenReturn(true);
+        when(response.getData()).thenReturn("provider-message-id");
+        when(provider.sendMessage(eq(PHONE), eq("login-template"), any(LinkedHashMap.class))).thenReturn(response);
+        smsFactory = mockStatic(SmsFactory.class);
+        smsFactory.when(() -> SmsFactory.getSmsBlend("101")).thenReturn(provider);
+        var service = new SmsLoginCodeService(users, new SmsSendManager(channels, smsRecords));
+        smsController = new CaptchaController(captcha, new MailProperties(), service);
+    }
+
+    @Test
+    void tableDrivenSmsReachesRealLoginAndCodeCannotBeReplayed() {
+        prepareSmsSending();
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String code = (String) cache.get(SMS_KEY);
+        assertNotNull(code);
+        assertTrue(code.matches("\\d{6}"));
+        assertEquals(Duration.ofMinutes(5), durations.get(SMS_KEY));
+        assertFalse(cache.containsKey(GlobalConstants.CAPTCHA_CODE_KEY + PHONE));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LinkedHashMap<String, String>> parameters = ArgumentCaptor.forClass(LinkedHashMap.class);
+        verify(provider).sendMessage(eq(PHONE), eq("login-template"), parameters.capture());
+        assertEquals(code, parameters.getValue().get(SmsConstant.VERIFICATION_CODE));
+        var record = ArgumentCaptor.forClass(MobileMessage.class);
+        verify(smsRecords).insert(record.capture());
+        assertEquals(101L, record.getValue().getSenderId());
+        assertEquals(SmsConstant.STATUS_SUCCESS, record.getValue().getStatus());
+        assertTrue(record.getValue().getContent().contains(code));
+        cache.put(ERROR_KEY, 2);
+        assertSession(login("sms", code));
+        assertFalse(cache.containsKey(SMS_KEY));
+        assertFalse(cache.containsKey(ERROR_KEY));
+        clearInvocations(loginService);
+        assertThrows(CaptchaExpireException.class, () -> login("sms", code));
+        verify(loginService, never()).buildLoginUser(any());
+    }
+
+    @Test
+    void resendWhileCodeExistsRetainsCodeAndDoesNotDispatchOrRecordAgain() {
+        prepareSmsSending();
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        Object code = cache.get(SMS_KEY);
+        var repeated = smsController.smsCode(PHONE);
+        assertEquals(200, repeated.getCode());
+        assertTrue(repeated.getMsg().contains("已发送短信"));
+        assertEquals(code, cache.get(SMS_KEY));
+        verify(provider, times(1)).sendMessage(eq(PHONE), eq("login-template"), any(LinkedHashMap.class));
+        verify(smsRecords, times(1)).insert(any(MobileMessage.class));
+    }
+
+    @Test
+    void expiredCodeAllowsNewSendAndPreviousCodeCannotLogin() {
+        prepareSmsSending();
+        smsTemplate.setVariable("{\"VERIFICATION_CODE\":\"123456\",\"REDIS_CODE\":5}");
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String oldCode = (String) cache.get(SMS_KEY);
+        // 模拟过期；固定模板测试值避免随机碰撞，不宣称验证真实 Redis 时间推进。
+        cache.remove(SMS_KEY);
+        durations.remove(SMS_KEY);
+        smsTemplate.setVariable("{\"VERIFICATION_CODE\":\"654321\",\"REDIS_CODE\":5}");
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String fresh = (String) cache.get(SMS_KEY);
+        assertThrows(UserException.class, () -> login("sms", oldCode));
+        assertEquals(fresh, cache.get(SMS_KEY));
+        assertSession(login("sms", fresh));
+        verify(provider, times(2)).sendMessage(eq(PHONE), eq("login-template"), any(LinkedHashMap.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "disabled"})
+    void unavailableAccountDoesNotSendOrConsumeExistingSmsCode(String state) {
+        prepareSmsSending();
+        cache.put(SMS_KEY, "123456");
+        if ("missing".equals(state)) { user = null; } else { user.setStatus("1"); }
+        assertEquals(500, smsController.smsCode(PHONE).getCode());
+        assertThrows(UserException.class, () -> login("sms", "123456"));
+        assertEquals("123456", cache.get(SMS_KEY));
+        verifyNoInteractions(channels, provider, smsRecords, smsBucket);
+        redis.verifyNoInteractions();
+    }
+
+    @Test
+    void accountDisabledAfterSendingCannotConsumeCodeOrBuildSession() {
+        prepareSmsSending();
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String code = (String) cache.get(SMS_KEY);
+        user.setStatus("1");
+        assertThrows(UserException.class, () -> login("sms", code));
+        assertEquals(code, cache.get(SMS_KEY));
+        verifyNoInteractions(smsBucket);
+        verify(loginService, never()).buildLoginUser(any());
+    }
+
+    @Test
+    void lockedAccountCannotConsumeCorrectSmsCode() {
+        prepareSmsSending();
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String code = (String) cache.get(SMS_KEY);
+        cache.put(ERROR_KEY, 5);
+        assertThrows(UserException.class, () -> login("sms", code));
+        assertEquals(code, cache.get(SMS_KEY));
+        verifyNoInteractions(smsBucket);
+        verify(loginService, never()).buildLoginUser(any());
+    }
+
+    @Test
+    void wrongSmsCodePreservesValidCodeAndIncrementsRetry() {
+        prepareSmsSending();
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        String code = (String) cache.get(SMS_KEY);
+        assertThrows(UserException.class, () -> login("sms", "wrong-code"));
+        assertEquals(1, cache.get(ERROR_KEY));
+        assertEquals(code, cache.get(SMS_KEY));
+        verifyNoInteractions(smsBucket);
+        assertSession(login("sms", code));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"consumed", "replaced", "expired"})
+    void losingAtomicConsumeNeverBuildsSessionOrDeletesReplacement(String race) {
+        cache.put(SMS_KEY, "123456");
+        doAnswer(call -> {
+            if ("replaced".equals(race)) { cache.put(SMS_KEY, "654321"); }
+            else { cache.remove(SMS_KEY); }
+            return false;
+        }).when(smsBucket).compareAndSet("123456", null);
+        assertThrows(CaptchaExpireException.class, () -> login("sms", "123456"));
+        verify(loginService, never()).buildLoginUser(any());
+        assertFalse(cache.containsKey(ERROR_KEY));
+        assertEquals("replaced".equals(race) ? "654321" : null, cache.get(SMS_KEY));
+        redis.verify(() -> RedisUtils.deleteObject(SMS_KEY), never());
+    }
+
+    @Test
+    void registrationAndLegacyCodesCannotBeUsedForSmsLogin() {
+        String registerKey = SmsConstant.verificationCodeKey(SmsConstant.TYPE_REGISTER, PHONE);
+        cache.put(registerKey, "123456");
+        cache.put(GlobalConstants.CAPTCHA_CODE_KEY + PHONE, "123456");
+        assertThrows(CaptchaExpireException.class, () -> login("sms", "123456"));
+        assertEquals("123456", cache.get(registerKey));
+        assertEquals("123456", cache.get(GlobalConstants.CAPTCHA_CODE_KEY + PHONE));
+        verifyNoInteractions(smsBucket);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"no-channel", "no-template", "unregistered", "failure", "exception"})
+    void failedSendingCannotCacheCodeOrEnableLogin(String failure) {
+        prepareSmsSending();
+        switch (failure) {
+            case "no-channel" -> when(channels.findActiveConfigs(1)).thenReturn(List.of());
+            case "no-template" -> when(channels.findLastTemplate(101L, 1)).thenReturn(null);
+            case "unregistered" -> smsFactory.when(() -> SmsFactory.getSmsBlend("101")).thenReturn(null);
+            case "failure" -> {
+                SmsResponse response = mock(SmsResponse.class);
+                when(response.getData()).thenReturn("provider-rejected");
+                when(provider.sendMessage(eq(PHONE), eq("login-template"), any(LinkedHashMap.class))).thenReturn(response);
+            }
+            case "exception" -> when(provider.sendMessage(eq(PHONE), eq("login-template"), any(LinkedHashMap.class)))
+                .thenThrow(new IllegalStateException("provider unavailable"));
+            default -> fail("Unknown scenario");
+        }
+        assertEquals(500, smsController.smsCode(PHONE).getCode());
+        assertFalse(cache.containsKey(SMS_KEY));
+        assertThrows(CaptchaExpireException.class, () -> login("sms", "123456"));
+        verify(loginService, never()).buildLoginUser(any());
+        if ("no-channel".equals(failure) || "no-template".equals(failure)) {
+            verifyNoInteractions(provider, smsRecords);
+        } else {
+            var record = ArgumentCaptor.forClass(MobileMessage.class);
+            verify(smsRecords).insert(record.capture());
+            assertEquals(SmsConstant.STATUS_FAIL, record.getValue().getStatus());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "{}", "broken-json", "{\"REDIS_CODE\":5}",
+        "{\"VERIFICATION_CODE\":\"\"}", "{\"VERIFICATION_CODE\":\"\",\"REDIS_CODE\":0}",
+        "{\"VERIFICATION_CODE\":\"\",\"REDIS_CODE\":-1}",
+        "{\"VERIFICATION_CODE\":\"\",\"REDIS_CODE\":\"invalid\"}",
+        "{\"OTHER\":\"VERIFICATION_CODE REDIS_CODE\"}"})
+    void invalidLoginTemplateNeverSendsAnUnusableCode(String variables) {
+        prepareSmsSending();
+        smsTemplate.setVariable(variables);
+        assertEquals(500, smsController.smsCode(PHONE).getCode());
+        assertFalse(cache.containsKey(SMS_KEY));
+        verifyNoInteractions(provider, smsRecords);
+    }
+
+    @Test
+    void loginTemplateOfWrongTypeIsRejectedBeforeSending() {
+        prepareSmsSending();
+        smsTemplate.setType(SmsConstant.TYPE_REGISTER);
+        assertEquals(500, smsController.smsCode(PHONE).getCode());
+        verifyNoInteractions(provider, smsRecords);
+        assertFalse(cache.containsKey(SMS_KEY));
+    }
+
+    @Test
+    void failedChannelFallsBackAndCachesOnlyTheSuccessfulChannelCode() {
+        prepareSmsSending();
+        var first = new SmsConfig(); first.setId(100L); first.setSmsType(5);
+        var second = new SmsConfig(); second.setId(101L); second.setSmsType(5);
+        when(channels.findActiveConfigs(1)).thenReturn(List.of(first, second));
+        when(channels.findLastTemplate(100L, 1)).thenReturn(smsTemplate);
+        SmsBlend failingProvider = mock(SmsBlend.class);
+        smsFactory.when(() -> SmsFactory.getSmsBlend("100")).thenReturn(failingProvider);
+        when(failingProvider.sendMessage(eq(PHONE), anyString(), any(LinkedHashMap.class)))
+            .thenThrow(new IllegalStateException("first channel unavailable"));
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        var record = ArgumentCaptor.forClass(MobileMessage.class);
+        verify(smsRecords, times(1)).insert(record.capture());
+        assertEquals(101L, record.getValue().getSenderId());
+        assertSession(login("sms", (String) cache.get(SMS_KEY)));
+    }
+
+    @Test
+    void templateCacheDurationIsUsedBySenderAndLogin() {
+        prepareSmsSending();
+        smsTemplate.setVariable("{\"VERIFICATION_CODE\":\"\",\"REDIS_CODE\":2}");
+        assertEquals(200, smsController.smsCode(PHONE).getCode());
+        assertEquals(Duration.ofMinutes(2), durations.get(SMS_KEY));
+        assertSession(login("sms", (String) cache.get(SMS_KEY)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"invalid", "138", "email@example.com"})
+    void invalidPhoneIsRejectedBeforeAccountOrProviderLookup(String phone) {
+        prepareSmsSending();
+        assertEquals(500, smsController.smsCode(phone).getCode());
+        verifyNoInteractions(users, channels, provider, smsRecords);
+        redis.verifyNoInteractions();
     }
 
     private LoginVo login(String grant, String code) {
@@ -507,5 +798,9 @@ class LoginStrategyContractTest {
 
     private static String identifier(String grant) {
         return "sms".equals(grant) ? PHONE : EMAIL;
+    }
+
+    private static String codeKey(String grant) {
+        return "sms".equals(grant) ? SMS_KEY : GlobalConstants.CAPTCHA_CODE_KEY + EMAIL;
     }
 }

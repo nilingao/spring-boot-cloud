@@ -19,6 +19,7 @@ import org.dromara.sms4j.api.entity.SmsResponse;
 import org.dromara.sms4j.core.factory.SmsFactory;
 import org.springframework.stereotype.Component;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +43,7 @@ import java.util.Map;
 public class SmsSendManager {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final SecureRandom CODE_RANDOM = new SecureRandom();
 
     private final SmsChannelManager smsChannelManager;
     private final MobileMessageMapper mobileMessageMapper;
@@ -58,7 +60,7 @@ public class SmsSendManager {
     public synchronized SmsSendResult smsSend(SmsSendBo bo) {
         Integer type = bo.getType();
         String mobile = bo.getMobile();
-        String key = SmsConstant.VERIFICATION_CODE_PREFIX + type + "_" + mobile;
+        String key = SmsConstant.verificationCodeKey(type, mobile);
 
         // 1.防重发：命中则直接返回剩余等待时间（getTimeToLive 返回毫秒）
         if (RedisUtils.isExistsObject(key)) {
@@ -85,7 +87,19 @@ public class SmsSendManager {
             if (template == null) {
                 continue;
             }
-            Rendered rendered = render(template);
+            Rendered rendered;
+            try {
+                rendered = render(template);
+            } catch (IllegalArgumentException e) {
+                log.warn("短信模板变量无效，跳过: configId={}, type={}", account.getId(), type);
+                continue;
+            }
+            if (Integer.valueOf(SmsConstant.TYPE_LOGIN).equals(type)
+                && (!type.equals(rendered.templateType) || rendered.redisTime <= 0
+                    || StrUtil.isBlank(rendered.verificationCode))) {
+                log.warn("登录短信模板缺少有效验证码或缓存期限，跳过: configId={}", account.getId());
+                continue;
+            }
             SmsResponse response = dispatch(account, mobile, rendered);
             chosen = account;
             chosenRender = rendered;
@@ -138,16 +152,16 @@ public class SmsSendManager {
         LinkedHashMap<String, Object> vars = parseJson(variableJson);
 
         // 验证码：占位存在且值为空时自动生成 6 位随机码
-        if (variableJson.contains(SmsConstant.VERIFICATION_CODE)) {
+        if (vars.containsKey(SmsConstant.VERIFICATION_CODE)) {
             Object code = vars.get(SmsConstant.VERIFICATION_CODE);
             if (code == null || StrUtil.isEmpty(String.valueOf(code))) {
-                code = (int) ((Math.random() * 900000) + 100000);
+                code = CODE_RANDOM.nextInt(900000) + 100000;
                 vars.put(SmsConstant.VERIFICATION_CODE, code);
             }
             r.verificationCode = String.valueOf(code);
         }
         // 缓存分钟数：占位存在且值为空时取默认
-        if (variableJson.contains(SmsConstant.REDIS_CODE)) {
+        if (vars.containsKey(SmsConstant.REDIS_CODE)) {
             Object redisCode = vars.get(SmsConstant.REDIS_CODE);
             if (redisCode == null || StrUtil.isEmpty(String.valueOf(redisCode))) {
                 redisCode = SmsConstant.REDIS_TIME;
@@ -225,7 +239,7 @@ public class SmsSendManager {
         boolean isCodeType = templateType != null
             && (templateType == SmsConstant.TYPE_LOGIN || templateType == SmsConstant.TYPE_REGISTER);
         if (isCodeType && rendered.redisTime > 0 && StrUtil.isNotBlank(rendered.verificationCode)) {
-            String key = SmsConstant.VERIFICATION_CODE_PREFIX + requestType + "_" + mobile;
+            String key = SmsConstant.verificationCodeKey(requestType, mobile);
             RedisUtils.setCacheObject(key, rendered.verificationCode, Duration.ofMinutes(rendered.redisTime));
         }
     }

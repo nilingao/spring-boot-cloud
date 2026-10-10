@@ -19,6 +19,11 @@ public final class SmsConstant {
      */
     public static final String VERIFICATION_CODE_PREFIX = "redis:verificationCode:";
 
+    /** 发送与校验共用的验证码缓存 key，按用途和手机号隔离。 */
+    public static String verificationCodeKey(Integer type, String mobile) {
+        return VERIFICATION_CODE_PREFIX + type + "_" + mobile;
+    }
+
     /**
      * 模板变量占位：验证码（值缺失时自动生成 6 位随机码）
      */

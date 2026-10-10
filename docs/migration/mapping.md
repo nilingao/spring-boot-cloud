@@ -732,9 +732,22 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - JDK21 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块成功**，日志 `.migration/build-login-strategy-reactor.log`。
 - Mapper、权限/部门/角色/岗位数据源和 Redis 操作使用替身，Sa-Token DAO 为内存实现；测试核对缓存 Duration 并移除条目模拟过期，未验收真实 Redis TTL/多实例并发、生产日志落库、MySQL 或供应商。
 
-**功能映射结论**：旧 `code` 登录由新 `password` + 图形验证码覆盖；旧短信参数 phone/SmsCodeCode 改为 phoneNumber/smsCode。表驱动 SmsSendManager 写 `redis:verificationCode:1_{mobile}`，基线短信登录读另一套验证码 key，且 `/resource/sms/code` 仍使用固定 config1/空模板号；短信发送与登录尚未贯通。`XcxAuthStrategy` 只有密钥/用户查询占位模板，旧 wx_mini 用户处理和 wx_mini_web 网页登录未等价实现；二维码旧链路还依赖微信码生成、Redis 场景、MQ 通知和 Socket.IO 房间推送，不能以技术封装就绪认定业务完成。
+**功能映射结论**：旧 `code` 登录由新 `password` + 图形验证码覆盖；旧短信参数 phone/SmsCodeCode 改为 phoneNumber/smsCode。5.2 时发现表驱动发送与基线短信登录使用不同 key，且 `/resource/sms/code` 使用固定 config1/空模板号；这些短信缺口已在 5.3 接通（见 5.6）。`XcxAuthStrategy` 只有密钥/用户查询占位模板，旧 wx_mini 用户处理和 wx_mini_web 网页登录未等价实现；二维码旧链路还依赖微信码生成、Redis 场景、MQ 通知和 Socket.IO 房间推送，不能以技术封装就绪认定业务完成。
 
-**下一批**：阶段 5.3 接通表驱动短信发送与登录验证码缓存/消费契约；小程序绑定、二维码状态和通知链路另批实施。旧账号/token/租户数据不迁，原 mini 表不重建，阶段 5 保持进行中，pay 继续暂缓。
+**后续**：阶段 5.3 已交付，见下；小程序绑定、二维码状态和通知链路另批实施。旧账号/token/租户数据不迁，原 mini 表不重建，阶段 5 保持进行中，pay 继续暂缓。
+
+### 5.6 阶段 5.3：表驱动短信发送与登录验证码契约（已交付）
+
+完整 API、模板配置、缓存与消费时机见 [sms-login.md](sms-login.md)。`CaptchaController.smsCode` 调用新增 `SmsLoginCodeService`，检查手机号及账号可用性后调用 `nla-message/SmsSendManager`；渠道与模板来自业务表，保持内部服务调用和现有公共 URL，无新增通用短信发送接口。
+
+- 发送与短信登录共用 `SmsConstant.verificationCodeKey`，登录 key 为 `redis:verificationCode:1_{phoneNumber}`；按用途隔离，不双写旧图形/邮箱验证码 key。
+- 模板验证码值为空时由 SecureRandom 生成 6 位数字，缓存分钟数为空默认 5。登录模板缺少验证码/正期限、类型不匹配或变量非法时跳过，不发送不可校验的短信。供应商失败不写验证码，继续故障转移，沿用最终尝试落发送记录。
+- 缓存命中保持原码、防止重复发送，继续返回成功与等待提示；原公共接口限流和 HTTP 200 + `R.code` 契约保留。登录错误输入保留验证码并递增既有账号重试计数；缺失/停用账号和锁定账号不能消费或建立会话。
+- 答案匹配后通过同一 Redisson 客户端的 `RBucket.compareAndSet(code, null)` 原子比较删除，只有消费成功的请求继续签发 JWT；消费竞争失败拒绝，不误删替换后的新码。消费发生在权限组装与签发之前，后续失败需重新获取验证码。
+
+**验证结果**：`LoginStrategyContractTest` 新增 **32 项**、合计 **73 项**；与 5.1 回归及 `SmsDataContractTest` 的 8 项共同执行，**131 项全通过，无失败、错误或跳过**。根工程 JDK21 离线编译 **49/49 模块成功**。日志 `.migration/test-sms-login-contract.log`、`.migration/build-sms-login-reactor.log`。
+
+**验收边界**：测试执行真实发送/认证逻辑与 JWT，用户/渠道/模板查询、记录 Mapper、供应商、Redis 使用替身；已有 H2/Mapper 数据层测试共同回归。过期及消费竞争通过替身模拟，未验收真实 Redis/MySQL/供应商、限流切面或完整启动。原 synchronized 仅保障单实例发送串行，多实例发送去重和基线账号计数并发仍待环境/后续处理。`SecurityConfig`/`AllUrlHandler` 路径匹配沿用原逻辑，图形验证码、邮箱和 video 数据层不改；多租户禁用，pay 暂缓，阶段 5 仍待小程序/二维码业务及外部验收。
 
 ---
 
@@ -986,8 +999,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 - **菜单权限 SQL 已生成**：`script/sql/nla_message.sql` 追加「短信管理」目录 + 3 菜单（渠道配置/短信模板/发送记录）+ 12 按钮 + 16 条 `sys_role_menu` 授权；`menu_id` 用 `1761400000000002000` 独立号段（现有菜单最大 `1761400000000001623`，job/ai/workflow 无 `sys_menu` 插入，无冲突）；perms 与 3 controller 的 `@SaCheckPermission` 逐一对齐（config/template 各 list+query+add+edit+remove+export，record 仅 list+export+remove）；超级管理员自动可见，普通角色 `1761300000000000003` 按种子约定授权。前端 Vue 页面（`sms/{config,template,record}/index`）由独立前端任务线补齐，不影响后端鉴权。
 - **`MobileMessageVo.mobile` 已脱敏**：加 `@Sensitive(strategy = SensitiveStrategy.PHONE, perms = "sms:record:export")`，与 `SysUserVo.phoneNumber` 同构；语义 = 有导出权限者与超级管理员见原文、其余见掩码（Excel 导出经 fesod 读原始字段，与“可导出即可见原文”一致）。`nla-common-sensitive` 早在 pom 声明，无需改依赖。
 
-**仍待决策（需用户确认）**：
-1. **发送入口未接**：`SmsSendManager` 目前是内部 Bean，无 REST controller 暴露，也尚未被 `nla-system` 登录/注册/重置验证码流程调用 —— 单体化后短信走内部服务调用还是需独立发送接口，待定。
+**发送入口进度**：阶段 5.3 已通过 `CaptchaController` → `SmsLoginCodeService` 内部调用接入登录验证码（见 5.6），沿用 `/resource/sms/code`。注册/重置验证码业务尚未接入；没有新增通用短信发送 REST 接口。
 
 ---
 
@@ -1086,12 +1098,14 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 主服务镜像名是 **`nla-server`** 而非 `nla-admin` —— 由 `nla-admin` 模块打包产出，
 这也是规则组里 `image tag nla-server` 的 `min` 为 2 的原因（双实例各一处）。
 
-### 7.4 Java 源码（2 处）
+### 7.4 Java 源码（品牌替换与功能偏离）
 
 | 文件 | 上游 | 本工程 | 理由 |
 |---|---|---|---|
 | `nla-modules/nla-gen/.../util/GenUtils.java` | `RegExUtils.replaceAll(text, "(?:表\|若依)", "")` | `"(?:表\|NLA)"` | `replaceText` 用于从表注释剔除噪音词生成代码功能名，剔除的是本工程品牌词 |
 | `nla-modules/nla-demo/.../controller/TestExcelController.java` | `map.put("author", "Lion Li")` | `"TZY"` | 填充 `excel/多列表.xlsx` 模板的 `{author}` 占位符 |
+
+认证功能偏离另按交付批次记录：阶段 5.1 的授权类型、方法级公开入口、clientId 与社交解绑归属见 5.4；阶段 5.2 的 `LoginHelper` User-Agent 空值保护见 5.5；阶段 5.3 的 `CaptchaController` 表驱动短信接入、`SmsLoginCodeService` 账号检查、`SmsAuthStrategy` 共用 key 与原子消费、`SmsSendManager` 登录模板校验及 SecureRandom 见 5.6。同步上游这些类时须保留对应行为，`SecurityConfig` 的 `AllUrlHandler.getUrls()` 路径匹配保持原逻辑。
 
 ### 7.5 明确不引入的上游内容
 
@@ -1318,7 +1332,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
-| **5** | 认证鉴权与租户 | 🟡 进行中·5.1/5.2 已交付 | 客户端契约、社交解绑归属、真实密码/验证码/锁定/账号状态验证及旧登录映射已交付（见 5.4/5.5，91 项测试，全工程 49/49 编译）；5.3 表驱动短信登录接入、小程序/二维码业务与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **5** | 认证鉴权与租户 | 🟡 进行中·5.1/5.2/5.3 已交付 | 客户端契约、社交解绑归属、真实密码/验证码/锁定/账号状态验证、旧登录映射及表驱动短信发送/原子消费已交付（见 5.4～5.6，131 项测试，全工程 49/49 编译）；小程序/二维码业务与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |

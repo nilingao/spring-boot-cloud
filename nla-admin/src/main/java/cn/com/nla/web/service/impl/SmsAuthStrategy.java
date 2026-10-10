@@ -6,7 +6,6 @@ import cn.hutool.core.util.ObjectUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import cn.com.nla.common.core.constant.Constants;
-import cn.com.nla.common.core.constant.GlobalConstants;
 import cn.com.nla.common.core.constant.SystemConstants;
 import cn.com.nla.common.core.enums.LoginType;
 import cn.com.nla.common.core.exception.user.CaptchaExpireException;
@@ -17,6 +16,7 @@ import cn.com.nla.common.core.utils.ValidatorUtils;
 import cn.com.nla.common.json.utils.JsonUtils;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import cn.com.nla.common.satoken.utils.LoginHelper;
+import cn.com.nla.message.sms.SmsConstant;
 import cn.com.nla.system.api.model.LoginUser;
 import cn.com.nla.system.api.model.SmsLoginBody;
 import cn.com.nla.system.domain.SysUser;
@@ -72,19 +72,28 @@ public class SmsAuthStrategy implements IAuthStrategy {
     }
 
     /**
-     * 校验短信验证码是否存在且匹配。
+     * 校验短信验证码并原子消费；错误输入保留验证码，成功后不可复用。
      *
      * @param phoneNumber 手机号
      * @param smsCode     用户输入的短信验证码
      * @return 是否校验通过
      */
     private boolean validateSmsCode(String phoneNumber, String smsCode) {
-        String code = RedisUtils.getCacheObject(GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber);
+        String key = SmsConstant.verificationCodeKey(SmsConstant.TYPE_LOGIN, phoneNumber);
+        String code = RedisUtils.getCacheObject(key);
         if (StringUtils.isBlank(code)) {
             loginService.recordLoginInfo(phoneNumber, Constants.LOGIN_FAIL, MessageUtils.message("user.jcaptcha.expire"));
             throw new CaptchaExpireException();
         }
-        return code.equals(smsCode);
+        if (!code.equals(smsCode)) {
+            return false;
+        }
+        // 同一 Redis codec 下按值比较并删除；过期/已消费/被替换时不再签发会话。
+        if (!RedisUtils.getClient().<String>getBucket(key).compareAndSet(code, null)) {
+            loginService.recordLoginInfo(phoneNumber, Constants.LOGIN_FAIL, MessageUtils.message("user.jcaptcha.expire"));
+            throw new CaptchaExpireException();
+        }
+        return true;
     }
 
     /**

@@ -23,9 +23,7 @@ import cn.com.nla.common.redis.enums.LimitType;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import cn.com.nla.common.web.config.properties.CaptchaProperties;
 import cn.com.nla.common.web.core.WaveAndCircleCaptcha;
-import org.dromara.sms4j.api.SmsBlend;
-import org.dromara.sms4j.api.entity.SmsResponse;
-import org.dromara.sms4j.core.factory.SmsFactory;
+import cn.com.nla.web.service.SmsLoginCodeService;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -35,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.awt.*;
 import java.time.Duration;
-import java.util.LinkedHashMap;
 
 /**
  * 验证码操作处理
@@ -51,6 +48,7 @@ public class CaptchaController {
 
     private final CaptchaProperties captchaProperties;
     private final MailProperties mailProperties;
+    private final SmsLoginCodeService smsLoginCodeService;
 
     /**
      * 发送短信验证码。
@@ -64,21 +62,8 @@ public class CaptchaController {
         if (!RegexValidator.isMobile(phoneNumber)) {
             return R.fail("请输入正确的手机号！");
         }
-        String key = GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber;
-        String code = RandomUtil.randomNumbers(4);
-        // 验证码模板id 自行处理 (查数据库或写死均可)
-        String templateId = "";
-        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-        map.put("code", code);
-        SmsBlend smsBlend = SmsFactory.getSmsBlend("config1");
-        SmsResponse smsResponse = smsBlend.sendMessage(phoneNumber, templateId, map);
-        if (!smsResponse.isSuccess()) {
-            log.error("验证码短信发送异常 => {}", smsResponse);
-            Object data = smsResponse.getData();
-            return R.fail(data == null ? "验证码短信发送失败" : data.toString());
-        }
-        RedisUtils.setCacheObject(key, code, Duration.ofMinutes(Constants.CAPTCHA_EXPIRATION));
-        return R.ok();
+        var result = smsLoginCodeService.send(phoneNumber);
+        return result.isSuccess() ? R.ok(result.getMessage()) : R.fail(result.getMessage());
     }
 
     /**
