@@ -719,7 +719,22 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - JDK21 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块成功**，日志 `.migration/build-auth-security-reactor.log`。
 - `nla-admin -am` 编译依赖过滤检查未出现 H2，确认新增依赖保持 test scope，日志 `.migration/deps-auth-security.log`。
 
-**边界与下一批**：错误仍沿用 HTTP 200 + `R.code` 的基线响应；客户端路径/IP 策略是登录时 token 快照，未实现配置即时刷新。真实密码/验证码/重试锁定/账号状态及旧短信、小程序、二维码登录映射留阶段 5.2；第三方真实绑定、Redis 会话/权限刷新、生产代理和完整应用启动未验收。方法级权限属于架构基线变更，当前多租户保持禁用，企业 companyId 不代替登录权限，pay 继续暂缓。
+**边界与后续进度**：错误仍沿用 HTTP 200 + `R.code` 的基线响应；客户端路径/IP 策略是登录时 token 快照，未实现配置即时刷新。真实密码/验证码/重试锁定/账号状态及旧短信、小程序、二维码登录映射已在阶段 5.2 验证与记录（见 5.5）；第三方真实绑定、Redis 会话/权限刷新、生产代理和完整应用启动未验收。方法级权限属于架构基线变更，当前多租户保持禁用，企业 companyId 不代替登录权限，pay 继续暂缓。
+
+### 5.5 阶段 5.2：登录策略验证与旧登录功能映射（已交付）
+
+完整请求字段、失败计数规则、测试边界和旧功能缺口见 [login-strategies.md](login-strategies.md)。本批沿用现有密码/短信/邮箱策略；生产代码只在 `LoginHelper.fillRequestContext` 增加两处解析结果空值判断，修复请求缺失 User-Agent 时正确密码/验证码登录空指针。`AllUrlHandler.getUrls()` 路径匹配保持基线。
+
+**验证结果**：
+
+- 新增 `LoginStrategyContractTest` **41 项全通过**：真实 BCrypt、图形验证码 math/char 图片生成与答案校验、顺序消费/重放拒绝、密码请求约束、缺失/停用账号、第五次错误锁定、正确凭证不能绕过锁定、过期模拟、账号计数隔离与密码/短信/邮箱共享锁定、失败事件发布、虚拟线程权限组装、JWT 会话及可选 User-Agent。
+- 与阶段 5.1 的 50 项共同运行，**91 项全通过，无失败、错误或跳过**。日志 `.migration/test-login-strategy-contract.log`。
+- JDK21 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块成功**，日志 `.migration/build-login-strategy-reactor.log`。
+- Mapper、权限/部门/角色/岗位数据源和 Redis 操作使用替身，Sa-Token DAO 为内存实现；测试核对缓存 Duration 并移除条目模拟过期，未验收真实 Redis TTL/多实例并发、生产日志落库、MySQL 或供应商。
+
+**功能映射结论**：旧 `code` 登录由新 `password` + 图形验证码覆盖；旧短信参数 phone/SmsCodeCode 改为 phoneNumber/smsCode。表驱动 SmsSendManager 写 `redis:verificationCode:1_{mobile}`，基线短信登录读另一套验证码 key，且 `/resource/sms/code` 仍使用固定 config1/空模板号；短信发送与登录尚未贯通。`XcxAuthStrategy` 只有密钥/用户查询占位模板，旧 wx_mini 用户处理和 wx_mini_web 网页登录未等价实现；二维码旧链路还依赖微信码生成、Redis 场景、MQ 通知和 Socket.IO 房间推送，不能以技术封装就绪认定业务完成。
+
+**下一批**：阶段 5.3 接通表驱动短信发送与登录验证码缓存/消费契约；小程序绑定、二维码状态和通知链路另批实施。旧账号/token/租户数据不迁，原 mini 表不重建，阶段 5 保持进行中，pay 继续暂缓。
 
 ---
 
@@ -1303,7 +1318,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
-| **5** | 认证鉴权与租户 | 🟡 进行中·5.1 已交付 | 登录与客户端契约、JWT/方法级权限、社交解绑归属已落实（见 5.4，50 项测试，全工程 49/49 编译）；5.2 密码/验证码/账号状态与旧登录功能映射待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **5** | 认证鉴权与租户 | 🟡 进行中·5.1/5.2 已交付 | 客户端契约、社交解绑归属、真实密码/验证码/锁定/账号状态验证及旧登录映射已交付（见 5.4/5.5，91 项测试，全工程 49/49 编译）；5.3 表驱动短信登录接入、小程序/二维码业务与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |

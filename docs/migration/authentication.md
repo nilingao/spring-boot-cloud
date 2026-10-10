@@ -44,4 +44,4 @@ SysSocialOwnershipTest 从交付 `nla_system.sql` 提取 sys_social 表结构，
 
 `nla-admin -am` 编译依赖过滤检查未出现 H2，H2 保持 test scope，日志 `.migration/deps-auth-security.log`。
 
-下一批阶段 5.2 核对真实密码、验证码、重试锁定与账号状态契约，以及旧短信/小程序/二维码登录的功能映射；第三方绑定、Redis 会话/权限刷新、生产反向代理和完整应用启动仍需后续验收。阶段 5 尚未整体完成，pay 继续暂缓。
+阶段 5.2 的真实密码、验证码、重试锁定与账号状态契约及旧登录功能映射已补齐，见 [login-strategies.md](login-strategies.md)。下一批阶段 5.3 接通表驱动短信发送与登录验证码；小程序/二维码业务、第三方绑定、Redis 会话/权限刷新、生产反向代理和完整应用启动仍需后续实施或验收。阶段 5 尚未整体完成，pay 继续暂缓。

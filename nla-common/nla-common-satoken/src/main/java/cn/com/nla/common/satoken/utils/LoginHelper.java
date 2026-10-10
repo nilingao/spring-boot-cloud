@@ -83,10 +83,10 @@ public class LoginHelper {
             loginUser.setLoginLocation(AddressUtils.getRealAddressByIP(ip));
         }
         UserAgent userAgent = UserAgentUtil.parse(request.getHeader("User-Agent"));
-        if (StringUtils.isBlank(loginUser.getBrowser())) {
+        if (userAgent != null && StringUtils.isBlank(loginUser.getBrowser())) {
             loginUser.setBrowser(userAgent.getBrowser().getName());
         }
-        if (StringUtils.isBlank(loginUser.getOs())) {
+        if (userAgent != null && StringUtils.isBlank(loginUser.getOs())) {
             loginUser.setOs(userAgent.getOs().getName());
         }
         if (StringUtils.isBlank(loginUser.getDeviceType()) && StringUtils.isNotBlank(model.getDeviceType())) {
