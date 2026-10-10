@@ -24,4 +24,7 @@ public class XcxLoginUser extends LoginUser {
      */
     private String openid;
 
+    /** 此身份所属的小程序，避免跨 app 使用 openid。 */
+    private String appid;
+
 }

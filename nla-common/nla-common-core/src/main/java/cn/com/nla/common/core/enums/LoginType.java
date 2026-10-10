@@ -30,7 +30,7 @@ public enum LoginType {
     /**
      * 小程序登录
      */
-    XCX("", "");
+    XCX("user.password.retry.limit.exceed", "user.password.retry.limit.count");
 
     /**
      * 登录重试超出限制提示

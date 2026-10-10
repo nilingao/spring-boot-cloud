@@ -323,7 +323,7 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | 2 | 通用基座 25 个 `nla-common-*` | ✅ |
 | 3 | 自建技术封装 6 个（freeswitch / gb28181 / pay / facesdk / socketio / mq） | ⬜ |
 | 4 | 数据层重写（face / sms / video / callcenter 已落地；参考数据导入/搜索评估与 MySQL 验收待推进） | 🟡 |
-| 5 | 认证鉴权与租户（OAuth2 → Sa-Token；[5.1 客户端契约](docs/migration/authentication.md)、[5.2 登录策略验证与映射](docs/migration/login-strategies.md)、[5.3 表驱动短信登录](docs/migration/sms-login.md)已交付） | 🟡 进行中 |
+| 5 | 认证鉴权与租户（OAuth2 → Sa-Token；[5.1 客户端契约](docs/migration/authentication.md)、[5.2 登录策略验证与映射](docs/migration/login-strategies.md)、[5.3 表驱动短信登录](docs/migration/sms-login.md)、[5.4 小程序登录与绑定](docs/migration/xcx-login.md)已交付） | 🟡 进行中 |
 | 6 | 业务模块迁移（7 批次） | ⬜ |
 | 7 | 工作流与调度替换（Activiti → WarmFlow） | ⬜ |
 | 8 | client 聚合层扁平化（废弃 43 个 Feign） | ⬜ |

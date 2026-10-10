@@ -7,6 +7,7 @@ import cn.com.nla.common.core.enums.LoginType;
 import cn.com.nla.common.core.exception.user.CaptchaException;
 import cn.com.nla.common.core.exception.user.CaptchaExpireException;
 import cn.com.nla.common.core.exception.user.UserException;
+import cn.com.nla.common.core.exception.ServiceException;
 import cn.com.nla.common.core.utils.SpringUtils;
 import cn.com.nla.common.json.utils.JsonUtils;
 import cn.com.nla.common.mail.config.properties.MailProperties;
@@ -33,6 +34,8 @@ import cn.com.nla.web.controller.CaptchaController;
 import cn.com.nla.web.service.impl.EmailAuthStrategy;
 import cn.com.nla.web.service.impl.PasswordAuthStrategy;
 import cn.com.nla.web.service.impl.SmsAuthStrategy;
+import cn.com.nla.web.service.impl.XcxAuthStrategy;
+import cn.com.nla.system.api.model.XcxLoginUser;
 import cn.dev33.satoken.SaManager;
 import cn.dev33.satoken.config.SaTokenConfig;
 import cn.dev33.satoken.context.SaTokenContext;
@@ -504,6 +507,87 @@ class LoginStrategyContractTest {
         assertEquals("sms".equals(grant) ? LoginType.SMS.getRetryLimitExceed() : LoginType.EMAIL.getRetryLimitExceed(), failure.getCode());
         redis.verify(() -> RedisUtils.getCacheObject(codeKey(grant)), never());
         verify(loginService, never()).buildLoginUser(any());
+    }
+
+    private XcxAuthStrategy prepareXcx(WechatMiniClient provider, SysXcxBindingService bindings) {
+        when(provider.exchange("wx0123456789abcdef", "wx-code", "web-client"))
+            .thenReturn(new WechatMiniClient.Identity("wx0123456789abcdef", "verified-openid", null));
+        when(bindings.findUserId("wx0123456789abcdef", "verified-openid")).thenReturn(USER_ID);
+        when(users.selectVoById(USER_ID)).thenAnswer(call -> user);
+        return new XcxAuthStrategy(loginService, provider, bindings, users);
+    }
+
+    private String xcxBody() {
+        var body = baseBody("xcx");
+        body.put("appid", "wx0123456789abcdef"); body.put("xcxCode", "wx-code");
+        return JsonUtils.toJsonString(body);
+    }
+
+    @Test
+    void verifiedXcxIdentityBuildsFullPermissionsAndJwtFromBoundAccount() {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = prepareXcx(provider, bindings);
+        cache.put(ERROR_KEY, 2);
+        var view = strategy.login(xcxBody(), client);
+        assertSession(view);
+        assertFalse(cache.containsKey(ERROR_KEY));
+        XcxLoginUser session = LoginHelper.getLoginUser(view.getAccessToken());
+        assertEquals("wx0123456789abcdef", session.getAppid());
+        assertEquals("verified-openid", session.getOpenid());
+        assertEquals("verified-openid", view.getOpenid());
+        verify(loginService).buildLoginUser(user);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"unbound", "missing", "disabled", "locked", "provider"})
+    void rejectedXcxLoginNeverBuildsSession(String state) {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = prepareXcx(provider, bindings);
+        switch (state) {
+            case "unbound" -> when(bindings.findUserId(anyString(), anyString())).thenThrow(new ServiceException("unbound"));
+            case "missing" -> user = null;
+            case "disabled" -> user.setStatus("1");
+            case "locked" -> cache.put(ERROR_KEY, 5);
+            case "provider" -> when(provider.exchange(anyString(), anyString(), anyString())).thenThrow(new ServiceException("provider failed"));
+            default -> fail("Unknown scenario");
+        }
+        if ("unbound".equals(state) || "provider".equals(state)) {
+            assertThrows(ServiceException.class, () -> strategy.login(xcxBody(), client));
+        } else {
+            var failure = assertThrows(UserException.class, () -> strategy.login(xcxBody(), client));
+            assertEquals(switch (state) {
+                case "missing" -> "user.not.exists";
+                case "disabled" -> "user.blocked";
+                default -> LoginType.XCX.getRetryLimitExceed();
+            }, failure.getCode());
+        }
+        assertFalse(StpUtil.isLogin());
+        verify(loginService, never()).buildLoginUser(any());
+        if ("locked".equals(state)) { assertEquals(5, cache.get(ERROR_KEY)); }
+        if ("provider".equals(state)) { verifyNoInteractions(bindings); }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"appid,''", "appid,invalid", "xcxCode,''", "clientId,''", "grantType,''"})
+    void invalidXcxInputCannotReachProvider(String field, String value) {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = new XcxAuthStrategy(loginService, provider, bindings, users);
+        var body = baseBody("xcx"); body.put("appid", "wx0123456789abcdef"); body.put("xcxCode", "wx-code");
+        body.put(field, value);
+        assertThrows(ConstraintViolationException.class, () -> strategy.login(JsonUtils.toJsonString(body), client));
+        verifyNoInteractions(provider, bindings, users);
+    }
+
+    @Test
+    void xcxUsesClientSelectedByServerAndIgnoresSpoofedOpenidAndUserId() {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = prepareXcx(provider, bindings);
+        var body = baseBody("xcx"); body.put("appid", "wx0123456789abcdef"); body.put("xcxCode", "wx-code");
+        body.put("userId", USER_ID + 1); body.put("openid", "spoofed-openid"); body.put("clientId", "spoofed-client");
+        assertSession(strategy.login(JsonUtils.toJsonString(body), client));
+        verify(provider).exchange("wx0123456789abcdef", "wx-code", "web-client");
+        verify(bindings).findUserId("wx0123456789abcdef", "verified-openid");
+        verify(users).selectVoById(USER_ID);
     }
 
     /** 执行真实 Controller → Service → 发送引擎，仅渠道查询、供应商和 Redis 使用替身。 */

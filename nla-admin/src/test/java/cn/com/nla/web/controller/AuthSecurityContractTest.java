@@ -1,5 +1,8 @@
 package cn.com.nla.web.controller;
 
+import cn.com.nla.web.service.WechatMiniClient;
+import cn.com.nla.system.service.SysXcxBindingService;
+
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.utils.SpringUtils;
 import cn.com.nla.common.satoken.core.service.SaPermissionImpl;
@@ -316,6 +319,46 @@ class AuthSecurityContractTest {
         verify(social, never()).deleteWithValidById(anyLong());
     }
 
+    @Test
+    void xcxLoginUsesExistingAuthorizedGrantDispatch() throws Exception {
+        client.setGrantType("password,xcx");
+        assertEquals(200, responseCode(post("/auth/login").contentType("application/json").content(loginBody("xcx"))));
+        verify(strategy).login(loginBody("xcx"), client);
+    }
+
+    @Test
+    void xcxBindingRequiresLoginAndMatchingClientPolicy() throws Exception {
+        var request = post("/auth/xcx/bind").contentType("application/json")
+            .content("{\"appid\":\"wx0123456789abcdef\",\"xcxCode\":\"wx-code\"}");
+        assertEquals(401, responseCode(request));
+        assertEquals(401, responseCode(request.header("Authorization", "Bearer " + token(Set.of()))
+            .header("clientid", "other-client")));
+        verifyNoInteractions(context.getBean(WechatMiniClient.class), context.getBean(SysXcxBindingService.class));
+    }
+
+    @Test
+    void xcxBindingRetainsClientPathAndIpRestrictions() throws Exception {
+        client.setAccessPath("/contract/**");
+        assertEquals(403, responseCode(authenticated(post("/auth/xcx/bind"), token(Set.of()))
+            .contentType("application/json").content("{\"appid\":\"wx0123456789abcdef\",\"xcxCode\":\"wx-code\"}")));
+        client.setAccessPath(null); client.setIpWhitelist("10.0.0.0/24");
+        assertEquals(403, responseCode(authenticated(post("/auth/xcx/bind"), token(Set.of()))
+            .contentType("application/json").content("{\"appid\":\"wx0123456789abcdef\",\"xcxCode\":\"wx-code\"}")
+            .with(request -> { request.setRemoteAddr("192.168.1.1"); return request; })));
+        verifyNoInteractions(context.getBean(WechatMiniClient.class));
+    }
+
+    @Test
+    void xcxBindingUsesSessionOwnerAndVerifiedProviderIdentity() throws Exception {
+        var provider = context.getBean(WechatMiniClient.class);
+        var bindings = context.getBean(SysXcxBindingService.class);
+        when(provider.exchange("wx0123456789abcdef", "wx-code", "web-client"))
+            .thenReturn(new WechatMiniClient.Identity("wx0123456789abcdef", "verified-openid", null));
+        assertEquals(200, responseCode(authenticated(post("/auth/xcx/bind"), token(Set.of()))
+            .contentType("application/json").content("{\"appid\":\"wx0123456789abcdef\",\"xcxCode\":\"wx-code\",\"userId\":1,\"openid\":\"spoofed\"}")));
+        verify(bindings).bind(9_007_199_254_740_993L, "wx0123456789abcdef", "verified-openid", null);
+    }
+
     private String token(Set<String> permissions) {
         return issueInBoundRequest(IAuthStrategy.buildLoginParameter(client), permissions, Set.of());
     }
@@ -367,7 +410,12 @@ class AuthSecurityContractTest {
         @Bean ISysClientService clientService() { return mock(ISysClientService.class); }
         @Bean ISysSocialService socialService() { return mock(ISysSocialService.class); }
         @Bean ScheduledExecutorService scheduler() { return mock(ScheduledExecutorService.class); }
-        @Bean("passwordAuthStrategy") IAuthStrategy strategy() { return mock(IAuthStrategy.class); }
+        @Bean({"passwordAuthStrategy", "xcxAuthStrategy"}) IAuthStrategy strategy() { return mock(IAuthStrategy.class); }
+        @Bean WechatMiniClient wechatMiniClient() { return mock(WechatMiniClient.class); }
+        @Bean SysXcxBindingService xcxBindings() { return mock(SysXcxBindingService.class); }
+        @Bean XcxBindingController xcxController(WechatMiniClient provider, SysXcxBindingService bindings) {
+            return new XcxBindingController(provider, bindings);
+        }
         @Bean AuthController authController(ISysClientService clients, ISysSocialService social, ScheduledExecutorService scheduler) {
             return new AuthController(new SocialProperties(), mock(SysLoginService.class), mock(SysRegisterService.class),
                 mock(ISysConfigService.class), social, clients, scheduler, mock(MessageService.class));
