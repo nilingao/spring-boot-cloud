@@ -396,17 +396,18 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-video`(201) | 自建 `nla-common-video` | 见 5.1.2 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
 
-### 5.1 阶段 3 的 6 个自建封装（2 已建 / 4 待建）
+### 5.1 阶段 3 的 6 个自建封装（3 已建 / 3 待建）
 
 坐标 `cn.com.nla:nla-common-{tech}`，全部需登记进 `nla-common-bom`。
 每个遵循 `basic`（注解/枚举/POJO，无 Spring 依赖）+ `core`（配置/AOP/实现）二段式。
+facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目对象池/代理/配置放 `cn.com.nla.common.facesdk.core`，不重命名 JNI 绑定。
 
 | 模块 | 源 | 关键风险 |
 |---|---|---|
 | ✅ `nla-common-freeswitch` | `starter-freeswitch`(199) | `freeswitch-esl 1.6.7.RELEASE` **尖峰已验：核心库 JDK21 GO（Java8 字节码、0 处 `javax/*`）；starter 是 Boot2/`spring.factories` 产物，Boot4 不自动加载 → 自建 `@AutoConfiguration` 替代；netty 4.1→4.2 需实测；见 5.2**；铁律沿用：管理接口禁止执行 FreeSWITCH CLI / 系统命令 / 文件删除 |
 | ✅ `nla-common-video` | `starter-video`(201) | **已交付，见 5.1.2**；JDK21 本机 SIP UDP 收包、TCP/UDP 端口释放与模拟 ZLM HTTP 已验；真实设备注册/心跳/点播、ZLM RTP 与 ONVIF 联调延后 |
 | `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
-| `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` 内嵌源码 | **尖峰已验 JDK21 GO，见 5.3.1**：29 `.java` 内嵌源码纯标准 JDK（0 处 `javax/*`/`sun/*`/removed API），137 native 方法 JNI ABI 与 JDK 解耦，`System.load` 机制无变化，18 `finalize` 废弃但 JDK21 功能正常；native 库 Linux`.so`+Windows`.dll` **双平台齐备→开发机可本地冒烟**；包名保持 `com.seeta.sdk`；基础镜像 `seetaface_face_work` 需重建 JDK 21 版（延后部署阶段） |
+| ✅ `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` + pool/proxy | **已交付，见 5.1.3**：29 SDK 文件、135 个实际 native 方法签名保持；16 组对象池/代理；Windows amd64 CPU / JDK21 真实 JNI 创建与释放已验。Linux/GPU 与真实识别效果待环境；基础镜像 `seetaface_face_work` 重建留部署阶段 |
 | `nla-common-socketio` | `starter-socket-io` + `starter-netty` | netty-socketio JDK 21 兼容性 |
 | `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | spring-amqp Boot 4 版本 |
 
@@ -449,6 +450,29 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 **剩余外部验收**：真实 GB28181 设备注册/心跳、点播/录像回放、ZLM RTP/Hook 和 ONVIF 设备联调需外部环境，尚未执行；阶段 6.5 的 12 张业务表、Controller 与 SPI 实现不属于本轮技术封装。
 
+#### 5.1.3 `nla-common-facesdk` 交付结果（阶段 3.3，已落地）
+
+新建 `nla-common/nla-common-facesdk`，登记 `nla-common` reactor 与 `nla-common-bom`。迁入 **29 个 SDK 文件 + 17 个 pool 文件（16 算法池 + 配置）+ 16 个 proxy 文件**，新增自动配置、属性与加载初始化器后共 **65 个主 Java 文件**。接入示例见 [`nla-common-facesdk/README.md`](../../nla-common/nla-common-facesdk/README.md)。旧 face 业务模块、DLL/SO 与模型保持原位，本轮只迁技术层。
+
+**关键契约与修正**：
+
+- **JNI ABI 保持**：`com.seeta.sdk` 包名、native 方法签名与数据字段保留，逐文件核对 **135 个实际 native 声明一致**；原尖峰的 137 计数包含 2 行注释中的声明，已校正。项目代码包为 `cn.com.nla.common.facesdk.core`，SDK 层无 Spring import。
+- **Boot4 门控**：`FaceSdkAutoConfiguration` 通过 `.imports` 注册，`face.enabled=true` 才加载 native，默认关闭；消费方组件宽扫描不会触发加载。沿用 `face.dll-path` / `face.csta-path`，新增设备/设备 ID、每算法池容量与等待时间配置，默认最大 8 个对象、借用等待 30 秒。消费方可替换算法代理或加载初始化器。
+- **加载失败即启动失败**：修正旧 Windows 路径拼接；支持 native 根目录或直接平台目录，按 `dll.properties` 数字顺序加载 base → JNI，CPU/GPU 的 tennis 库单独选取。启动前检查全部库文件和默认算法使用的 10 个模型，关闭清单输入流，不再吞掉加载异常或错误标记成功；同 JVM 不允许中途切换库/设备。
+- **显式 native 生命周期**：18 个有 native 句柄的 SDK 类支持幂等 `AutoCloseable.close()`，释放后 `impl=0`；`finalize()` 保留兼容兜底。旧池的 `destroyObject` 仅 `object=null`，实际没有释放 native；现在 16 个池销毁时调用 `close()`，校验指针非零。16 个代理都可关闭，随 Spring 上下文关闭释放对象池。
+- **操作失败向上抛出**：代理保留算法方法名，异常改抛 `IllegalStateException`，避免错误被包装成正常结果；特征提取返回 false 时同样失败。`QualityOfLBN` 模型从错误的 `pose_estimation.csta` 改为 `quality_lbn.csta`。
+- **图像适配去 Web 化**：SDK 工具去旧 `MockMultipartFile` / Spring `MultipartFile`，输入改用 `InputStream`，输出使用真实 PNG/JPEG 编码字节，由阶段 6.4 Controller 适配上传/下载；修正 BGR → BufferedImage 时红蓝通道颠倒的问题，图像读取错误显式抛出。
+- **原生资产不入模块 JAR**：DLL/SO/`.csta` 由外部配置目录提供；未复制到新模块，避免将模型与二进制重复入库。
+
+**验证（2026-10-10，JDK21）**：
+
+- `FaceSdkContractTest` **12/12 通过**：默认门控/宽扫描、配置绑定与 16 池关闭、自定义代理、无效配置/缺模型失败、Windows/Linux/arch 路径与清单顺序、缺库预检查、池句柄关闭与拒绝继续借用、代理失败行为、BGR/PNG 往返与读取错误。
+- `FaceSdkNativeSmokeTest` **2/2 通过，0 跳过**：显式传入旧模块 `conf/seetaface6` 和 `conf/sf3.0_models`，在 **Windows amd64 / CPU / JDK21** 实际加载 24 个库、创建全部 16 种算法句柄、检测器接收合成图、查询特征维度；上下文关闭后 16 个句柄归零，重复 `close()` 和同配置重复加载通过。合计 **14/14，BUILD SUCCESS，MVN_EXIT=0**，日志 `.migration/test-facesdk.log`。常规 CI 未传路径时仅跳过两个 native 冒烟用例。
+- 根工程 `mvn -o -B -DskipTests compile` → **44/44 模块 BUILD SUCCESS，MVN_EXIT=0，耗时 15.002 秒**；依赖树 `dependency:tree -Dscope=compile` 同样成功，只有 Boot4/Spring7、commons-pool2、Hutool、Lombok 等技术依赖，无旧工程 starter/cloud/Web/Redis 依赖。日志 `.migration/build-facesdk-reactor.log` / `.migration/deps-facesdk.log`。
+- 文件/编码审计：29 SDK 文件 **missing=0**，135 native 签名一致；全部交付文本 UTF-8 往返通过，新模块无旧包/未门控组件/尾随空白/二进制资产，`git diff --check` 通过。
+
+**剩余验收**：Linux ARM/GPU、真实人脸识别准确率/活体识别效果、生产负载未测；当前仓库 Linux 原生包仅 ARM 平台，Linux amd64 需另备匹配库。阶段 6.4 的 Person 表、业务流程/鉴权/Controller 仍待迁移。
+
 ### 5.2 阶段3 兼容性尖峰结论（freeswitch-esl / SIP 栈，JDK21+Boot4）
 
 **背景**：阶段3 的自建封装是 6.4~6.7 硬前置，其中 freeswitch / video 依赖外部协议库，能否在 JDK21+Boot4 存活是最大未知。本轮先做**静态兼容性尖峰**（依赖可拉取性 + 字节码版本 + jakarta 迁移面 + JDK 内部 API + 自动配置机制），退役未知后再投入完整封装。所有 artifact 已在本地仓（旧项目构建残留），无需下载；证据取自 `javap` / `jar tf` / `findstr` 实测。
@@ -480,11 +504,11 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 源码位置 | `spring-boot-face/.../com/seeta/sdk`，**29 个 `.java`** 内嵌（非外部 jar），包名须保持 `com.seeta.sdk`（native 库按此包名做 JNI 符号绑定） | ✅ 迁移即整包搬入 `nla-common-facesdk`，不改包名 |
 | native 库 | Linux `.so`(aarch64) + Windows `.dll`(amd64) + JNI 桥接库齐备；14 个 `.csta` 模型 | ✅ **双平台齐备**——Windows 开发机可本地冒烟（区别于 freeswitch/SIP 无端点） |
 | 加载机制 | `LoadNativeCore.LOAD_NATIVE(dllPath, SeetaDevice)`：读 `dll.properties`→按 OS(`os.name`)+arch(`os.arch`)定位→`System.load(绝对路径)` 逐个加载；导入**纯标准 JDK**（`java.io`/`nio.file`/`util`/`util.logging`/`stream`），**0 处 `javax/*`、`sun/*`、removed API** | ✅ **GO**：`System.load` 机制 JDK21 无变化 |
-| native 方法 | **137 个 `native` 方法**；JNI ABI 与 JDK 版本解耦（native 库按 `com.seeta.sdk` 符号编译，不依赖 JDK 内部 API） | ✅ GO |
-| `finalize()` | 18 处（`FaceDetector` 等用 `finalize()`→`dispose()` 清理 native 资源）；Java9 起废弃但 **JDK21 仍功能正常**（仅编译告警） | ⚠️ 可用；建议 pool/proxy 层显式 `dispose()`（旧代码已如此），`finalize` 作兜底 |
+| native 方法 | **135 个实际 `native` 方法**（阶段 3.3 校正：原 137 含 2 行注释声明）；JNI ABI 与 JDK 版本解耦 | ✅ 签名逐文件一致，见 5.1.3 |
+| `finalize()` | 18 处；Java9 起废弃但 **JDK21 仍功能正常**（仅编译告警）。旧池销毁仅 `object=null`，没有显式释放 | ✅ 阶段 3.3 已补幂等 `close()` 与池/代理关闭，`finalize` 留兼容兜底 |
 | `javax.imageio`/`javax.swing` | 仅 `SeetafaceUtil.java` 用到——二者是**永久 JDK 包**（`java.desktop` 模块），**不迁 jakarta、不冲突** | ✅ GO |
 
-**facesdk 净结论**：✅ **GO**。JNI 静态层面 JDK21 无阻塞；native 库双平台齐备，`nla-common-facesdk` 建好后 **Windows 开发机即可冒烟**（无需真实服务器）。6.4 face(1表+116文件JNI) 无底层阻塞。基础镜像 `seetaface_face_work` 需重建 JDK21 版（延后到部署阶段）。
+**facesdk 净结论**：✅ **GO**。阶段 3.3 已完成 Windows amd64 CPU / JDK21 真实 JNI 冒烟（见 5.1.3），6.4 face 的技术前置已就绪。Linux/GPU 验收与基础镜像 `seetaface_face_work` 的 JDK21 重建留对应部署阶段。
 
 #### 5.3.2 pay（8 子模块：alipay/jdpay/qqpay/unionpay/wxpay/paypal/xpay/starter）
 
@@ -515,7 +539,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 基线覆盖复核后**仅 `sys_area` 需迁**（mini/mini_user→`sys_social`+`sys_user`、user_set→`sys_user.status`+超管角色，不新建）；老数据丢弃、流B 数据迁移取消；表映射见下，交付见 6.1.1 | ✅ 完成 |
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
-| 6.4 | `face`(116) | `nla-modules/nla-face` | 18 Pool + 18 Proxy 对象池包装 JNI，依赖 `nla-common-facesdk` | 待推进 |
+| 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**前置 `nla-common-facesdk` 已就绪（见 5.1.3）** | 待推进（前置已解除） |
 | 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2）**；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进（前置已解除） |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1）** | 待推进（前置已解除） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
@@ -1086,7 +1110,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | 🟡 进行中·2/6 | **兼容性尖峰已全部退役**（freeswitch-esl/SIP/onvif 见 5.2、facesdk/pay 见 5.3，均 JDK21+Boot4 GO）；**freeswitch + video 已建成**（见 5.1.1/5.1.2），video 15/15 契约测试通过、全工程 43/43 模块编译 GREEN，余 pay/facesdk/socketio/mq 待建；真实外部协议联调待环境 |
+| **3** | 自建技术封装 | 🟡 进行中·3/6 | **freeswitch + video + facesdk 已建成**（见 5.1.1~5.1.3）；facesdk 12 契约 + 2 真实 Windows JNI 测试全通过，全工程 44/44 模块编译 GREEN；余 socketio/mq/pay 待建，pay 最低优先级；video 外部协议与 facesdk Linux/GPU 验收待对应环境 |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |

@@ -201,6 +201,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- SeetaFace native SDK integration -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-common-facesdk</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
