@@ -46,6 +46,7 @@
         <module>nla-common-video</module>
         <module>nla-common-facesdk</module>
         <module>nla-common-socketio</module>
+        <module>nla-common-mq</module>
     </modules>
 
 </project>

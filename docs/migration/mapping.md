@@ -391,12 +391,12 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-sentinel`(5) | **废弃** | 限流改基线 `@RateLimiter`（Redisson 实现） | 待阶段 6 |
 | `starter-quartz`(12) | **废弃** | 已弃用 | 待阶段 7 |
 | `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 → 2.0.14；TCP 有效代码迁入，见 5.1.4 | ✅ 已建·编译/协议测试 GREEN |
-| `starter-rabbitmq`(2) | 自建 `nla-common-mq` | spring-amqp 走 Boot 4 版本；`MQConfig` 迁移 | 待阶段 3 |
+| `starter-rabbitmq`(2) | 自建 `nla-common-mq` | Spring AMQP4 / Jackson3；配置与客户端重写，见 5.1.5 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1.1 | ✅ 已建·编译 GREEN |
 | `starter-video`(201) | 自建 `nla-common-video` | 见 5.1.2 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
 
-### 5.1 阶段 3 的 6 个自建封装（4 已建 / 2 待建）
+### 5.1 阶段 3 的 6 个自建封装（5 已建 / 1 待建）
 
 坐标 `cn.com.nla:nla-common-{tech}`，全部需登记进 `nla-common-bom`。
 每个遵循 `basic`（注解/枚举/POJO，无 Spring 依赖）+ `core`（配置/AOP/实现）二段式。
@@ -409,7 +409,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
 | ✅ `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` + pool/proxy | **已交付，见 5.1.3**：29 SDK 文件、135 个实际 native 方法签名保持；16 组对象池/代理；Windows amd64 CPU / JDK21 真实 JNI 创建与释放已验。Linux/GPU 与真实识别效果待环境；基础镜像 `seetaface_face_work` 重建留部署阶段 |
 | ✅ `nla-common-socketio` | `starter-socket-io` + `starter-netty` | **已交付，见 5.1.4**：Boot4 / JDK21 / Netty4.2 下 21 项测试通过，含真实 WebSocket/Polling/TCP；真实 Redis 多节点和代理联调延后 |
-| `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | spring-amqp Boot 4 版本 |
+| ✅ `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | **已交付，见 5.1.5**：Boot4 / AMQP4 / Jackson3，20 项测试通过；真实 RabbitMQ、delay 插件与 confirm/return 联调延后 |
 
 #### 5.1.1 `nla-common-freeswitch` 交付结果（阶段 3.1，已落地）
 
@@ -500,6 +500,30 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - 文件/编码审计：15 个有效 TCP 源文件逐个匹配，4 个不迁文件确认仅有注释；37 份交付文本 UTF-8 严格往返通过；旧包/静态 SpringUtil/未门控组件/basic Spring import/尾随空白均为 0，`git diff --check` 通过。
 
 **外部验收与限制**：Redis 使用内存模拟客户端及真实 codec 字节往返，尚未执行真实 Redis 多节点、代理层 WebSocket/Polling 联调、Linux 和生产负载测试；Polling 多节点仍需代理会话粘滞。异常退出留下的 Redis 会话数据暂无自动 TTL 清理。网络 JSON support 与 Redis codec 独立，Java 时间等扩展网络类型由消费方 customizer 注册模块。阶段 6 的坐席/公告/二维码监听器及业务鉴权不在本轮技术封装范围。
+
+---
+
+#### 5.1.5 `nla-common-mq` 交付结果（阶段 3.5，已落地）
+
+新建 `nla-common/nla-common-mq`，登记 `nla-common` reactor 与 `nla-common-bom`。旧 `starter-rabbitmq` 的配置/客户端及 common 的 `MqConstant` 由 **5 个主 Java 文件 + 2 个测试文件**覆盖；接入示例见 [`nla-common-mq/README.md`](../../nla-common/nla-common-mq/README.md)。旧源码保持原位，未接入 admin 或迁入二维码业务消费者。
+
+**关键契约与修正**：
+
+- **Boot4 默认门控与依赖边界**：`.imports` 注册 `MqAutoConfiguration`，仅 `nla.mq.enabled=true` 生效，默认关闭；宽范围组件扫描不越过门控。编译依赖为 `spring-rabbit`、`spring-boot-autoconfigure`、Jackson3，不传递引入 Boot AMQP starter；消费方启用时自行引入 `spring-boot-starter-amqp` 或提供 ConnectionFactory/RabbitTemplate。开关只控制本模块，不会关闭消费方另行引入的 Boot AMQP 自动配置与监听器；启用但缺基础设施启动失败。
+- **发送链路使用消费方 template**：转换器先于 Boot Rabbit 自动配置注册，`MqClient` 注入消费方 RabbitTemplate，保留 confirm/return、重试及 customizer；simple/direct 监听器使用同一 converter。MessageConverter/AmqpAdmin/MqClient 支持用户 Bean 覆盖，用户 RabbitTemplate 由 Boot 退让。保留 `MqClient(RabbitAdmin)` 手动构造，但该构造仍用 admin 内部模板，完整 Boot 配置需使用注入的客户端或双参数构造。
+- **JSON 契约与旧序列化边界**：对象（含 String）出站改 Jackson3 JSON，byte[] 原样；入站识别 JSON、vendor +json、charset、文本和原始字节，传递泛型 conversion hint 与 listener inferred type。具体 DTO/List<DTO> 监听参数不要求发送方 Java 类型头；依赖类型头时须配置 DTO 的完整可信包名。AMQP4 仅精确匹配包名，默认 `cn.com.nla` 不覆盖子包。旧 `application/x-java-serialized-object` 不自动反序列化，返回 bytes，业务迁移须同步 JSON 或提供自定义 converter。
+- **拓扑参数分离与失败传播**：保留主要 binding/remove/delete/send API 及 6 个 QR/DLX broker 名称。新增 queueArguments/bindingArguments 双 Map 重载并复制输入；单 Map 兼容重载对 headers 解释为绑定参数，其他类型解释为队列参数，避免原有 DLX 参数重复进入 binding。exchange/queue 默认持久化，queue 非 exclusive/non-auto-delete；按 exchange → queue → binding 声明，异常不再忽略，queue 返回 null 同样失败，不自动回滚前面声明的资源。删除/解绑必须显式调用，模块不自动声明二维码拓扑。
+- **延迟与 ACK 边界**：`sendDelay` 第 2 参数明确为 routing key，保留 Integer 并增加 long 毫秒重载，校验 x-delay 范围并使用 AMQP4 `setDelayLong`；delayed exchange 需要外部插件，不能替代 TTL/DLX。普通发送增加 CorrelationData 重载；发送方法返回不等于 broker/消费者完成确认。旧业务显式 basicAck 需消费方配置 MANUAL，本模块不全局改变 ACK。
+- **自动声明开关**：`nla.mq.auto-declare` 默认 true，控制本模块 RabbitAdmin 的 autoStartup；false 不禁止显式 binding，也不替代消费方监听容器的声明配置。broker 类型/参数冲突会向上抛出。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `mvn -o -B -pl nla-common/nla-common-mq -am -Dtest=MqContractTest,MqClientTest -Dsurefire.failIfNoSpecifiedTests=false test` → **20/20 通过，0 跳过，BUILD SUCCESS，MVN_EXIT=0**（12 配置/转换契约 + 8 拓扑/发布测试）。覆盖默认关闭/宽扫描、缺基础设施失败、Boot 连接/confirm/return 与 simple/direct MANUAL 配置、Bean 覆盖、真实监听适配器 DTO 转换、类型头可信包、中文/LocalDateTime/泛型 JSON、文本/字节和旧序列化边界、QR/DLX/headers 参数分离与失败传播。真实 RabbitTemplate 经模拟 AMQP Channel 验证 persistent JSON、mandatory 与 `3_000_000_000L` x-delay，连接/通道关闭已验。日志 `.migration/test-mq.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **46/46 模块 BUILD SUCCESS，MVN_EXIT=0，耗时 17.393 秒**。日志 `.migration/build-mq-reactor.log`。
+- `dependency:tree -Dscope=compile` → **BUILD SUCCESS**；Boot 4.1.1 / Spring 7.0.9、Spring AMQP 4.1.1、RabbitMQ client 5.30.0、Jackson3 3.1.5、Netty 4.2.17.Final。无旧工程 starter/cloud、Boot2、Redis、Spring Web 依赖；AMQP starter 仅用于本模块测试。日志 `.migration/deps-mq.log`。
+- 文件/编码审计：6 个旧 broker 常量逐项一致；13 份交付文本严格 UTF-8 往返通过，basic 无 Spring import；旧包/静态 SpringUtil/未门控组件/尾随空白/交付二进制资产均为 0，`git diff --check` 通过。
+
+**外部验收与限制**：测试未连接真实 RabbitMQ；真实 broker 拓扑/重连、delayed-message 插件投递、confirm/return 回调、业务 ACK/DLX 与二维码登录流程尚未联调。业务消费者迁移留阶段 6，本轮不迁入 JWT/Redis/Socket.IO 调用。阶段 3 当前 **5/6**；pay 沿用最低优先级、暂未开发的约定。
 
 ---
 
@@ -1140,7 +1164,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | 🟡 进行中·4/6 | **freeswitch + video + facesdk + socketio 已建成**（见 5.1.1~5.1.4）；socketio 21 项测试全通过，全工程 45/45 模块编译 GREEN；余 mq/pay 待建，pay 最低优先级；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点验收待对应环境 |
+| **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
