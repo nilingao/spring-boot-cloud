@@ -476,8 +476,13 @@ class AuthSecurityContractTest {
         @Bean QrLoginController qrController(cn.com.nla.web.service.QrLoginService qr) { return new QrLoginController(qr); }
         @Bean WechatMiniClient wechatMiniClient() { return mock(WechatMiniClient.class); }
         @Bean SysXcxBindingService xcxBindings() { return mock(SysXcxBindingService.class); }
-        @Bean XcxBindingController xcxController(WechatMiniClient provider, SysXcxBindingService bindings) {
-            return new XcxBindingController(provider, bindings);
+        @Bean cn.com.nla.web.service.WechatPhoneClient wechatPhoneClient() { return mock(cn.com.nla.web.service.WechatPhoneClient.class); }
+        @Bean cn.com.nla.web.config.properties.XcxProperties xcxProperties() { return new cn.com.nla.web.config.properties.XcxProperties(); }
+        @Bean cn.com.nla.system.service.ISysUserService xcxUserService() { return mock(cn.com.nla.system.service.ISysUserService.class); }
+        @Bean XcxBindingController xcxController(WechatMiniClient provider, SysXcxBindingService bindings,
+                cn.com.nla.web.service.WechatPhoneClient phoneClient, cn.com.nla.web.config.properties.XcxProperties props,
+                cn.com.nla.system.service.ISysUserService userService) {
+            return new XcxBindingController(provider, bindings, phoneClient, props, userService);
         }
         @Bean AuthController authController(ISysClientService clients, ISysSocialService social, ScheduledExecutorService scheduler) {
             return new AuthController(new SocialProperties(), mock(SysLoginService.class), mock(SysRegisterService.class),

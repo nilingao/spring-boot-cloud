@@ -760,7 +760,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 
 **验证结果**：本批新增 **48 项**（供应商/配置 20、真实 H2/Mapper 绑定 12、登录策略 12、MVC 4）；与既有认证与短信数据层回归共同运行，**179 项全通过，无失败、错误或跳过**。JDK21 根工程 **49/49 模块编译成功**。日志 `.migration/test-xcx-contract.log`、`.migration/build-xcx-reactor.log`。
 
-**边界与下一批**：微信请求、用户/权限数据源与 Redis 用替身；H2 验证实际绑定 SQL、大小写候选过滤与解绑归属，未执行真实 Redis 锁、多实例竞争、微信 code 一次性消费、真实 MySQL 或完整启动。小程序资料/手机号授权及自动注册尚未交付。二维码后端后续已在 5.5 接通，通知改为 REST 轮询（见 5.8），旧 MQ/Socket.IO 业务事件没有迁入。旧 mini 表/账号/token 数据不迁，SecurityConfig/AllUrlHandler 路径匹配沿用原逻辑，多租户禁用，pay 暂缓，阶段 5 仍进行中。
+**边界与下一批**：微信请求、用户/权限数据源与 Redis 用替身；H2 验证实际绑定 SQL、大小写候选过滤与解绑归属，未执行真实 Redis 锁、多实例竞争、微信 code 一次性消费、真实 MySQL 或完整启动。小程序手机号授权后续已在 5.6 接通（见 5.9），资料授权及自动注册尚未交付。二维码后端后续已在 5.5 接通，通知改为 REST 轮询（见 5.8），旧 MQ/Socket.IO 业务事件没有迁入。旧 mini 表/账号/token 数据不迁，SecurityConfig/AllUrlHandler 路径匹配沿用原逻辑，多租户禁用，pay 暂缓，阶段 5 仍进行中。
 
 ### 5.8 阶段 5.5：小程序扫码网页登录（已交付）
 
@@ -774,7 +774,19 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 
 **验证结果**：本批新增 **51 项**（登录策略 30、MVC 5、供应商/配置/响应限长 12、Redis 适配器 4）；与此前 179 项共同运行，**230 项全通过，无失败、错误或跳过**。JDK21 根工程 **49/49 模块编译成功**。日志 `.migration/test-qr-contract.log`、`.migration/build-qr-reactor.log`。
 
-**验收边界**：真实服务/策略/权限组装/JWT/MVC、供应商协议和 Redis codec/CAS 参数已验证；微信网络、用户/权限/客户端/绑定数据源及 Redis 为替身，过期与竞争用场景移除/CAS 失败模拟。尚未执行真实 Redis Lua、多实例竞争、微信码扫描、前端确认/轮询、生产代理或完整应用启动；既有 H2 数据层共同回归。客户端重新查询仍沿用现有缓存失效机制，直接 SQL 修改和领取期间并发撤权不承诺即时生效。小程序资料/手机号授权、自动注册、第三方真实授权及其他外部验收仍待推进，阶段 5 保持进行中，多租户禁用，pay 暂缓。
+**验收边界**：真实服务/策略/权限组装/JWT/MVC、供应商协议和 Redis codec/CAS 参数已验证；微信网络、用户/权限/客户端/绑定数据源及 Redis 为替身，过期与竞争用场景移除/CAS 失败模拟。尚未执行真实 Redis Lua、多实例竞争、微信码扫描、前端确认/轮询、生产代理或完整应用启动；既有 H2 数据层共同回归。客户端重新查询仍沿用现有缓存失效机制，直接 SQL 修改和领取期间并发撤权不承诺即时生效。小程序手机号授权已在 5.6 接通（见 5.9）；资料授权、自动注册、第三方真实授权及其他外部验收仍待推进，阶段 5 保持进行中，多租户禁用，pay 暂缓。
+
+### 5.9 阶段 5.6：小程序手机号授权（已交付）
+
+配置、前端调用顺序和验收边界见 [phone-auth.md](phone-auth.md)。新增 `XcxPhoneBody` 请求体（nla-api）、`WechatPhoneClient`（stable_token + getuserphonenumber 供应商协议边界）与 `XcxBindingController` 上的受保护 `/auth/xcx/phone` 端点；只复用既有 `xcx.apps` 配置和 `sys_user.phoneNumber`/`sys_social`，不新增数据库表、列或独立开关，不迁旧 `bean_mini.phone` 数据。
+
+- 前端先 `wx.login` 登录，再 `wx.getPhoneNumber()` 取一次性 `phoneCode`，携带 appid 以小程序会话 token 请求。会话必须是 `XcxLoginUser` 且 appid 非空，请求 appid 与会话精确匹配；密码/短信 token 和跨 app 请求拒绝。
+- `WechatPhoneClient` 与 `WechatQrClient` 同构：固定 HTTPS 地址、stable_token `force_refresh=false` 取 access_token、格式校验后进 URL、响应限长 64KB、连接超时 5 秒、每完整请求最长 10 秒。供应商错误、token 无效、`errcode≠0`、缺 `phone_info`、号码为空或超长统一返回脱敏业务错误，不透传 secret/access_token/原始响应。
+- 回读只取 `phone_info.purePhoneNumber`，采用新式 code 换取，不实现旧 encryptedData/iv+session_key 解密（微信已废弃该方式）。更新前 `checkPhoneUnique` 校验唯一性，号码被其他账号使用拒绝；回写走 `updateUserProfile` 只触碰手机号字段，保留基线 `SYS_NICKNAME` 缓存失效。
+
+**验证结果**：本批新增 `WechatPhoneClientTest` **9 项**（正常获取纯号码、token 失败不调手机号 API、错误脱敏、缺 `phone_info`、空/超长号码拒绝、网络异常不泄露、无效 JSON 拒绝、限长订阅器超限取消与正常接收）；`AuthSecurityContractTest` 装配同步更新为 5 参构造。与此前 230 项各认证/短信模块回归共同执行，**239 项全通过，无失败、错误或跳过**（nla-admin 单模块 206 项）。JDK21 根工程 **49/49 模块编译成功**。日志 `.migration/test-phone-contract.log`、`.migration/build-phone.log`。
+
+**验收边界**：测试以替身验证协议解析、脱敏、限长与会话/配置/唯一性校验逻辑；真实 phoneCode 一次性消费、access_token 限频、多 app 隔离、真实 Redis 会话与完整应用启动留对应环境验收。小程序资料授权与自动注册本批未交付。阶段 5 后端可编码任务至此全部交付，余下为外部验收项；多租户禁用，pay 暂缓。
 
 ---
 
@@ -1132,7 +1144,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | `nla-modules/nla-gen/.../util/GenUtils.java` | `RegExUtils.replaceAll(text, "(?:表\|若依)", "")` | `"(?:表\|NLA)"` | `replaceText` 用于从表注释剔除噪音词生成代码功能名，剔除的是本工程品牌词 |
 | `nla-modules/nla-demo/.../controller/TestExcelController.java` | `map.put("author", "Lion Li")` | `"TZY"` | 填充 `excel/多列表.xlsx` 模板的 `{author}` 占位符 |
 
-认证功能偏离另按交付批次记录：阶段 5.1 的授权类型、方法级公开入口、clientId 与社交解绑归属见 5.4；阶段 5.2 的 `LoginHelper` User-Agent 空值保护见 5.5；阶段 5.3 的 `CaptchaController` 表驱动短信接入、`SmsLoginCodeService` 账号检查、`SmsAuthStrategy` 共用 key 与原子消费、`SmsSendManager` 登录模板校验及 SecureRandom 见 5.6；阶段 5.4 的小程序配置/交换边界、绑定服务/API、`XcxAuthStrategy` 真实账号与完整权限登录、`XcxLoginBody` 输入约束、`XcxLoginUser.appid` 及 `LoginType.XCX` 共享锁定提示见 5.7。同步上游这些类时须保留对应行为，`SecurityConfig` 的 `AllUrlHandler.getUrls()` 路径匹配保持原逻辑。
+认证功能偏离另按交付批次记录：阶段 5.1 的授权类型、方法级公开入口、clientId 与社交解绑归属见 5.4；阶段 5.2 的 `LoginHelper` User-Agent 空值保护见 5.5；阶段 5.3 的 `CaptchaController` 表驱动短信接入、`SmsLoginCodeService` 账号检查、`SmsAuthStrategy` 共用 key 与原子消费、`SmsSendManager` 登录模板校验及 SecureRandom 见 5.6；阶段 5.4 的小程序配置/交换边界、绑定服务/API、`XcxAuthStrategy` 真实账号与完整权限登录、`XcxLoginBody` 输入约束、`XcxLoginUser.appid` 及 `LoginType.XCX` 共享锁定提示见 5.7；阶段 5.6 的 `WechatPhoneClient` 供应商协议与响应限长、`XcxPhoneBody` 输入约束及 `XcxBindingController` `/auth/xcx/phone` 会话匹配/唯一性校验见 5.9。同步上游这些类时须保留对应行为，`SecurityConfig` 的 `AllUrlHandler.getUrls()` 路径匹配保持原逻辑。
 
 ### 7.5 明确不引入的上游内容
 
@@ -1359,7 +1371,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
-| **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.5 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录及扫码网页登录后端已交付（见 5.4～5.8，230 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调、小程序资料及手机号授权与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.6 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录及手机号授权后端已交付（见 5.4～5.9，239 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调、小程序资料授权/自动注册与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
