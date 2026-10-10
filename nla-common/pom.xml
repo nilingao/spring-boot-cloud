@@ -43,6 +43,7 @@
         <module>nla-common-mcp</module>
         <!-- 以下为项目自建技术封装(非上游模块) -->
         <module>nla-common-freeswitch</module>
+        <module>nla-common-video</module>
     </modules>
 
 </project>

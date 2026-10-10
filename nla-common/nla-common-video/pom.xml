@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>cn.com.nla</groupId>
+        <artifactId>nla-common</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>nla-common-video</artifactId>
+    <description>GB28181 SIP、ZLMediaKit 与 ONVIF 视频技术封装</description>
+    <dependencies>
+        <dependency><groupId>cn.com.nla</groupId><artifactId>nla-common-core</artifactId></dependency>
+        <dependency><groupId>cn.com.nla</groupId><artifactId>nla-common-json</artifactId></dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-redis</artifactId>
+            <exclusions>
+                <!-- lock4j brings a Boot 2 AOP starter; common-core already supplies Boot 4 AspectJ. -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-aop</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency><groupId>cn.hutool</groupId><artifactId>hutool-json</artifactId></dependency>
+        <dependency><groupId>javax.sip</groupId><artifactId>jain-sip-ri</artifactId></dependency>
+        <dependency><groupId>be.teletask.onvif</groupId><artifactId>onvif</artifactId></dependency>
+        <!-- JAIN-SIP's optional log4j 1 API is bridged to SLF4J. -->
+        <dependency><groupId>org.slf4j</groupId><artifactId>log4j-over-slf4j</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    </dependencies>
+</project>

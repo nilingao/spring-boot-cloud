@@ -194,6 +194,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- Video protocol and media integration -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-common-video</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

@@ -393,10 +393,10 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 升级到 JDK 21 兼容版 | 待阶段 3 |
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | spring-amqp 走 Boot 4 版本；`MQConfig` 迁移 | 待阶段 3 |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1.1 | ✅ 已建·编译 GREEN |
-| `starter-video`(201) | 自建 `nla-common-video` | 见 5.1 | 待阶段 3 |
+| `starter-video`(201) | 自建 `nla-common-video` | 见 5.1.2 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
 
-### 5.1 阶段 3 的 6 个自建封装（1 已建 / 5 待建）
+### 5.1 阶段 3 的 6 个自建封装（2 已建 / 4 待建）
 
 坐标 `cn.com.nla:nla-common-{tech}`，全部需登记进 `nla-common-bom`。
 每个遵循 `basic`（注解/枚举/POJO，无 Spring 依赖）+ `core`（配置/AOP/实现）二段式。
@@ -404,7 +404,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 模块 | 源 | 关键风险 |
 |---|---|---|
 | ✅ `nla-common-freeswitch` | `starter-freeswitch`(199) | `freeswitch-esl 1.6.7.RELEASE` **尖峰已验：核心库 JDK21 GO（Java8 字节码、0 处 `javax/*`）；starter 是 Boot2/`spring.factories` 产物，Boot4 不自动加载 → 自建 `@AutoConfiguration` 替代；netty 4.1→4.2 需实测；见 5.2**；铁律沿用：管理接口禁止执行 FreeSWITCH CLI / 系统命令 / 文件删除 |
-| `nla-common-video` | `starter-video`(201) | `sip 1.3.0-91`（Java7 字节码、无 `sun.*` 内部 API）、`onvif 1.0.2`（Java8、无 JAXB）**尖峰已验 JDK21 GO，见 5.2**；`netty` 由 Boot BOM 管理(4.2.17)；SIP 注册/心跳/点播链路需真实服务器实测（延后） |
+| ✅ `nla-common-video` | `starter-video`(201) | **已交付，见 5.1.2**；JDK21 本机 SIP UDP 收包、TCP/UDP 端口释放与模拟 ZLM HTTP 已验；真实设备注册/心跳/点播、ZLM RTP 与 ONVIF 联调延后 |
 | `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
 | `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` 内嵌源码 | **尖峰已验 JDK21 GO，见 5.3.1**：29 `.java` 内嵌源码纯标准 JDK（0 处 `javax/*`/`sun/*`/removed API），137 native 方法 JNI ABI 与 JDK 解耦，`System.load` 机制无变化，18 `finalize` 废弃但 JDK21 功能正常；native 库 Linux`.so`+Windows`.dll` **双平台齐备→开发机可本地冒烟**；包名保持 `com.seeta.sdk`；基础镜像 `seetaface_face_work` 需重建 JDK 21 版（延后部署阶段） |
 | `nla-common-socketio` | `starter-socket-io` + `starter-netty` | netty-socketio JDK 21 兼容性 |
@@ -425,6 +425,29 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 **部署告诫**：`FreeswitchAutoConfiguration` 受 `@ConditionalOnProperty("freeswitch.enabled"="true")` 门控（默认关、无 `matchIfMissing`）；但 `FreeswitchConfig`（`@ComponentScan("cn.com.nla.common.freeswitch")`）与 10 个 ESL handler（`@Component` 注入 `InboundClient`）由消费方组件扫描**无条件注册** → 消费方 app **必须**设 `freeswitch.enabled=true`，否则 `InboundClient` 缺失致启动 `UnsatisfiedDependency`。SIP 侧（`SipServer`/`SipServerRunner`/`Sip*Event`）靠 `@Component` 扫描、不受门控。当前无任何 nla app 依赖本模块，迁 6.6 fs 业务时须处理此门控（备选：把 handler/FreeswitchConfig 也纳入门控以支持“依赖但停用”）。
 
 **提交状态**：本轮 freeswitch 全部改动**未提交**（提交需用户授权）。
+
+#### 5.1.2 `nla-common-video` 交付结果（阶段 3.2，已落地）
+
+旧 `starter-video-basic/core` 的 **201 个 Java 文件全部迁入** `nla-common/nla-common-video`，补充适配类后主源码共 **212 个 Java 文件**。包分为 `cn.com.nla.common.video.basic`（协议模型、枚举，无 Spring/MyBatis 依赖）和 `core`（SIP/ZLM/ONVIF 实现、缓存与订阅）。已登记 `nla-common/pom.xml` 与 `nla-common-bom`；根 POM 管理 ONVIF `1.0.2`，JAIN-SIP 仍为 `1.3.0-91`。旧迁移源保持不变，接入示例见 [`nla-common-video/README.md`](../../nla-common/nla-common-video/README.md)。
+
+**关键契约与适配**：
+
+- **Boot4 自动配置**：`SipConfig` 改 `@AutoConfiguration`，由 `.imports` 注册，`video.enabled=true` 才启用，默认关闭；协议组件仅经该配置导入，消费方宽范围扫描也不会绕开门控。配置 `sip.*` → **`video.sip.*`**，`video-settings.*` → **`video.settings.*`**，避免 FreeSWITCH 配置混用。
+- **SIP 去 Nacos 化**：保留 `bind-ip`/`advertised-ip` 的监听与公布地址分离，节点注册保存 **SIP 端口**。独立创建 `SipStackImpl`（绕开 `SipFactory` 按 IP 复用栈），栈名 `NLA_VIDEO_GB28181_SIP` 与 FreeSWITCH 分开；迁入代码按类型注入，已验证同名 `sipServer`/`dynamicTask`/`sipCommander`/`videoProperties` Bean 不干扰 video。初始化校验 id/domain/port，绑定失败抛错，应用关闭停止 SIP 栈并释放传输端口。
+- **HTTP 去 Forest 化**：ZLM 使用 Hutool GET，保留 HTTP/HTTPS、路径前缀、secret、查询参数编码与 10 秒超时；关闭 HTTP 响应，传输失败返回协议错误 code=2。移除旧工程 starter/cloud、Spring Data Redis、`javax.annotation` 和直接 Spring Web 引用；日志统一 SLF4J，JAIN-SIP 的旧 Log4j API 由 `log4j-over-slf4j` 桥接。
+- **Redis 改用既有 Redisson**：缓存基于 `RedisUtils`，`VideoCache` 补齐秒级 TTL、非正 TTL 永久保存、原子计数、hash/set/zset 操作。所有协议 Topic 保持 **`SerializationUtils.serialize(...)` → `byte[]` → 接收方反序列化一次** 的跨模块契约。
+- **异步与订阅**：`VideoRestResult<T>` 改为 `CompletableFuture<T>`，超时回调惰性求值；回调按 key/id 隔离并在完成/超时后清理。每节点只监听一个回调 Topic；Hook 按类型共享订阅并按字段过滤，删除/续期按 HookKey 身份操作，过期时间不参与 hash identity；SIP 成功/错误及录像查询订阅在完成、替换和关闭时释放。动态调度线程池随上下文关闭。
+- **模型与消费方 SPI**：业务 DTO 时间转 `LocalDateTime`，SIP 日期编码与 Hook 过期计时保留 `Date`。`ProtocolResult` 保留 **0-success** 协议码，阶段 6.5 的 Controller 须转换成 `R<T>` 语义。移除旧 JWT，`CurrentUserProvider` 可由消费方覆盖，默认 null 触发旧下载默认用户；业务服务与流鉴权 SPI 留给 6.5 实现。启用模块须提供 `DeviceChannelVoService` Bean，其他 SPI 随 Runner/协议流程使用，未实现时不可直接启用完整业务。ZLM Hook HTTP 路由由消费方调用 `MediaHookServer`。
+
+**验证（2026-10-10，JDK21）**：
+
+- `mvn -o -B -pl nla-common/nla-common-video -am -Dtest=VideoContractTest -Dsurefire.failIfNoSpecifiedTests=false test` → **15/15 通过，BUILD SUCCESS，MVN_EXIT=0**。覆盖默认关闭/宽扫描、启用绑定、同名 Bean 与用户 SPI 覆盖、回调隔离和超时清理、Hook 匹配/删除/续期、SIP 原始/包装事件、录像跨节点发布与订阅替换、TTL/原子计数、中文 DTO/LocalDateTime Redis codec 往返、模拟 ZLM 请求，以及真实本机 SIP UDP 收包、TCP/UDP 端口释放，以及关闭 video 后同 IP 的既有 SIP 栈继续监听。Redis Topic 使用内存模拟，不代表真实 Redis 连通性验收。
+- 根工程 `mvn -o -B -DskipTests compile` → **43/43 模块 BUILD SUCCESS，MVN_EXIT=0，最终复验耗时 16.169 秒**；已实证 video 的 reactor 注册与依赖集成。日志 `.migration/test-video.log` / `.migration/build-video-reactor.log`。
+
+- `dependency:tree -Dscope=compile` → **BUILD SUCCESS**；video 的依赖子树无旧工程 starter/cloud、Forest、Log4j 1、Boot 2 AOP starter。仅在 video 的 Redis 依赖边界排除 lock4j 间接引入的旧 AOP starter，沿用 common-core 的 Boot4 AspectJ。基线 Redis 模块本身未改。日志 `.migration/deps-video.log`。
+- 文件/编码审计：201 个迁移源逐个对照 **missing=0**；220 份交付文本严格 UTF-8 往返通过；76 个 basic Java 无 Spring/MyBatis import；新模块无旧包/未门控组件/尾随空白，`git diff --check` 通过。
+
+**剩余外部验收**：真实 GB28181 设备注册/心跳、点播/录像回放、ZLM RTP/Hook 和 ONVIF 设备联调需外部环境，尚未执行；阶段 6.5 的 12 张业务表、Controller 与 SPI 实现不属于本轮技术封装。
 
 ### 5.2 阶段3 兼容性尖峰结论（freeswitch-esl / SIP 栈，JDK21+Boot4）
 
@@ -493,7 +516,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 18 Pool + 18 Proxy 对象池包装 JNI，依赖 `nla-common-facesdk` | 待推进 |
-| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，依赖 `nla-common-video`；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进 |
+| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2）**；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进（前置已解除） |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1）** | 待推进（前置已解除） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
 
@@ -1063,7 +1086,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | 🟡 进行中·1/6 | **兼容性尖峰已全部退役**（freeswitch-esl/SIP/onvif 见 5.2、facesdk/pay 见 5.3，均 JDK21+Boot4 GO）；6 个自建模块中 **`nla-common-freeswitch` 已建成·编译 GREEN**（199 文件，见 5.1.1），余 video/pay/facesdk/socketio/mq 待建 |
+| **3** | 自建技术封装 | 🟡 进行中·2/6 | **兼容性尖峰已全部退役**（freeswitch-esl/SIP/onvif 见 5.2、facesdk/pay 见 5.3，均 JDK21+Boot4 GO）；**freeswitch + video 已建成**（见 5.1.1/5.1.2），video 15/15 契约测试通过、全工程 43/43 模块编译 GREEN，余 pay/facesdk/socketio/mq 待建；真实外部协议联调待环境 |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
