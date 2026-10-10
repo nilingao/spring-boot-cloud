@@ -24,6 +24,7 @@
         <module>nla-ai</module>
         <module>nla-message</module>
         <module>nla-face</module>
+        <module>nla-video</module>
     </modules>
 
 </project>

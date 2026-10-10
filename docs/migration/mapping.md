@@ -415,6 +415,47 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ---
 
+### 4.6 视频监控数据层：12 张表（已落地）
+
+新建 `nla-modules/nla-video`，登记业务 reactor 和根 POM 坐标管理，交付 **48 个主 Java 文件（12 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_video.sql`](../../script/sql/nla_video.sql)，模块说明见 [`nla-video/README.md`](../../nla-modules/nla-video/README.md)。旧源码/DDL 保留，不导入旧测试数据；未依赖协议封装、未接入 admin，Controller/Service/权限/菜单留阶段 6.5。
+
+| 旧实体 / 表 | 新实体 / 主键 | 迁移约束 |
+|---|---|---|
+| Device / video_device | Device / Long id | 保留 device_id 有效唯一、online 默认 2；状态含义留业务阶段核定 |
+| DeviceChannel / video_device_channel | DeviceChannel / Long id | channel_id 仍在有效记录中全局唯一；manufacture 列名保留，修正经纬度注释 |
+| DeviceAlarm / video_device_alarm | DeviceAlarm / Long id | 保留报警级别/方式/类型与 LocalDateTime 报警时间 |
+| DeviceMobilePosition / video_device_mobile_position | DeviceMobilePosition / Long id | 保留原坐标、速度/方向与 LocalDateTime 位置时间 |
+| MediaServer / video_media_server | **VideoMediaServer / String id** | 与 fs.MediaServer 消歧；协议节点 ID 由调用方提供，有效 (ip,http_port) 唯一 |
+| ParentPlatform / video_parent_platform | ParentPlatform / Long id | server_gb_id 有效唯一；默认目录和协议配置保留 |
+| PlatformCatalog / video_platform_catalog | **PlatformCatalog / String id** | 目录协议主键由调用方提供，不变为 Long |
+| PlatformGbStream / video_platform_gb_stream | PlatformGbStream / Long id | String gb_stream_id 对应 GbStream.gbId，非 Long 数据库主键 |
+| PlatformGbChannel / video_platform_gb_channel | PlatformGbChannel / Long id | String device_channel_id 对应 DeviceChannel.channelId |
+| GbStream / video_gb_stream | **GbStream / Long gb_stream_id** | 特殊主键列名保留；有效 (app,stream) 与 gb_id 分别唯一 |
+| StreamProxy / video_stream_proxy | StreamProxy / Long id | 保留代理配置及有效 (app,stream) 唯一 |
+| StreamPush / video_stream_push | StreamPush / Long id | self→onSelf、total_reader_count String 保留；有效 (app,stream) 唯一 |
+
+**数据契约**：
+
+- 10 个 Long 主键使用 ASSIGN_ID，2 个 String 主键使用 INPUT；全部继承 BaseEntity，旧 create_user_id/update_user_id 改 create_by/update_by，新增 create_dept，审计五列允许空值；Date 统一 LocalDateTime。无租户列、无物理外键。
+- 12 张表统一 String delFlag / `char(1) not null default '0'` / 显式 @TableLogic(0/1)。原生关联查询逐张过滤删除标志。报警/位置记录本轮也采用逻辑删除，历史清理与留存策略留业务阶段。
+- 9 张带唯一业务键的表新增数据库生成列 active_marker：有效为 1，删除为 NULL；保留 10 个原唯一索引名和业务键，追加该列，支持多次删除/重建。未使用会在第二次删除时冲突的 `(业务键,del_flag)`。生成列不进入实体/Bo/Vo。字符串主键仍不可复用，恢复或新身份的规则留业务阶段；复用国标编号前须事务性处理旧有效关联，不能跳过引用校验。
+- Bo 采用 AddGroup/EditGroup 与 MapStruct-Plus，拒绝审计/删除字段；Long 新增不接受自带主键、编辑必填，String 主键新增/编辑必填。字符串长度、必填列、原 unsigned 字段的非负数及端口 0..65535 校验对应 DDL。整数列改 signed 对齐 Java Integer/Long，其他业务列长和默认值保留。
+- Vo 不包含 password/secret/delFlag，原始 url/srcUrl/dstUrl 因可能携带账号或 token 也不进入 Vo。实体/Bo 的凭据及原始流地址 JSON 仅写、toString 排除；内部 Mapper 读取保留协议所需凭据，业务接口须返回 Vo。
+- 旧非持久化 channelCount、platformId/catalogId、manufacturer/hostAddress、childrenCount/type 放入对应 Vo，不添加数据库列；普通 CRUD 不计算派生查询字段。ptzTypeText 作为独立列保留，旧 setter 派生文本行为留业务阶段。
+- 重写两个只读平台关联查询 selectSharedChannels/selectSharedStreams，按平台国标编号与目录集合查询，验证目录所属平台；通道查询过滤关联/设备/通道/平台/目录五表，流查询过滤关联/流/平台/目录四表。全部绑定参数，null/空目录集合返回空结果，已删除或缺失目标不返回。旧分页/树/流状态聚合/目录事件/原生删除 SQL 留阶段 6.5 重写，未直接复制旧 `${}` 拼接。
+- DDL 仅新库 CREATE IF NOT EXISTS，显式 utf8mb4 / utf8mb4_cs_0900_ai_ci，无 drop、旧测试数据、媒体节点种子或凭据；已有表需独立 schema 升级，本轮未执行外部数据库脚本。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `mvn -o -B -pl nla-modules/nla-video -am -Dtest=VideoDataContractTest -Dsurefire.failIfNoSpecifiedTests=false test` → **47/47 通过，0 跳过，BUILD SUCCESS，MVN_EXIT=0**。H2 2.4.240 MySQL 模式加载交付 DDL 和两个真实 XML，执行全部 12 个 Mapper 全字段 CRUD、审计更新、删除后读取过滤/更新与重复删除不恢复、中文与 LocalDateTime、生成映射、校验分组、凭据 JSON 仅写、数据库非空/长度约束、默认值、字符串/特殊主键、国标关联/参数绑定/目录归属/空集合、全部参与查询表的删除过滤、独立唯一键及三轮删除/重建。日志 `.migration/test-video-data.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **48/48 模块 BUILD SUCCESS，MVN_EXIT=0**。日志 `.migration/build-video-data-reactor.log`。
+- 编译依赖树确认 Boot4 / Spring7、MyBatis-Plus 3.5.17、MyBatis 3.5.19、MapStruct-Plus 1.5.3；H2 仅 test，未依赖旧工程 starter/cloud 或 SIP/ZLM/JNI。MyBatis 依赖边界排除 Redis/lock4j 间接引入的 Boot2 AOP starter，沿用 common-core 的 Boot4 AspectJ。日志 `.migration/deps-video-data.log`。
+- 58 份交付文本严格 UTF-8 往返通过，12 套旧实体持久字段与新实体/DDL 对齐；无旧 Java 包、Swagger2、javax、Date 或尾随空白，`git diff --check` 通过。
+
+**剩余验收**：H2 剥离 MySQL 表级选项及 STORED 关键字，保留生成列表达式；只在测试中给索引名加表名前缀，适配 H2 的 schema 级索引命名。真实 MySQL 生成列/排序规则/索引性能、生产登录态审计/权限、完整应用启动和 GB28181/ZLM/ONVIF 业务联调未执行。阶段 4 后续 fs 41 表待重写；pay 持续暂缓。
+
+---
+
 ## 5. starter → nla-common 映射
 
 旧 `spring-boot-starter` 21 个子模块共 744 Java 文件。
@@ -639,7 +680,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | 业务待推进（数据层已就绪） |
-| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2）**；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进（前置已解除） |
+| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 业务待推进（数据层已就绪） |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1）** | 待推进（前置已解除） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
 
@@ -1210,7 +1251,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 数据层已落地（见 4.4，9 项测试），短信 String/char(1) 删除标志及排序规则已校正（见 4.5，8 项测试）；全工程 47/47 编译 GREEN；video/fs 数据层和真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试）；全工程 48/48 编译 GREEN；fs 41 表和真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |

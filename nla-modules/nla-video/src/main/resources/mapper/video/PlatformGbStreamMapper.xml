@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.PlatformGbStreamMapper">
+    <select id="selectSharedStreams" resultType="cn.com.nla.video.domain.vo.GbStreamVo">
+        select gs.`gb_stream_id`, gs.`app`, gs.`stream`, gs.`gb_id`, gs.`name`, gs.`longitude`, gs.`latitude`, gs.`stream_type`, gs.`media_server_id`, gs.`create_dept`, gs.`create_by`, gs.`create_time`, gs.`update_by`, gs.`update_time`, rel.platform_id, rel.catalog_id
+        from video_platform_gb_stream rel
+        join video_gb_stream gs on gs.gb_id = rel.gb_stream_id and gs.del_flag = '0'
+        join video_parent_platform p on p.server_gb_id = rel.platform_id and p.del_flag = '0'
+        join video_platform_catalog cat on cat.id = rel.catalog_id and cat.platform_id = rel.platform_id and cat.del_flag = '0'
+        where rel.del_flag = '0' and rel.platform_id = #{platformId}
+        <choose>
+            <when test="catalogIds != null and catalogIds.size() > 0">
+                and rel.catalog_id in
+                <foreach collection="catalogIds" item="catalogId" open="(" separator="," close=")">
+                    #{catalogId}
+                </foreach>
+            </when>
+            <otherwise>and 1 = 0</otherwise>
+        </choose>
+        order by rel.catalog_id, gs.`gb_stream_id`
+    </select>
+</mapper>

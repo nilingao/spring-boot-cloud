@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>cn.com.nla</groupId>
+        <artifactId>nla-modules</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>nla-video</artifactId>
+    <description>视频监控数据层，协议与管理业务待阶段 6.5 接入</description>
+    <dependencies>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-mybatis</artifactId>
+            <exclusions>
+                <!-- Redis/lock4j 间接携带 Boot2 AOP starter，沿用 common-core 的 Boot4 AspectJ。 -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-aop</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../script/sql</directory>
+                <includes><include>nla_video.sql</include></includes>
+                <filtering>false</filtering>
+            </testResource>
+        </testResources>
+    </build>
+</project>

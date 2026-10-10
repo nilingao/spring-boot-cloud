@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.PlatformGbChannelMapper">
+    <select id="selectSharedChannels" resultType="cn.com.nla.video.domain.vo.DeviceChannelVo">
+        select ch.`id`, ch.`parent_id`, ch.`channel_id`, ch.`device_id`, ch.`name`, ch.`manufacture`, ch.`model`, ch.`owner`, ch.`civil_code`, ch.`block`, ch.`address`, ch.`parental`, ch.`safety_way`, ch.`register_way`, ch.`cert_num`, ch.`certifiable`, ch.`err_code`, ch.`end_time`, ch.`secrecy`, ch.`ip_address`, ch.`port`, ch.`ptz_type`, ch.`ptz_type_text`, ch.`status`, ch.`longitude`, ch.`latitude`, ch.`longitude_gcj02`, ch.`latitude_gcj02`, ch.`longitude_wgs84`, ch.`latitude_wgs84`, ch.`sub_count`, ch.`stream_id`, ch.`has_record`, ch.`has_audio`, ch.`channel_type`, ch.`business_group_id`, ch.`gps_time`, ch.`create_dept`, ch.`create_by`, ch.`create_time`, ch.`update_by`, ch.`update_time`, rel.platform_id, rel.catalog_id, d.manufacturer, d.host_address
+        from video_platform_gb_channel rel
+        join video_device_channel ch on ch.channel_id = rel.device_channel_id and ch.del_flag = '0'
+        join video_device d on d.device_id = ch.device_id and d.del_flag = '0'
+        join video_parent_platform p on p.server_gb_id = rel.platform_id and p.del_flag = '0'
+        join video_platform_catalog cat on cat.id = rel.catalog_id and cat.platform_id = rel.platform_id and cat.del_flag = '0'
+        where rel.del_flag = '0' and rel.platform_id = #{platformId}
+        <choose>
+            <when test="catalogIds != null and catalogIds.size() > 0">
+                and rel.catalog_id in
+                <foreach collection="catalogIds" item="catalogId" open="(" separator="," close=")">
+                    #{catalogId}
+                </foreach>
+            </when>
+            <otherwise>and 1 = 0</otherwise>
+        </choose>
+        order by rel.catalog_id, ch.`id`
+    </select>
+</mapper>

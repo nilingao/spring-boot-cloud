@@ -16,9 +16,9 @@
 >
 > 你正在看的是 **`6.0.0-nla`** 分支 —— 一次**架构升级进行中**的分支。
 >
-> - 工程骨架、通用基座（25 个 `nla-common-*`）、支撑脚本**已完成并通过全量编译**
-> - 旧版 9 大业务域（呼叫中心 / 视频监控 / 人脸识别 / 支付 / 短信 / OA / 工作流等）
->   **尚未迁入**，仍在下方"旧代码"列出的目录中等待迁移
+> - 工程骨架、通用基座（30 个 common 子模块）、支撑脚本**已完成并通过全量编译**
+> - 短信模块已迁入；face 人员数据层、video 12 表数据层已就绪，当前全工程 **48/48 模块编译通过**
+> - 人脸识别、视频协议业务、呼叫中心等仍待迁移，支付暂缓；阶段进度与剩余验收以迁移台账为准
 > - 旧微服务版本请切到 **`5.0.0-dev`** 分支查看
 >
 > 迁移的完整映射关系、进度台账与有意偏离上游的每一处改动，见
@@ -75,7 +75,7 @@ nla-cloud/
 ├── nla-admin/                  启动入口 cn.com.nla.NlaApplication
 │   └── src/main/resources/     application*.yml / logback-nla.xml / banner.txt / i18n / ip2region
 ├── nla-api/                    跨模块契约：cn.com.nla.{module}.api + api.domain(DTO) + api.model
-├── nla-common/                 通用基座（25 个子模块）
+├── nla-common/                 通用基座（30 个子模块）
 │   ├── nla-common-bom              全部 common 坐标清单，供根 POM import
 │   ├── nla-common-core             核心工具 / 常量 / 异常 / 统一响应 R
 │   ├── nla-common-web              Web 基座、全局异常处理器
@@ -98,6 +98,11 @@ nla-cloud/
 │   ├── nla-common-ai               Spring AI 基座
 │   ├── nla-common-mcp              MCP 协议
 │   ├── nla-common-mqtt             mica-mqtt
+│   ├── nla-common-freeswitch       FreeSWITCH ESL / SIP 封装
+│   ├── nla-common-video            GB28181 / ZLM / ONVIF 封装
+│   ├── nla-common-facesdk          人脸 SDK 封装
+│   ├── nla-common-socketio         Socket.IO 封装
+│   ├── nla-common-mq               RabbitMQ 封装
 │   ├── nla-common-elasticsearch    Easy-ES
 │   ├── nla-common-liteflow         LiteFlow 规则编排
 │   └── nla-common-push             消息推送
@@ -107,6 +112,9 @@ nla-cloud/
 │   ├── nla-gen                     代码生成
 │   ├── nla-job                     定时任务业务
 │   ├── nla-ai                      AI 业务
+│   ├── nla-message                 短信渠道 / 模板 / 发送记录
+│   ├── nla-face                    人脸人员数据层（未接入 admin）
+│   ├── nla-video                   视频监控 12 表数据层（未接入 admin）
 │   └── nla-demo                    功能示例（Excel / 加解密 / 脱敏 / 幂等 / 限流等用法参考）
 ├── nla-extend/                 独立运行的服务端
 │   ├── nla-monitor-admin           Spring Boot Admin 监控中心
@@ -115,7 +123,7 @@ nla-cloud/
 ├── script/
 │   ├── bin/                        nla.sh / nla.bat 启停脚本
 │   ├── docker/                     docker-compose.yml / database.yml / nginx / redis
-│   ├── sql/                        建表脚本，4 种方言共 14 份（MySQL / Oracle / PostgreSQL / SQLServer）
+│   ├── sql/                        基线 4 方言 14 份 + message / face / video 的 MySQL 脚本
 │   └── leave/                      工作流请假示例流程定义（6 份 JSON）
 ├── docs/migration/             迁移台账
 ├── .run/                       IDEA Docker 镜像构建配置（4 份，buildOnly）
@@ -162,8 +170,11 @@ CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_090
 | `nla_job.sql` | SnailJob 调度相关表 |
 | `nla_workflow.sql` | WarmFlow 工作流表 |
 | `nla_ai.sql` | AI 会话与知识库表 |
+| `nla_message.sql` | 短信模块三张表与菜单初始化 |
 
-Oracle / PostgreSQL / SQLServer 用户改用对应子目录下的同名脚本。
+`nla_face.sql` / `nla_video.sql` 为已交付数据层的新库初始化脚本，模块尚未接入 admin；按后续业务启用计划建表。脚本分别见 [face 模块说明](nla-modules/nla-face/README.md) 和 [video 模块说明](nla-modules/nla-video/README.md)。
+
+基线四个脚本另有 Oracle / PostgreSQL / SQLServer 子目录版本；新增 message / face / video 脚本目前仅交付 MySQL 方言。
 
 ### 2. 改配置
 
@@ -181,7 +192,7 @@ Oracle / PostgreSQL / SQLServer 用户改用对应子目录下的同名脚本。
 mvn -B -DskipTests clean install
 ```
 
-预期输出 **BUILD SUCCESS**，reactor 共 40 个条目。
+预期输出 **BUILD SUCCESS**，当前 reactor 共 48 个条目。
 
 ### 4. 启动
 

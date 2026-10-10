@@ -518,6 +518,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 视频业务模块（数据层） -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-video</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!--  api模块  -->
             <dependency>
                 <groupId>cn.com.nla</groupId>
