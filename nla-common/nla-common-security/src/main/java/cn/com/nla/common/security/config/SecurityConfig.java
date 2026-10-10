@@ -27,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Enumeration;
 import java.util.List;
 
 /**
@@ -67,16 +68,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                         // 检查是否登录 是否有token
                         StpUtil.checkLogin();
 
-                        // 检查 header 与 param 里的 clientid 与 token 里的是否一致
-                        String headerCid = request.getHeader(LoginHelper.CLIENT_KEY);
-                        String paramCid = ServletUtils.getParameter(LoginHelper.CLIENT_KEY);
-                        String clientId = StpUtil.getExtra(LoginHelper.CLIENT_KEY).toString();
-                        if (!StringUtils.equalsAny(clientId, headerCid, paramCid)) {
-                            // token 无效
-                            throw NotLoginException.newInstance(StpUtil.getLoginType(),
-                                "-100", "客户端ID与Token不匹配",
-                                StpUtil.getTokenValue());
-                        }
+                        validateClientId(request);
                         validateClientAccessRules(request);
 
                         // 有效率影响 用于临时测试
@@ -89,6 +81,48 @@ public class SecurityConfig implements WebMvcConfigurer {
             })).addPathPatterns("/**")
             // 排除不需要拦截的路径
             .excludePathPatterns(securityProperties.getExcludes());
+    }
+
+    /**
+     * 要求至少提供一个客户端ID，且所有请求头/参数值均与当前 token 一致。
+     *
+     * @param request 当前请求
+     */
+    private void validateClientId(HttpServletRequest request) {
+        String clientId = getTokenExtra(LoginHelper.CLIENT_KEY);
+        if (StringUtils.isBlank(clientId)) {
+            throw clientMismatch();
+        }
+        boolean supplied = false;
+        Enumeration<String> headers = request.getHeaders(LoginHelper.CLIENT_KEY);
+        while (headers.hasMoreElements()) {
+            supplied = true;
+            if (!clientId.equals(headers.nextElement())) {
+                throw clientMismatch();
+            }
+        }
+        String[] parameters = request.getParameterValues(LoginHelper.CLIENT_KEY);
+        if (parameters != null) {
+            for (String parameter : parameters) {
+                supplied = true;
+                if (!clientId.equals(parameter)) {
+                    throw clientMismatch();
+                }
+            }
+        }
+        if (!supplied) {
+            throw clientMismatch();
+        }
+    }
+
+    /**
+     * 将客户端标识缺失或冲突统一转换为既有未登录异常。
+     *
+     * @return 客户端校验异常
+     */
+    private NotLoginException clientMismatch() {
+        return NotLoginException.newInstance(StpUtil.getLoginType(),
+            "-100", "客户端ID与Token不匹配", StpUtil.getTokenValue());
     }
 
     /**

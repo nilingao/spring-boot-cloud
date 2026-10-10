@@ -43,6 +43,15 @@ public interface ISysSocialService {
      */
     Boolean deleteWithValidById(Long id);
 
+    /**
+     * 仅删除指定用户拥有的社会化关系，以同一条 SQL 检查归属并删除。
+     *
+     * @param id 绑定主键
+     * @param userId 所属用户主键
+     * @return 删除成功返回 {@code true}，缺失或不属于该用户返回 {@code false}
+     */
+    Boolean deleteByIdAndUserId(Long id, Long userId);
+
 
     /**
      * 根据 authId 查询

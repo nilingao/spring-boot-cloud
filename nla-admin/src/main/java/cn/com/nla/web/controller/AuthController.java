@@ -50,7 +50,6 @@ import java.util.concurrent.TimeUnit;
  * @author TZY
  */
 @Slf4j
-@SaIgnore
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/auth")
@@ -73,6 +72,7 @@ public class AuthController {
      * @return 结果
      */
     @ApiEncrypt
+    @SaIgnore
     @PostMapping("/login")
     public R<LoginVo> login(@RequestBody String body) {
         LoginBody loginBody = JsonUtils.parseObject(body, LoginBody.class);
@@ -81,8 +81,9 @@ public class AuthController {
         String clientId = loginBody.getClientId();
         String grantType = loginBody.getGrantType();
         SysClientVo client = clientService.queryByClientId(clientId);
-        // 查询不到 client 或 client 内不包含 grantType
-        if (ObjectUtil.isNull(client) || !StringUtils.contains(client.getGrantType(), grantType)) {
+        // 授权类型按逗号分隔的完整名称匹配，不能用子串放行其他登录策略。
+        if (ObjectUtil.isNull(client)
+            || !StringUtils.str2List(client.getGrantType(), ",", true, true).contains(grantType)) {
             log.info("客户端id: {} 认证类型：{} 异常!.", clientId, grantType);
             return R.fail(MessageUtils.message("auth.grant.type.error"));
         } else if (!SystemConstants.NORMAL.equals(client.getStatus())) {
@@ -112,6 +113,7 @@ public class AuthController {
      * @param source 登录来源
      * @return 跳转地址
      */
+    @SaIgnore
     @GetMapping("/binding/{source}")
     public R<String> authBinding(@PathVariable("source") String source) {
         SocialLoginConfigProperties obj = socialProperties.getType().get(source);
@@ -157,7 +159,7 @@ public class AuthController {
     public R<Void> unlockSocial(@PathVariable Long socialId) {
         // 校验token
         StpUtil.checkLogin();
-        Boolean rows = socialUserService.deleteWithValidById(socialId);
+        Boolean rows = socialUserService.deleteByIdAndUserId(socialId, LoginHelper.getUserId());
         return rows ? R.ok() : R.fail("取消授权失败");
     }
 
@@ -165,6 +167,7 @@ public class AuthController {
     /**
      * 退出登录
      */
+    @SaIgnore
     @PostMapping("/logout")
     public R<Void> logout() {
         loginService.logout();
@@ -178,6 +181,7 @@ public class AuthController {
      * @return 操作结果
      */
     @ApiEncrypt
+    @SaIgnore
     @PostMapping("/register")
     public R<Void> register(@Validated @RequestBody RegisterBody user) {
         if (!configService.selectRegisterEnabled()) {

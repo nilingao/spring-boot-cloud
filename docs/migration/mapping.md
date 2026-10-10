@@ -700,6 +700,29 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 
 ---
 
+### 5.4 阶段 5.1：登录与客户端访问契约（已交付）
+
+在现有 Sa-Token 基座上落实认证入口、JWT 客户端绑定、方法级权限和社交解绑归属。请求/响应、公开端点和验证边界详见 [authentication.md](authentication.md)。新工程沿用 `/auth/login` 与 `Authorization: Bearer <access_token>` / `clientid`，不新增旧 `/oauth/token` 兼容入口，不迁旧账号、token 或租户测试数据。
+
+**本批改动**：
+
+- `AuthController`：授权类型按逗号分隔的完整名称匹配，拒绝子串和组合策略名；类级 `SaIgnore` 改为 login/register/authBinding/logout 四个方法的公开注解，社交回调与解绑经过统一登录、客户端和路径/IP 检查。
+- `SecurityConfig`：沿用 `AllUrlHandler.getUrls()` 的基线路径匹配和排除配置；请求头/参数中至少提供一个 `clientid`，且每个值都须与 token 一致，冲突、空值和缺失扩展字段返回既有 401 业务码。
+- `ISysSocialService` / `SysSocialServiceImpl`：新增按绑定 ID 与当前用户 ID 的同一条 SQL 条件删除，拒绝他人绑定或缺失条件，保留通用内部删除 API；当前用户从登录会话取得。
+- `nla-system` 的 H2 仅用于 test，测试资源只复制交付 `nla_system.sql`，不改变生产数据库配置或执行种子数据。
+
+**本批验收**：
+
+- `AuthSecurityContractTest` **37 项**：真实 MVC 拦截器、AllUrlHandler、JWT 简单模式、LoginHelper、权限实现及异常处理器；覆盖授权类型、客户端状态/冲突、公开端点、已注册路径（含单段路径变量）、菜单/角色、Cookie、非法/撤销 JWT、雪花 ID 精度、超时、路径/IP 策略及解绑用户传递。密码策略、用户/客户端和外部服务是测试替身。
+- `SysSocialOwnershipTest` **4 项**：从交付 SQL 提取 sys_social DDL，以 H2 MySQL 模式和真实 Mapper 验证本人/他人/空条件/删除前重新归属；只使用内存测试数据。
+- 加上既有 `SecurityConfigTest` 3 项与 `SaTokenFunctionTest` 6 项，本批 **50 项全通过，无失败、错误或跳过**，日志 `.migration/test-auth-security-contract.log`。
+- JDK21 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块成功**，日志 `.migration/build-auth-security-reactor.log`。
+- `nla-admin -am` 编译依赖过滤检查未出现 H2，确认新增依赖保持 test scope，日志 `.migration/deps-auth-security.log`。
+
+**边界与下一批**：错误仍沿用 HTTP 200 + `R.code` 的基线响应；客户端路径/IP 策略是登录时 token 快照，未实现配置即时刷新。真实密码/验证码/重试锁定/账号状态及旧短信、小程序、二维码登录映射留阶段 5.2；第三方真实绑定、Redis 会话/权限刷新、生产代理和完整应用启动未验收。方法级权限属于架构基线变更，当前多租户保持禁用，企业 companyId 不代替登录权限，pay 继续暂缓。
+
+---
+
 ## 6. 业务模块映射
 
 | 批次 | 源模块（文件数） | 目标模块 | 要点 | 状态 |
@@ -1280,7 +1303,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
-| **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
+| **5** | 认证鉴权与租户 | 🟡 进行中·5.1 已交付 | 登录与客户端契约、JWT/方法级权限、社交解绑归属已落实（见 5.4，50 项测试，全工程 49/49 编译）；5.2 密码/验证码/账号状态与旧登录功能映射待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |

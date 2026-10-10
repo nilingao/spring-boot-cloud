@@ -1,6 +1,7 @@
 package cn.com.nla.system.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import cn.com.nla.common.core.utils.MapstructUtils;
 import cn.com.nla.system.domain.SysSocial;
 import cn.com.nla.system.domain.bo.SysSocialBo;
@@ -115,6 +116,16 @@ public class SysSocialServiceImpl implements ISysSocialService {
     @Override
     public Boolean deleteWithValidById(Long id) {
         return socialMapper.deleteById(id) > 0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Boolean deleteByIdAndUserId(Long id, Long userId) {
+        if (id == null || userId == null) {
+            return false;
+        }
+        return socialMapper.delete(Wrappers.<SysSocial>lambdaQuery()
+            .eq(SysSocial::getId, id).eq(SysSocial::getUserId, userId)) > 0;
     }
 
 

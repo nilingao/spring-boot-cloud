@@ -100,6 +100,24 @@
             <artifactId>nla-common-push</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../script/sql</directory>
+                <includes><include>nla_system.sql</include></includes>
+                <filtering>false</filtering>
+            </testResource>
+        </testResources>
+    </build>
 
 </project>
