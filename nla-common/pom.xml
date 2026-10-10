@@ -45,6 +45,7 @@
         <module>nla-common-freeswitch</module>
         <module>nla-common-video</module>
         <module>nla-common-facesdk</module>
+        <module>nla-common-socketio</module>
     </modules>
 
 </project>

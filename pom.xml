@@ -70,6 +70,7 @@
         <!-- JAIN SIP 协议栈(javax.sip/javax.sdp 为独立规范命名空间,不迁 jakarta) -->
         <jain-sip.version>1.3.0-91</jain-sip.version>
         <onvif.version>1.0.2</onvif.version>
+        <netty-socketio.version>2.0.14</netty-socketio.version>
         <!-- velocity 模板引擎(FreeSWITCH 配置生成) -->
         <velocity.version>2.3</velocity.version>
 

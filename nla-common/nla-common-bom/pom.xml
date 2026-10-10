@@ -208,6 +208,12 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- Socket.IO and TCP protocol integration -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-common-socketio</artifactId>
+                <version>${revision}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

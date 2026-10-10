@@ -390,13 +390,13 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-feign`(2) / `starter-nacos`(2) | **废弃** | 单体化 | 待阶段 8 |
 | `starter-sentinel`(5) | **废弃** | 限流改基线 `@RateLimiter`（Redisson 实现） | 待阶段 6 |
 | `starter-quartz`(12) | **废弃** | 已弃用 | 待阶段 7 |
-| `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 升级到 JDK 21 兼容版 | 待阶段 3 |
+| `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 → 2.0.14；TCP 有效代码迁入，见 5.1.4 | ✅ 已建·编译/协议测试 GREEN |
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | spring-amqp 走 Boot 4 版本；`MQConfig` 迁移 | 待阶段 3 |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1.1 | ✅ 已建·编译 GREEN |
 | `starter-video`(201) | 自建 `nla-common-video` | 见 5.1.2 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
 
-### 5.1 阶段 3 的 6 个自建封装（3 已建 / 3 待建）
+### 5.1 阶段 3 的 6 个自建封装（4 已建 / 2 待建）
 
 坐标 `cn.com.nla:nla-common-{tech}`，全部需登记进 `nla-common-bom`。
 每个遵循 `basic`（注解/枚举/POJO，无 Spring 依赖）+ `core`（配置/AOP/实现）二段式。
@@ -408,7 +408,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | ✅ `nla-common-video` | `starter-video`(201) | **已交付，见 5.1.2**；JDK21 本机 SIP UDP 收包、TCP/UDP 端口释放与模拟 ZLM HTTP 已验；真实设备注册/心跳/点播、ZLM RTP 与 ONVIF 联调延后 |
 | `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
 | ✅ `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` + pool/proxy | **已交付，见 5.1.3**：29 SDK 文件、135 个实际 native 方法签名保持；16 组对象池/代理；Windows amd64 CPU / JDK21 真实 JNI 创建与释放已验。Linux/GPU 与真实识别效果待环境；基础镜像 `seetaface_face_work` 重建留部署阶段 |
-| `nla-common-socketio` | `starter-socket-io` + `starter-netty` | netty-socketio JDK 21 兼容性 |
+| ✅ `nla-common-socketio` | `starter-socket-io` + `starter-netty` | **已交付，见 5.1.4**：Boot4 / JDK21 / Netty4.2 下 21 项测试通过，含真实 WebSocket/Polling/TCP；真实 Redis 多节点和代理联调延后 |
 | `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | spring-amqp Boot 4 版本 |
 
 #### 5.1.1 `nla-common-freeswitch` 交付结果（阶段 3.1，已落地）
@@ -472,6 +472,36 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - 文件/编码审计：29 SDK 文件 **missing=0**，135 native 签名一致；全部交付文本 UTF-8 往返通过，新模块无旧包/未门控组件/尾随空白/二进制资产，`git diff --check` 通过。
 
 **剩余验收**：Linux ARM/GPU、真实人脸识别准确率/活体识别效果、生产负载未测；当前仓库 Linux 原生包仅 ARM 平台，Linux amd64 需另备匹配库。阶段 6.4 的 Person 表、业务流程/鉴权/Controller 仍待迁移。
+
+#### 5.1.4 `nla-common-socketio` 交付结果（阶段 3.4，已落地）
+
+新建 `nla-common/nla-common-socketio`，登记 `nla-common` reactor 与 `nla-common-bom`，根 POM 增加 `netty-socketio.version=2.0.14`。共 **27 个主 Java 文件 + 3 个测试文件**，接入示例见 [`nla-common-socketio/README.md`](../../nla-common/nla-common-socketio/README.md)。未接入 admin 业务依赖，旧技术与业务源码保持原位。
+
+**范围和逐项取舍**：
+
+- 旧 socket-io 的 **9 个主文件**（原表 11 包含 2 个手动聊天示例测试）全部覆盖：2 个监听接口、Message 和 OutType 迁入 basic；配置/属性重写为 Boot4 自动配置；3 个 Jedis 命名的 RedisTemplate 适配改为 Redisson 工厂、PubSub 与 codec。旧手动示例由新的契约与真实协议测试替代。
+- 旧 netty 的 **19 个文件中 15 个有效文件**迁入 `basic.netty` / `core.netty`；MainServer、MainServerHandler、VirtualServerClient、Biz100000039 共 **4 个只有注释的文件不迁入**。保留 Message/TypeOperator、MsgCode/Msg100000039、工厂/业务接口、编解码、客户端/服务端/处理器；TCP 显式启动，不自动开放第二个端口。
+- `basic` 无 Spring import；新模块无旧工程 starter、RedisTemplate、静态 SpringUtil、Nacos/OAuth2/JWT 耦合。Lombok 日志统一改 SLF4J。
+
+**关键契约与修正**：
+
+- **默认关闭**：`.imports` 注册 `SocketIoAutoConfiguration`，仅 `socket-io.enabled=true` 生效；组件宽扫描即便指定 `store=redisson` 也不会越过门控。内存模式不需要 Redisson 类，已通过过滤 classloader 测试；Redisson 为 optional 依赖，集群模式需消费方提供 RedissonClient。
+- **配置兼容与调整**：沿用 `socket-io` 前缀、port/boss-count/work-count、消息上限及毫秒超时字段；恢复有效 host 配置，增加 context/origin/store/redis-prefix/auto-start。work-count 由旧 100 改为 0（库按 CPU 选择），allow-custom-requests 由 true 改为 false；SO_LINGER 由旧 0 改为 -1，修复鉴权拒绝响应被 TCP reset 截断的问题。`name` 只保留配置兼容，不做服务注册。
+- **监听与生命周期**：独立 namespace Bean 和事件引用的 namespace 都注册，根 namespace 也挂载连接/断开监听；同对象去重，冲突 namespace 或重复事件名启动失败。支持 @OnConnect/@OnDisconnect/@OnEvent。注册器延迟到全部单例初始化后执行，SmartLifecycle 随后启动服务器；关闭幂等，Netty 通过 Future 直接抛出的 checked 绑定异常也捕获并清理资源。
+- **用户覆盖和鉴权边界**：SocketIOServer/StoreFactory/生命周期可覆盖，配置 customizer 按 Spring 顺序调用；原生 AuthorizationListener Bean 接管握手鉴权。未提供鉴权时沿用库允许连接行为；旧用户/坐席身份、二维码登录、房间命名及 Sa-Token 改造属于后续业务迁移。
+- **Redis 存储真实写回**：旧 `JedisSore`/`createMap()` 返回 Hash entries 快照，修改未写回 Redis；现在使用实时 RMap，并对 Map/会话/Topic 加服务前缀。断开删除对应会话；PubSub 忽略自己节点，只移除自己拥有的监听 ID，不关闭共享 RedissonClient。7 类消息路由采用库自带 BaseStoreFactory，可忽略本节点不存在的 namespace，无静态 Spring 上下文。默认独立 Jackson2 codec，已验证 Dispatch/Join、中文 POJO、UUID、LocalDateTime 与 byte[] 往返。
+- **TCP 解码与资源释放**：保留原线格式和 CRC16；修复 CRC 头半包越界、粘包跨帧 CRC、未知码残留、负长度和超限。CRC 能力从实际 Message 读取，支持扩展时间头和自定义工厂；默认整帧上限 1 MiB，字符串/列表读取校验长度。NettyServer/NettyClient 可显式关闭并清理连接/线程组，客户端连接超时 5 秒、重连间隔 1 秒；DefaultBizFactory 显式注入 BeanFactory，保留 biz%09d 命名。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `mvn -o -B -pl nla-common/nla-common-socketio -am -Dtest=SocketIoContractTest,SocketIoProtocolTest,NettyContractTest -Dsurefire.failIfNoSpecifiedTests=false test` → **21/21 通过，0 跳过，BUILD SUCCESS**（12 配置/Redis 契约 + 3 本机 Socket.IO 协议 + 6 TCP 测试）。真实 WebSocket 验证 Engine.IO4、中文 typed event/ACK、注解回调、房间广播、独立 namespace 和关闭后的端口释放；真实 Polling 验证允许握手/401 拒绝，真实 TCP 验证编解码往返与绑定失败清理。Redis codec 额外验证 final record、根 UUID 与根 LocalDateTime 类型保留。日志 `.migration/test-socketio.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **45/45 模块 BUILD SUCCESS**。日志 `.migration/build-socketio-reactor.log`。
+- `dependency:tree -Dscope=compile` → **BUILD SUCCESS**；netty-socketio 2.0.14、Boot 4.1.1 / Spring 7.0.9、Netty 4.2.17.Final、Jackson2 2.21.5；Redisson 4.7.0 optional。无旧 cloud/starter、Boot2 AOP、Spring Web/RedisTemplate 依赖。日志 `.migration/deps-socketio.log`。
+- 文件/编码审计：15 个有效 TCP 源文件逐个匹配，4 个不迁文件确认仅有注释；37 份交付文本 UTF-8 严格往返通过；旧包/静态 SpringUtil/未门控组件/basic Spring import/尾随空白均为 0，`git diff --check` 通过。
+
+**外部验收与限制**：Redis 使用内存模拟客户端及真实 codec 字节往返，尚未执行真实 Redis 多节点、代理层 WebSocket/Polling 联调、Linux 和生产负载测试；Polling 多节点仍需代理会话粘滞。异常退出留下的 Redis 会话数据暂无自动 TTL 清理。网络 JSON support 与 Redis codec 独立，Java 时间等扩展网络类型由消费方 customizer 注册模块。阶段 6 的坐席/公告/二维码监听器及业务鉴权不在本轮技术封装范围。
+
+---
 
 ### 5.2 阶段3 兼容性尖峰结论（freeswitch-esl / SIP 栈，JDK21+Boot4）
 
@@ -1110,7 +1140,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | 🟡 进行中·3/6 | **freeswitch + video + facesdk 已建成**（见 5.1.1~5.1.3）；facesdk 12 契约 + 2 真实 Windows JNI 测试全通过，全工程 44/44 模块编译 GREEN；余 socketio/mq/pay 待建，pay 最低优先级；video 外部协议与 facesdk Linux/GPU 验收待对应环境 |
+| **3** | 自建技术封装 | 🟡 进行中·4/6 | **freeswitch + video + facesdk + socketio 已建成**（见 5.1.1~5.1.4）；socketio 21 项测试全通过，全工程 45/45 模块编译 GREEN；余 mq/pay 待建，pay 最低优先级；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点验收待对应环境 |
 | **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
