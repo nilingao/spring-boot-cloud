@@ -760,7 +760,21 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 
 **验证结果**：本批新增 **48 项**（供应商/配置 20、真实 H2/Mapper 绑定 12、登录策略 12、MVC 4）；与既有认证与短信数据层回归共同运行，**179 项全通过，无失败、错误或跳过**。JDK21 根工程 **49/49 模块编译成功**。日志 `.migration/test-xcx-contract.log`、`.migration/build-xcx-reactor.log`。
 
-**边界与下一批**：微信请求、用户/权限数据源与 Redis 用替身；H2 验证实际绑定 SQL、大小写候选过滤与解绑归属，未执行真实 Redis 锁、多实例竞争、微信 code 一次性消费、真实 MySQL 或完整启动。小程序资料/手机号授权、自动注册、二维码微信码生成/场景状态/MQ/Socket.IO 通知尚未交付；绑定/登录完成不代表旧扫码网页登录等价迁移。旧 mini 表/账号/token 数据不迁，SecurityConfig/AllUrlHandler 路径匹配沿用原逻辑，多租户禁用，pay 暂缓，阶段 5 仍进行中。
+**边界与下一批**：微信请求、用户/权限数据源与 Redis 用替身；H2 验证实际绑定 SQL、大小写候选过滤与解绑归属，未执行真实 Redis 锁、多实例竞争、微信 code 一次性消费、真实 MySQL 或完整启动。小程序资料/手机号授权及自动注册尚未交付。二维码后端后续已在 5.5 接通，通知改为 REST 轮询（见 5.8），旧 MQ/Socket.IO 业务事件没有迁入。旧 mini 表/账号/token 数据不迁，SecurityConfig/AllUrlHandler 路径匹配沿用原逻辑，多租户禁用，pay 暂缓，阶段 5 仍进行中。
+
+### 5.8 阶段 5.5：小程序扫码网页登录（已交付）
+
+配置、前端调用顺序和验收边界见 [qr-login.md](qr-login.md)。新增 `QrLoginController`、`QrLoginService`、`QrSceneStore`、`WechatQrClient`、`QrAuthStrategy` 及二维码请求模型；只扩展已有 `XcxProperties`，不修改路由基座、旧代码或数据库种子。
+
+- 网页客户端需完整授权 `qr` grant；小程序端需 `xcx` grant，扫码会话必须是同 appid 的 `XcxLoginUser`。小程序客户端和可扫码登录的网页客户端分别配置白名单，二维码能力默认关闭。
+- 微信 stable_token 与不限次数小程序码调用使用服务端密钥、固定 HTTPS 地址和受限的响应/超时；供应商错误不透传。生成失败不创建场景，二维码只编码 128 位随机 scene，独立 256 位 browserToken 只交付网页，Redis 仅保存其 SHA-256。
+- 场景有效期 180 秒。WAITING → SCANNED → CONFIRMED/CANCELLED → CONSUMED 通过 Redis Lua 比较原 JSON 与正数 PTTL 后原子迁移，保留剩余 TTL；过期不能复活，重扫/查询不续期。第一个扫码者占有场景，必须显式确认，重复确认和他人覆盖拒绝。
+- 网页轮询 POST `/auth/qr/status`，必须提供对应 browserToken/clientId，只返回阶段。CONFIRMED 后通过既有 POST `/auth/login` 的 `qr` 策略一次性领取 JWT；领取重查客户端、绑定、账号/共享锁定与完整权限，终端信息取网页请求。先 CAS 至 CONSUMED，再签发，失败不重开场景。
+- 本单体用 REST 轮询完成网页通知，不新增旧 QR MQ 拓扑、消费者、Socket.IO 房间或令牌推送。前端必须按新接口适配；这是通知方式变更，旧 MQ/Socket.IO 事件接口没有等价迁入。
+
+**验证结果**：本批新增 **51 项**（登录策略 30、MVC 5、供应商/配置/响应限长 12、Redis 适配器 4）；与此前 179 项共同运行，**230 项全通过，无失败、错误或跳过**。JDK21 根工程 **49/49 模块编译成功**。日志 `.migration/test-qr-contract.log`、`.migration/build-qr-reactor.log`。
+
+**验收边界**：真实服务/策略/权限组装/JWT/MVC、供应商协议和 Redis codec/CAS 参数已验证；微信网络、用户/权限/客户端/绑定数据源及 Redis 为替身，过期与竞争用场景移除/CAS 失败模拟。尚未执行真实 Redis Lua、多实例竞争、微信码扫描、前端确认/轮询、生产代理或完整应用启动；既有 H2 数据层共同回归。客户端重新查询仍沿用现有缓存失效机制，直接 SQL 修改和领取期间并发撤权不承诺即时生效。小程序资料/手机号授权、自动注册、第三方真实授权及其他外部验收仍待推进，阶段 5 保持进行中，多租户禁用，pay 暂缓。
 
 ---
 
@@ -1345,7 +1359,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
-| **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.4 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费与小程序绑定/完整权限登录已交付（见 5.4～5.7，179 项测试，全工程 49/49 编译）；二维码/通知、小程序资料及手机号授权与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.5 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录及扫码网页登录后端已交付（见 5.4～5.8，230 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调、小程序资料及手机号授权与外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |

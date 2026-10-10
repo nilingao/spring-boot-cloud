@@ -70,4 +70,4 @@ mvn -o -B -DskipTests compile
 
 JDK21 / Maven 3.9.9 验证结果：`WechatMiniClientTest` **20 项**、`SysXcxBindingTest` **12 项**；既有登录策略新增 **12 项**（共 85）、MVC 新增 **4 项**（共 41）。本批新增 **48 项**，与既有认证及短信数据层回归共同执行，**179 项全通过，无失败、错误或跳过**；根工程 **49/49 模块编译成功**。日志 `.migration/test-xcx-contract.log`、`.migration/build-xcx-reactor.log`。
 
-本批只交付小程序账号绑定与登录。旧小程序用户资料/手机号授权、自动注册、微信码生成、扫码网页场景状态、MQ/Socket.IO 通知链路仍待推进；不默认开放未配置的 app，不自动合并 unionId 账号，旧测试数据不迁。`AllUrlHandler` 的路由匹配沿用原逻辑，多租户保持禁用，pay 暂缓，阶段 5 仍在进行中。
+本批只交付小程序账号绑定与登录。后续阶段 5.5 已实现微信码生成、扫码确认和网页一次性领取，以 REST 轮询替代旧 MQ/Socket.IO 令牌推送，见 [qr-login.md](qr-login.md)。旧小程序用户资料/手机号授权和自动注册仍待推进；不默认开放未配置的 app，不自动合并 unionId 账号，旧测试数据不迁。`AllUrlHandler` 的路由匹配沿用原逻辑，多租户保持禁用，pay 暂缓，阶段 5 仍在进行中。

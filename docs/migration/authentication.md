@@ -17,6 +17,8 @@
 | POST /auth/login | 方法级 SaIgnore；验证请求、客户端状态及完整授权类型后分派既有策略 |
 | POST /auth/register | 方法级 SaIgnore；保留注册开关与输入校验 |
 | GET /auth/binding/{source} | 方法级 SaIgnore；保留第三方授权地址生成 |
+| POST /auth/qr/create、/auth/qr/status | 5.5 新增方法级 SaIgnore；创建检查 app/网页客户端，状态查询需独立网页凭证 |
+| POST /auth/qr/scan、/auth/qr/confirm | 5.5 新增受保护入口；沿用 token/clientid/路径/IP，业务层验证小程序身份及绑定归属 |
 | POST /auth/logout | 方法级 SaIgnore；保留既有退出的幂等行为 |
 | POST /auth/social/callback | 受统一登录、clientid、路径与 IP 规则约束；保留端点内登录检查 |
 | DELETE /auth/unlock/{socialId} | 同上；用户 ID 来自 LoginHelper，用同一条 SQL 按绑定 ID 与所属用户删除 |
@@ -44,4 +46,4 @@ SysSocialOwnershipTest 从交付 `nla_system.sql` 提取 sys_social 表结构，
 
 `nla-admin -am` 编译依赖过滤检查未出现 H2，H2 保持 test scope，日志 `.migration/deps-auth-security.log`。
 
-阶段 5.2 的真实密码、验证码、重试锁定与账号状态契约及旧登录功能映射已补齐，见 [login-strategies.md](login-strategies.md)。阶段 5.3 已接通表驱动短信发送与登录验证码，统一缓存 key 并原子消费成功匹配的验证码，见 [sms-login.md](sms-login.md)；阶段 5.4 已实现按 appid 隔离的小程序绑定与完整权限登录，见 [xcx-login.md](xcx-login.md)。二维码业务、小程序资料/手机号授权、真实微信/第三方授权、Redis 会话/权限刷新、生产反向代理和完整应用启动仍需后续实施或验收。阶段 5 尚未整体完成，pay 继续暂缓。
+阶段 5.2 的真实密码、验证码、重试锁定与账号状态契约及旧登录功能映射已补齐，见 [login-strategies.md](login-strategies.md)。阶段 5.3 已接通表驱动短信发送与登录验证码，统一缓存 key 并原子消费成功匹配的验证码，见 [sms-login.md](sms-login.md)；阶段 5.4 已实现按 appid 隔离的小程序绑定与完整权限登录，见 [xcx-login.md](xcx-login.md)；阶段 5.5 已交付二维码生成、扫码确认、网页凭证隔离和一次性 JWT 领取，使用 REST 轮询通知，见 [qr-login.md](qr-login.md)。小程序资料/手机号授权、真实微信/第三方授权、Redis 会话/权限刷新、二维码前端联调、生产反向代理和完整应用启动仍需后续实施或验收。阶段 5 尚未整体完成，pay 继续暂缓。

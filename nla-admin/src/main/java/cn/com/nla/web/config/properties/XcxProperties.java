@@ -15,6 +15,8 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "xcx")
 public class XcxProperties {
     private boolean enabled;
+    /** 二维码网页登录独立开关，默认关闭。 */
+    private boolean qrEnabled;
     private Map<String, App> apps = new LinkedHashMap<>();
 
     @Data
@@ -24,5 +26,9 @@ public class XcxProperties {
         private String secret;
         /** 可登录/绑定此小程序的系统客户端 ID，未配置时拒绝。 */
         private List<String> clientIds = List.of();
+        /** 允许通过此小程序扫码登录的网页客户端（必须另启用 qr grant）。 */
+        private List<String> qrClientIds = List.of();
+        private String qrPage;
+        private String qrEnvVersion = "release";
     }
 }

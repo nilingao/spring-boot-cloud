@@ -35,6 +35,9 @@ import cn.com.nla.web.service.impl.EmailAuthStrategy;
 import cn.com.nla.web.service.impl.PasswordAuthStrategy;
 import cn.com.nla.web.service.impl.SmsAuthStrategy;
 import cn.com.nla.web.service.impl.XcxAuthStrategy;
+import cn.com.nla.web.service.impl.QrAuthStrategy;
+import cn.com.nla.web.config.properties.XcxProperties;
+import cn.com.nla.web.domain.model.QrLoginModels;
 import cn.com.nla.system.api.model.XcxLoginUser;
 import cn.dev33.satoken.SaManager;
 import cn.dev33.satoken.config.SaTokenConfig;
@@ -846,6 +849,226 @@ class LoginStrategyContractTest {
         body.put("sms".equals(grant) ? "phoneNumber" : "email", identifier(grant));
         body.put("sms".equals(grant) ? "smsCode" : "emailCode", code);
         return ("sms".equals(grant) ? smsStrategy : emailStrategy).login(JsonUtils.toJsonString(body), client);
+    }
+
+    private static final String QR_APP = "wx0123456789abcdef";
+    private QrLoginService qr;
+    private QrAuthStrategy qrStrategy;
+    private XcxProperties qrProperties;
+    private XcxProperties.App qrApp;
+    private WechatQrClient qrImages;
+    private QrSceneStore qrStore;
+    private SysXcxBindingService qrBindings;
+    private ISysClientService qrClients;
+    private SysClientVo miniClient;
+    private final Map<String, QrSceneStore.Snapshot> qrScenes = new HashMap<>();
+
+    private QrLoginModels.Created prepareQr() {
+        client.setStatus("0"); client.setGrantType("password, qr ,xcx");
+        qrProperties = new XcxProperties(); qrProperties.setEnabled(true); qrProperties.setQrEnabled(true);
+        qrApp = new XcxProperties.App(); qrApp.setSecret("test-secret"); qrApp.setQrPage("pages/login/index");
+        qrApp.setQrClientIds(List.of("web-client")); qrApp.setClientIds(List.of("mini-client"));
+        qrProperties.getApps().put(QR_APP, qrApp);
+        qrClients = mock(ISysClientService.class);
+        when(qrClients.queryByClientId("web-client")).thenAnswer(call -> client);
+        miniClient = new SysClientVo(); miniClient.setClientId("mini-client"); miniClient.setStatus("0");
+        miniClient.setGrantType("xcx"); miniClient.setDeviceType("mini"); miniClient.setTimeout(600L); miniClient.setActiveTimeout(300L);
+        when(qrClients.queryByClientId("mini-client")).thenReturn(miniClient);
+        qrImages = mock(WechatQrClient.class);
+        when(qrImages.generate(eq(QR_APP), same(qrApp), anyString())).thenReturn("data:image/png;base64,test-image");
+        qrStore = mock(QrSceneStore.class);
+        when(qrStore.create(anyString(), any())).thenAnswer(call -> {
+            String scene = call.getArgument(0); QrSceneStore.State value = call.getArgument(1);
+            return qrScenes.putIfAbsent(scene, new QrSceneStore.Snapshot(JsonUtils.toJsonString(value), value)) == null;
+        });
+        when(qrStore.read(anyString())).thenAnswer(call -> qrScenes.get(call.getArgument(0)));
+        when(qrStore.transition(anyString(), any(), any())).thenAnswer(call -> {
+            String scene = call.getArgument(0); QrSceneStore.Snapshot expected = call.getArgument(1);
+            QrSceneStore.State next = call.getArgument(2);
+            return qrScenes.replace(scene, expected, new QrSceneStore.Snapshot(JsonUtils.toJsonString(next), next));
+        });
+        qrBindings = mock(SysXcxBindingService.class);
+        when(qrBindings.findUserId(QR_APP, "verified-openid")).thenReturn(USER_ID);
+        when(users.selectVoById(USER_ID)).thenAnswer(call -> user);
+        qr = new QrLoginService(qrProperties, qrClients, qrImages, qrStore, qrBindings, users, loginService);
+        qrStrategy = new QrAuthStrategy(qr);
+        return qr.create(QR_APP, "web-client");
+    }
+
+    private XcxLoginUser qrScanner(String appid, String openid, Long userId) {
+        var scanner = new XcxLoginUser();
+        scanner.setUserType("sys_user"); scanner.setUserId(userId); scanner.setUsername(USERNAME);
+        scanner.setAppid(appid); scanner.setOpenid(openid);
+        LoginHelper.login(scanner, IAuthStrategy.buildLoginParameter(miniClient));
+        String token = StpUtil.getTokenValue();
+        var request = new MockHttpServletRequest(); request.setRemoteAddr("127.0.0.2");
+        request.addHeader("Authorization", "Bearer " + token); request.addHeader("clientid", "mini-client");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request, new MockHttpServletResponse()));
+        return scanner;
+    }
+
+    private void qrBrowser() {
+        var request = new MockHttpServletRequest(); request.setRemoteAddr("127.0.0.3");
+        request.addHeader("clientid", "web-client"); request.addHeader("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request, new MockHttpServletResponse()));
+    }
+
+    private String qrBody(QrLoginModels.Created scene) {
+        return JsonUtils.toJsonString(Map.of("clientId", "web-client", "grantType", "qr", "scene", scene.scene(),
+            "browserToken", scene.browserToken(), "userId", 1, "openid", "spoofed"));
+    }
+
+    private void qrConfirm(QrLoginModels.Created scene) {
+        qrScanner(QR_APP, "verified-openid", USER_ID);
+        assertEquals("web-client", qr.scan(scene.scene()).clientId());
+        qr.confirm(scene.scene(), true);
+        qrBrowser();
+    }
+
+    @Test
+    void qrBuildsBrowserJwtWithFullPermissionsAndFreshClientPolicyOnlyOnce() {
+        var scene = prepareQr();
+        assertTrue(scene.scene().matches("[0-9a-f]{32}")); assertTrue(scene.browserToken().matches("[A-Za-z0-9_-]{43}"));
+        assertEquals(180, scene.expireIn());
+        assertFalse(qrScenes.get(scene.scene()).raw().contains(scene.browserToken()));
+        assertFalse(scene.toString().contains(scene.browserToken()));
+        assertEquals("WAITING", qr.status(scene.scene(), scene.browserToken(), "web-client").status());
+        qrConfirm(scene);
+        assertEquals("CONFIRMED", qr.status(scene.scene(), scene.browserToken(), "web-client").status());
+        client.setAccessPath("/contract/**"); client.setIpWhitelist("127.0.0.3");
+        var view = qrStrategy.login(qrBody(scene), client); assertSession(view);
+        var session = LoginHelper.getLoginUser(view.getAccessToken());
+        assertFalse(session instanceof XcxLoginUser); assertEquals("127.0.0.3", session.getIpaddr());
+        assertEquals("/contract/**", StpUtil.getExtra(LoginHelper.CLIENT_ACCESS_PATH_KEY));
+        assertEquals("127.0.0.3", StpUtil.getExtra(LoginHelper.CLIENT_IP_WHITELIST_KEY));
+        assertEquals("CONSUMED", qr.status(scene.scene(), scene.browserToken(), "web-client").status());
+        clearInvocations(loginService);
+        assertThrows(ServiceException.class, () -> qrStrategy.login(qrBody(scene), client));
+        verify(loginService, never()).buildLoginUser(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"WAITING", "SCANNED", "CANCELLED", "expired"})
+    void qrCannotIssueTokenBeforeConfirmationOrAfterCancellationOrExpiry(String phase) {
+        var scene = prepareQr();
+        if (!phase.equals("WAITING") && !phase.equals("expired")) {
+            qrScanner(QR_APP, "verified-openid", USER_ID); qr.scan(scene.scene());
+            if (phase.equals("CANCELLED")) { qr.confirm(scene.scene(), false); }
+        }
+        if (phase.equals("expired")) { qrScenes.remove(scene.scene()); }
+        qrBrowser(); clearInvocations(loginService);
+        assertThrows(ServiceException.class, () -> qrStrategy.login(qrBody(scene), client));
+        verify(loginService, never()).buildLoginUser(any()); assertFalse(StpUtil.isLogin());
+    }
+
+    @Test
+    void qrBrowserPossessionAndClientIsolationApplyToPollingAndRedemption() {
+        var first = prepareQr(); var second = qr.create(QR_APP, "web-client"); qrConfirm(first);
+        assertNotEquals(first.scene(), second.scene()); assertNotEquals(first.browserToken(), second.browserToken());
+        assertThrows(ServiceException.class, () -> qr.status(first.scene(), second.browserToken(), "web-client"));
+        assertThrows(ServiceException.class, () -> qr.redeem(first.scene(), second.browserToken(), "web-client"));
+        assertThrows(ServiceException.class, () -> qr.status(first.scene(), first.browserToken(), "mini-client"));
+        assertThrows(ServiceException.class, () -> qr.redeem(first.scene(), first.browserToken(), "mini-client"));
+        assertEquals("CONFIRMED", qr.status(first.scene(), first.browserToken(), "web-client").status());
+        assertSession(qrStrategy.login(qrBody(first), client));
+    }
+
+    @Test
+    void qrRequiresExplicitScanAndOnlyFirstScannerCanConfirmOnce() {
+        var scene = prepareQr(); qrScanner(QR_APP, "verified-openid", USER_ID);
+        assertThrows(ServiceException.class, () -> qr.confirm(scene.scene(), true));
+        qr.scan(scene.scene()); qr.scan(scene.scene()); // 本人重扫不覆盖场景。
+        when(qrBindings.findUserId(QR_APP, "other-openid")).thenReturn(USER_ID + 1);
+        when(users.selectVoById(USER_ID + 1)).thenReturn(user);
+        qrBrowser(); qrScanner(QR_APP, "other-openid", USER_ID + 1);
+        assertThrows(ServiceException.class, () -> qr.scan(scene.scene()));
+        assertThrows(ServiceException.class, () -> qr.confirm(scene.scene(), true));
+        qrBrowser(); qrScanner(QR_APP, "verified-openid", USER_ID);
+        qr.confirm(scene.scene(), true);
+        assertThrows(ServiceException.class, () -> qr.confirm(scene.scene(), true));
+        assertThrows(ServiceException.class, () -> qr.confirm(scene.scene(), false));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"web-session", "other-app", "binding-owner", "scanner-client-disabled", "scanner-allowlist"})
+    void qrScannerMustHaveVerifiedMiniSessionWithCurrentBindingAndAllowedClient(String reason) {
+        var scene = prepareQr();
+        if (reason.equals("web-session")) { assertSession(passwordStrategy.login(passwordBody(PASSWORD, null, null), client)); }
+        else { qrScanner(reason.equals("other-app") ? "wxfedcba9876543210" : QR_APP, "verified-openid", USER_ID); }
+        if (reason.equals("binding-owner")) { when(qrBindings.findUserId(QR_APP, "verified-openid")).thenReturn(USER_ID + 1); }
+        if (reason.equals("scanner-client-disabled")) { miniClient.setStatus("1"); }
+        if (reason.equals("scanner-allowlist")) { qrApp.setClientIds(List.of()); }
+        assertThrows(ServiceException.class, () -> qr.scan(scene.scene()));
+        assertEquals(QrSceneStore.Phase.WAITING, qrScenes.get(scene.scene()).state().phase());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"disabled", "missing", "locked", "unbound", "reassigned", "client-disabled", "grant-removed", "app-disabled"})
+    void qrReloadsAccountBindingAndConfigBeforeRedemption(String reason) {
+        var scene = prepareQr(); qrConfirm(scene); clearInvocations(loginService);
+        switch (reason) {
+            case "disabled" -> user.setStatus("1");
+            case "missing" -> user = null;
+            case "locked" -> cache.put(ERROR_KEY, 5);
+            case "unbound" -> when(qrBindings.findUserId(QR_APP, "verified-openid")).thenThrow(new ServiceException("unbound"));
+            case "reassigned" -> when(qrBindings.findUserId(QR_APP, "verified-openid")).thenReturn(USER_ID + 1);
+            case "client-disabled" -> client.setStatus("1");
+            case "grant-removed" -> client.setGrantType("password,qrcode");
+            case "app-disabled" -> qrProperties.setQrEnabled(false);
+            default -> fail();
+        }
+        assertThrows(RuntimeException.class, () -> qrStrategy.login(qrBody(scene), client));
+        verify(loginService, never()).buildLoginUser(any()); assertFalse(StpUtil.isLogin());
+        assertEquals(QrSceneStore.Phase.CONFIRMED, qrScenes.get(scene.scene()).state().phase());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"feature", "app", "page", "env", "allowlist", "secret", "grant"})
+    void qrCreationRejectsUnavailableConfigBeforeImageGeneration(String reason) {
+        prepareQr(); clearInvocations(qrImages, qrStore);
+        switch (reason) {
+            case "feature" -> qrProperties.setQrEnabled(false);
+            case "app" -> qrApp.setEnabled(false);
+            case "page" -> qrApp.setQrPage("/pages/login");
+            case "env" -> qrApp.setQrEnvVersion("invalid");
+            case "allowlist" -> qrApp.setQrClientIds(List.of());
+            case "secret" -> qrApp.setSecret(" ");
+            case "grant" -> client.setGrantType("password,qrcode");
+            default -> fail();
+        }
+        assertThrows(ServiceException.class, () -> qr.create(QR_APP, "web-client"));
+        verifyNoInteractions(qrImages, qrStore);
+    }
+
+    @Test
+    void qrImageFailureLeavesNoSceneAndCreationCollisionDoesNotOverwrite() {
+        prepareQr(); int size = qrScenes.size(); clearInvocations(qrStore);
+        doThrow(new ServiceException("provider failed")).when(qrImages).generate(anyString(), any(), anyString());
+        assertThrows(ServiceException.class, () -> qr.create(QR_APP, "web-client"));
+        verifyNoInteractions(qrStore); assertEquals(size, qrScenes.size());
+        doReturn("image").when(qrImages).generate(anyString(), any(), anyString());
+        doReturn(false).when(qrStore).create(anyString(), any());
+        assertThrows(ServiceException.class, () -> qr.create(QR_APP, "web-client"));
+        assertEquals(size, qrScenes.size());
+    }
+
+    @Test
+    void qrExpiredOrCompetingCasCannotMintJwtOrReplaceNewState() {
+        var scene = prepareQr(); qrConfirm(scene);
+        doAnswer(call -> { qrScenes.remove(scene.scene()); return false; }).when(qrStore).transition(anyString(), any(), any());
+        assertThrows(ServiceException.class, () -> qrStrategy.login(qrBody(scene), client));
+        assertFalse(StpUtil.isLogin()); assertFalse(qrScenes.containsKey(scene.scene()));
+    }
+
+    @Test
+    void qrSigningFailureNeverReopensConsumedScene() {
+        var scene = prepareQr(); qrConfirm(scene);
+        try (var helper = mockStatic(LoginHelper.class)) {
+            helper.when(() -> LoginHelper.login(any(), any())).thenThrow(new IllegalStateException("session store down"));
+            assertThrows(IllegalStateException.class, () -> qrStrategy.login(qrBody(scene), client));
+        }
+        assertEquals(QrSceneStore.Phase.CONSUMED, qrScenes.get(scene.scene()).state().phase());
+        assertThrows(ServiceException.class, () -> qrStrategy.login(qrBody(scene), client));
     }
 
     private void assertSession(LoginVo view) {

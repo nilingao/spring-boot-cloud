@@ -359,6 +359,67 @@ class AuthSecurityContractTest {
         verify(bindings).bind(9_007_199_254_740_993L, "wx0123456789abcdef", "verified-openid", null);
     }
 
+    @Test
+    void qrPublicCreationAndPossessionPollingAreMethodScopedAndNeverReturnJwt() throws Exception {
+        var qr = context.getBean(cn.com.nla.web.service.QrLoginService.class);
+        String scene = "0123456789abcdef0123456789abcdef";
+        String secret = "a".repeat(43);
+        when(qr.create("wx0123456789abcdef", "web-client"))
+            .thenReturn(new cn.com.nla.web.domain.model.QrLoginModels.Created(scene, secret, "data:image/png;base64,test", 180));
+        var created = mvc.perform(post("/auth/qr/create").contentType("application/json")
+            .content("{\"appid\":\"wx0123456789abcdef\",\"clientId\":\"web-client\"}")).andReturn().getResponse();
+        assertEquals("no-store", created.getHeader("Cache-Control"));
+        var json = JsonMapper.builder().build().readTree(created.getContentAsString());
+        assertEquals(200, json.get("code").asInt()); assertEquals(secret, json.get("data").get("browserToken").asString());
+        assertFalse(created.getContentAsString().contains("access_token"));
+        when(qr.status(scene, secret, "web-client"))
+            .thenReturn(new cn.com.nla.web.domain.model.QrLoginModels.Status("CONFIRMED"));
+        var status = mvc.perform(post("/auth/qr/status").contentType("application/json")
+            .content("{\"scene\":\"" + scene + "\",\"browserToken\":\"" + secret + "\",\"clientId\":\"web-client\"}"))
+            .andReturn().getResponse();
+        assertEquals("no-store", status.getHeader("Cache-Control"));
+        assertEquals("CONFIRMED", JsonMapper.builder().build().readTree(status.getContentAsString()).get("data").get("status").asString());
+        assertFalse(status.getContentAsString().contains(secret)); assertFalse(status.getContentAsString().contains("access_token"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/auth/qr/scan", "/auth/qr/confirm"})
+    void qrScannerRoutesRequireLoginMatchingClientAndPathAndIpPolicy(String path) throws Exception {
+        String body = "{\"scene\":\"0123456789abcdef0123456789abcdef\",\"confirmed\":true}";
+        assertEquals(401, responseCode(post(path).contentType("application/json").content(body)));
+        assertEquals(401, responseCode(post(path).contentType("application/json").content(body)
+            .header("Authorization", "Bearer " + token(Set.of())).header("clientid", "other")));
+        client.setAccessPath("/contract/**");
+        assertEquals(403, responseCode(authenticated(post(path), token(Set.of())).contentType("application/json").content(body)));
+        client.setAccessPath(null); client.setIpWhitelist("10.0.0.0/24");
+        assertEquals(403, responseCode(authenticated(post(path), token(Set.of())).contentType("application/json").content(body)
+            .with(request -> { request.setRemoteAddr("192.168.1.1"); return request; })));
+        verifyNoInteractions(context.getBean(cn.com.nla.web.service.QrLoginService.class));
+    }
+
+    @Test
+    void qrConfirmationRequiresExplicitDecisionAndRejectsMalformedScene() throws Exception {
+        String token = token(Set.of());
+        assertEquals(400, mvc.perform(authenticated(post("/auth/qr/confirm"), token).contentType("application/json")
+            .content("{\"scene\":\"0123456789abcdef0123456789abcdef\"}")).andReturn().getResponse().getStatus());
+        assertEquals(400, mvc.perform(authenticated(post("/auth/qr/scan"), token).contentType("application/json")
+            .content("{\"scene\":\"invalid\"}")).andReturn().getResponse().getStatus());
+        assertEquals(400, mvc.perform(post("/auth/qr/status").contentType("application/json")
+            .content("{\"scene\":\"0123456789abcdef0123456789abcdef\",\"clientId\":\"web-client\"}"))
+            .andReturn().getResponse().getStatus());
+        verifyNoInteractions(context.getBean(cn.com.nla.web.service.QrLoginService.class));
+    }
+
+    @Test
+    void qrGrantUsesExistingLoginDispatchAndCannotMatchPartialGrant() throws Exception {
+        client.setGrantType("password,qrcode");
+        assertEquals(500, responseCode(post("/auth/login").contentType("application/json").content(loginBody("qr"))));
+        verifyNoInteractions(strategy);
+        client.setGrantType("password, qr ");
+        assertEquals(200, responseCode(post("/auth/login").contentType("application/json").content(loginBody("qr"))));
+        verify(strategy).login(loginBody("qr"), client);
+    }
+
     private String token(Set<String> permissions) {
         return issueInBoundRequest(IAuthStrategy.buildLoginParameter(client), permissions, Set.of());
     }
@@ -410,7 +471,9 @@ class AuthSecurityContractTest {
         @Bean ISysClientService clientService() { return mock(ISysClientService.class); }
         @Bean ISysSocialService socialService() { return mock(ISysSocialService.class); }
         @Bean ScheduledExecutorService scheduler() { return mock(ScheduledExecutorService.class); }
-        @Bean({"passwordAuthStrategy", "xcxAuthStrategy"}) IAuthStrategy strategy() { return mock(IAuthStrategy.class); }
+        @Bean({"passwordAuthStrategy", "xcxAuthStrategy", "qrAuthStrategy"}) IAuthStrategy strategy() { return mock(IAuthStrategy.class); }
+        @Bean cn.com.nla.web.service.QrLoginService qrService() { return mock(cn.com.nla.web.service.QrLoginService.class); }
+        @Bean QrLoginController qrController(cn.com.nla.web.service.QrLoginService qr) { return new QrLoginController(qr); }
         @Bean WechatMiniClient wechatMiniClient() { return mock(WechatMiniClient.class); }
         @Bean SysXcxBindingService xcxBindings() { return mock(SysXcxBindingService.class); }
         @Bean XcxBindingController xcxController(WechatMiniClient provider, SysXcxBindingService bindings) {

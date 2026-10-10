@@ -43,10 +43,10 @@ Redis 操作使用每测隔离的内存替身，测试检查写入的 Duration�
 | 旧 `SmsSendManager` 和发送类型缓存 | `nla-message/sms/core/SmsSendManager` | 表驱动渠道/模板引擎已迁；它写 `redis:verificationCode:{type}_{mobile}`，登录类型为 1；基线策略读 `GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber`，两种 key 未贯通 |
 | 新基线 `/resource/sms/code` | `CaptchaController.smsCode` | 仍调用固定 `SmsFactory.getSmsBlend("config1")`、空模板号和 4 位码，未使用表驱动发送引擎；不能把登录策略测试当作发送可用证明 |
 | `WxMiniGranter` / `WxMiniAuthenticationProvider` / `WxMiniUserServiceImpl`，grant `wx_mini` | `XcxAuthStrategy`，grant `xcx`；`sys_social` + `sys_user` | 5.4 已补服务端配置、appid/openid 绑定查询、账号状态/锁定和完整权限会话；旧用户资料/手机号授权与场景联动仍待迁 |
-| `WxMiniWebGranter` / `WxMiniUserOpenIdServiceImpl`，grant `wx_mini_web` | 已确认的绑定模型与 Sa-Token 登录参数 | 没有完成等价的扫码网页登录；后续从服务端确认的场景/绑定中构造系统用户会话 |
-| `MiniController.getQRCode` / `WxMiniQrEvent` / `WxMiniLoginEvent` / `QRDataListener` | `nla-common-socketio` + `nla-common-mq` 技术封装 | 旧链路包含微信码生成、3 分钟场景缓存、小程序授权、MQ 通知、网页会话签发与 Socket.IO 房间推送；技术封装就绪不等于二维码业务已迁移 |
+| `WxMiniWebGranter` / `WxMiniUserOpenIdServiceImpl`，grant `wx_mini_web` | 5.5 `QrAuthStrategy`，grant `qr` | 按服务端已确认场景及有效绑定签发网页 JWT；需要独立网页凭证，领取时重查账号/客户端/权限 |
+| `MiniController.getQRCode` / `WxMiniQrEvent` / `WxMiniLoginEvent` / `QRDataListener` | 5.5 `WechatQrClient`、`QrSceneStore`、`QrLoginService` 与 REST 入口 | 已接通微信码、3 分钟原子状态、小程序显式确认及一次性领取；网页状态通知改为 REST 轮询，旧 MQ/Socket.IO 事件接口没有迁入 |
 
-旧 `bean_mini` / `bean_mini_user` 的数据模型覆盖仍按台账使用 `sys_social` 与 `sys_user`，不新增旧表、不迁旧测试账号、token 或租户数据。5.4 已交付小程序绑定和登录，资料/手机号授权、自动注册和二维码业务另批推进。
+旧 `bean_mini` / `bean_mini_user` 的数据模型覆盖仍按台账使用 `sys_social` 与 `sys_user`，不新增旧表、不迁旧测试账号、token 或租户数据。5.4 已交付小程序绑定和登录，5.5 已交付扫码网页登录后端；资料/手机号授权、自动注册及前端/真实供应商联调另批推进。
 
 ## 验证与下一批
 
@@ -58,4 +58,4 @@ mvn -o -B -pl nla-admin -am '-Dtest=LoginStrategyContractTest,AuthSecurityContra
 
 本批 JDK 21 / Maven 3.9.9 验证结果：新增 **41 项**，与阶段 5.1 的 50 项共同运行，**91 项全部通过，无失败、错误或跳过**；根工程 `mvn -o -B -DskipTests compile` **49/49 模块成功**。日志 `.migration/test-login-strategy-contract.log`、`.migration/build-login-strategy-reactor.log`；编码、变更范围和报告核对脚本 `.migration/audit-login-strategies.py`。
 
-阶段 5.3 已接通表驱动短信发送与登录验证，详见 [sms-login.md](sms-login.md)；阶段 5.4 已实现小程序账号绑定与登录，详见 [xcx-login.md](xcx-login.md)。二维码状态、通知链路和小程序资料/手机号授权仍待迁；真实 MySQL/Redis/供应商、微信/第三方授权和完整应用启动留对应环境验收。阶段 5 保持进行中，pay 继续暂缓。
+阶段 5.3 已接通表驱动短信发送与登录验证，详见 [sms-login.md](sms-login.md)；阶段 5.4 已实现小程序账号绑定与登录，详见 [xcx-login.md](xcx-login.md)；阶段 5.5 已交付二维码状态、显式确认与网页一次性领取，通知改为轮询，详见 [qr-login.md](qr-login.md)。小程序资料/手机号授权仍待迁；真实 MySQL/Redis/供应商、二维码前端、微信/第三方授权和完整应用启动留对应环境验收。阶段 5 保持进行中，pay 继续暂缓。
