@@ -25,6 +25,7 @@
         <module>nla-message</module>
         <module>nla-face</module>
         <module>nla-video</module>
+        <module>nla-callcenter</module>
     </modules>
 
 </project>

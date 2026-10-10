@@ -456,6 +456,34 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ---
 
+### 4.7 呼叫中心数据层：41 张表（已落地）
+
+新建 `nla-modules/nla-callcenter`，登记业务 reactor 和根 POM 坐标管理，交付 **164 个主 Java 文件（41 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_callcenter.sql`](../../script/sql/nla_callcenter.sql)，表分组、数据契约与接入约束见 [`nla-callcenter/README.md`](../../nla-modules/nla-callcenter/README.md)。本轮只迁数据层，未接入 admin 或协议封装；Controller/Service/菜单/权限/策略引擎留阶段 6.6。旧源码、旧 SQL 和 FreeSWITCH 自身运行表未改，不迁旧测试数据。
+
+**迁移决策**：
+
+- fs.MediaServer 消歧为 FsMediaServer，保留 String 协议主键 / INPUT；其余 40 表 Long 主键 / ASSIGN_ID，无自增。全部继承 BaseEntity，旧 Date 改 LocalDateTime，统一五个允许空值的审计列，不增加租户列或物理外键。
+- 41 表采用 String delFlag / char(1)，显式 `@TableLogic(value="0",delval="1")`。历史通话/事件表的留存与清理规则待业务阶段定义，不能把逻辑删除当成完整业务删除流程。
+- 保留 16 表共 19 个业务唯一键的原名称、字段与全局/企业范围，唯一键追加 active_marker 生成列（有效 1、删除 NULL），支持多轮删除/重建。包括 company_name/company_code/uniq_skill_name 等遗留名称；VdnPhone 原 uni_idx_phone(vdn_id,company_id) 保留。字符串主键删除后不能直接复用，引用检查、恢复与级联事务留 Service。
+- Company.balance 的旧 DDL double 改 decimal(19,4)，与 BigDecimal 对齐；补齐旧实体遗漏的 Company.conferenceLimit、Agent.display。
+- UserAgent.agentId/userId 从 String / varchar 改 Long / bigint，必填无默认值；旧 XML 的真实关联是 `fs_user_agent.agent_id = fs_agent.id`，userId 是系统用户数据库 ID。避免 MySQL 隐式浮点比较丢失大于 2^53 的雪花 ID 精度，新增 idx_user_agent_company_user(company_id,user_id,del_flag)。Agent 自身工号与 SIP 号码仍是 String。
+- OverflowConfig.overflowValue 从 Integer / int 改 Long / bigint，承载技能组/IVR/VDN 雪花目标 ID；到协议字符串 DTO 的转换留阶段 6.6。CallLog 等原 Long 时间戳/时长、`fristQueueTime` 拼写、VdnSchedule 的字符串调度规则与 VdnConfig.routeValue 的混合字符串语义保留；GateWay.username / routeId 的旧类型保留待业务核定。
+- Bo 使用 AddGroup/EditGroup，不接受审计、删除和生成列。实体/Bo 的 passwd/password/sipPwd/secret/secretKey/notifyUrl/cdrNotifyUrl JSON 仅写并排除日志，Vo 不包含这些字段；内部实体读取保留凭据供协议使用。
+- 号码字段排除 toString，Vo 标注 PHONE 脱敏；实际输出依赖既有 JsonValueEnhancer、SensitiveJsonFieldProcessor 和 SensitiveService 权限判定。缺少 SensitiveService 时保留原值，裸 JSON、Vo getter 和数据库仍是原号码，生产响应链待业务接入验收。Agent.sipPhoneList 仅保留 Vo，普通 CRUD 不计算。
+- 重写三个参数绑定查询：selectByUserId(companyId,userId) 用 exists 去重，按 create_time/id 稳定倒序返回 AgentVo 列表；selectBySip(companyId,sip) 限同企业有效座席/SIP；selectConfigsByGroup(companyId,groupId) 限同企业有效技能组/配置，按关联优先级排序并返回配置主键。全部参与表显式过滤 del_flag；null、错企业和不存在对象不匹配，不回显凭据。系统用户存在性/账号状态与当前登录权限由后续业务层负责。
+- DDL 仅新库 CREATE IF NOT EXISTS，41 表显式 utf8mb4 / utf8mb4_cs_0900_ai_ci，无 drop、seed 或外部数据库操作；已有库须单独升级，初始化脚本不会改已有表。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `mvn -o -B -pl nla-modules/nla-callcenter -am -Dtest=CallcenterDataContractTest -Dsurefire.failIfNoSpecifiedTests=false test` → **121/121 通过，0 跳过，BUILD SUCCESS，MVN_EXIT=0**。加载交付 DDL、两个真实 XML 和全部 41 个 Mapper，覆盖全字段 CRUD/审计/逻辑删除、Bo→Entity→Vo 全字段生成映射、分组校验、精确金额、遗漏列、雪花关联精度、调度字符串/计数、参数绑定、企业隔离、每个查询参与表删除过滤、重复绑定去重/稳定排序、19 个唯一键独立冲突及三轮删除重建、凭据仅写和响应增强号码脱敏。日志 `.migration/test-callcenter-data.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块 BUILD SUCCESS，MVN_EXIT=0**。日志 `.migration/build-callcenter-data-reactor.log`。
+- 编译依赖树保持 Boot4 / Spring7 / MyBatis-Plus / MapStruct-Plus；H2 仅 test，无旧 starter/cloud、ESL/SIP/JNI 依赖。排除 MyBatis 间接引入的 Boot2 AOP starter，沿用 common-core 的 Boot4 AspectJ。日志 `.migration/deps-callcenter-data.log`。
+- 41 套旧实体字段与全部旧 DDL 列/默认值/普通及唯一索引逐项核对，只采用上面记录的修正；164 个主 Java + 1 个测试、2 XML、16 生成列/19 唯一键核对通过。交付文本严格 UTF-8 往返，无旧 Java 包、Swagger2、javax、Date 或尾随空白；`git diff --check` 通过。核对脚本 `.migration/audit-callcenter-data.py`。
+
+**剩余验收**：H2 剥离 MySQL 表级选项和 STORED，保留生成列表达式；测试索引加表名前缀适配 schema 级命名。真实 MySQL 生成列/排序规则/索引性能、生产审计/鉴权、完整应用启动及 ESL/SIP/媒体联调未执行。sys_area 数据层已在 6.1.1 交付，参考数据导入与搜索方案评估仍待处理；阶段 4 未整体验收完成，pay 持续暂缓。
+
+---
+
 ## 5. starter → nla-common 映射
 
 旧 `spring-boot-starter` 21 个子模块共 744 Java 文件。
@@ -681,7 +709,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | 业务待推进（数据层已就绪） |
 | 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 业务待推进（数据层已就绪） |
-| 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1）** | 待推进（前置已解除） |
+| 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1），41 表数据层已建（见 4.7）** | 业务待推进（数据层已就绪） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
 
 ### 6.1 `bean_*` → `sys_*` 表映射
@@ -1251,7 +1279,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试）；全工程 48/48 编译 GREEN；fs 41 表和真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |

@@ -525,6 +525,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 呼叫中心业务模块（数据层） -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-callcenter</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!--  api模块  -->
             <dependency>
                 <groupId>cn.com.nla</groupId>

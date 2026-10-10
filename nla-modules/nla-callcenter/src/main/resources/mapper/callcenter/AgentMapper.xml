@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.callcenter.mapper.AgentMapper">
+    <select id="selectByUserId" resultType="cn.com.nla.callcenter.domain.vo.AgentVo">
+        select a.`id`, a.`company_id`, a.`agent_id`, a.`agent_key`, a.`agent_name`, a.`agent_code`, a.`agent_type`, a.`record`, a.`group_id`, a.`after_interval`, a.`ring_time`, a.`host`, a.`state`, a.`status`, a.`register_time`, a.`renew_time`, a.`keepalive_time`, a.`keep_timeout`, a.`expires`, a.`stream_mode`, a.`transport`, a.`charset`, a.`display`, a.`create_dept`, a.`create_by`, a.`create_time`, a.`update_by`, a.`update_time`
+        from fs_agent a
+        join fs_company c on c.id = a.company_id and c.del_flag = '0'
+        where a.del_flag = '0' and a.company_id = #{companyId}
+          and exists (select 1 from fs_user_agent ua where ua.agent_id = a.id
+                      and ua.company_id = a.company_id and ua.user_id = #{userId} and ua.del_flag = '0')
+        order by a.create_time desc, a.id desc
+    </select>
+    <select id="selectBySip" resultType="cn.com.nla.callcenter.domain.vo.AgentVo">
+        select a.`id`, a.`company_id`, a.`agent_id`, a.`agent_key`, a.`agent_name`, a.`agent_code`, a.`agent_type`, a.`record`, a.`group_id`, a.`after_interval`, a.`ring_time`, a.`host`, a.`state`, a.`status`, a.`register_time`, a.`renew_time`, a.`keepalive_time`, a.`keep_timeout`, a.`expires`, a.`stream_mode`, a.`transport`, a.`charset`, a.`display`, a.`create_dept`, a.`create_by`, a.`create_time`, a.`update_by`, a.`update_time`
+        from fs_agent a
+        join fs_agent_sip s on s.agent_id = a.id and s.company_id = a.company_id and s.del_flag = '0'
+        join fs_company c on c.id = a.company_id and c.del_flag = '0'
+        where a.del_flag = '0' and a.company_id = #{companyId} and s.sip = #{sip}
+    </select>
+</mapper>

@@ -17,7 +17,7 @@
 > 你正在看的是 **`6.0.0-nla`** 分支 —— 一次**架构升级进行中**的分支。
 >
 > - 工程骨架、通用基座（30 个 common 子模块）、支撑脚本**已完成并通过全量编译**
-> - 短信模块已迁入；face 人员数据层、video 12 表数据层已就绪，当前全工程 **48/48 模块编译通过**
+> - 短信模块已迁入；face 人员、video 12 表、callcenter 41 表数据层已就绪，当前全工程 **49/49 模块编译通过**
 > - 人脸识别、视频协议业务、呼叫中心等仍待迁移，支付暂缓；阶段进度与剩余验收以迁移台账为准
 > - 旧微服务版本请切到 **`5.0.0-dev`** 分支查看
 >
@@ -115,6 +115,7 @@ nla-cloud/
 │   ├── nla-message                 短信渠道 / 模板 / 发送记录
 │   ├── nla-face                    人脸人员数据层（未接入 admin）
 │   ├── nla-video                   视频监控 12 表数据层（未接入 admin）
+│   ├── nla-callcenter              呼叫中心 41 表数据层（未接入 admin）
 │   └── nla-demo                    功能示例（Excel / 加解密 / 脱敏 / 幂等 / 限流等用法参考）
 ├── nla-extend/                 独立运行的服务端
 │   ├── nla-monitor-admin           Spring Boot Admin 监控中心
@@ -172,9 +173,9 @@ CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_090
 | `nla_ai.sql` | AI 会话与知识库表 |
 | `nla_message.sql` | 短信模块三张表与菜单初始化 |
 
-`nla_face.sql` / `nla_video.sql` 为已交付数据层的新库初始化脚本，模块尚未接入 admin；按后续业务启用计划建表。脚本分别见 [face 模块说明](nla-modules/nla-face/README.md) 和 [video 模块说明](nla-modules/nla-video/README.md)。
+`nla_face.sql` / `nla_video.sql` / `nla_callcenter.sql` 为已交付数据层的新库初始化脚本，模块尚未接入 admin；按后续业务启用计划建表。脚本分别见 [face 模块说明](nla-modules/nla-face/README.md)、[video 模块说明](nla-modules/nla-video/README.md) 和 [callcenter 模块说明](nla-modules/nla-callcenter/README.md)。
 
-基线四个脚本另有 Oracle / PostgreSQL / SQLServer 子目录版本；新增 message / face / video 脚本目前仅交付 MySQL 方言。
+基线四个脚本另有 Oracle / PostgreSQL / SQLServer 子目录版本；新增 message / face / video / callcenter 脚本目前仅交付 MySQL 方言。
 
 ### 2. 改配置
 
@@ -192,7 +193,7 @@ CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_090
 mvn -B -DskipTests clean install
 ```
 
-预期输出 **BUILD SUCCESS**，当前 reactor 共 48 个条目。
+预期输出 **BUILD SUCCESS**，当前 reactor 共 49 个条目。
 
 ### 4. 启动
 
@@ -321,7 +322,7 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | 1 | 工程骨架（根 POM / 全部模块 POM / 启动类 / 配置 / script） | ✅ |
 | 2 | 通用基座 25 个 `nla-common-*` | ✅ |
 | 3 | 自建技术封装 6 个（freeswitch / gb28181 / pay / facesdk / socketio / mq） | ⬜ |
-| 4 | 数据层重写（实体 / Bo / Vo / DDL / 91 个 Mapper XML） | ⬜ |
+| 4 | 数据层重写（face / sms / video / callcenter 已落地；参考数据导入/搜索评估与 MySQL 验收待推进） | 🟡 |
 | 5 | 认证鉴权与租户（OAuth2 → Sa-Token） | ⬜ |
 | 6 | 业务模块迁移（7 批次） | ⬜ |
 | 7 | 工作流与调度替换（Activiti → WarmFlow） | ⬜ |

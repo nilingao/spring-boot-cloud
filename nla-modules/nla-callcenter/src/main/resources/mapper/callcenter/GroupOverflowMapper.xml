@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.callcenter.mapper.GroupOverflowMapper">
+    <select id="selectConfigsByGroup" resultType="cn.com.nla.callcenter.domain.vo.OverflowConfigVo">
+        select o.`id`, o.`company_id`, o.`name`, o.`handle_type`, o.`busy_type`, o.`queue_timeout`, o.`busy_timeout_type`, o.`overflow_type`, o.`overflow_value`, o.`lineup_expression`, o.`create_dept`, o.`create_by`, o.`create_time`, o.`update_by`, o.`update_time`
+        from fs_group_overflow rel
+        join fs_group g on g.id = rel.group_id and g.del_flag = '0'
+        join fs_overflow_config o on o.id = rel.overflow_id and o.company_id = g.company_id and o.del_flag = '0'
+        join fs_company c on c.id = g.company_id and c.del_flag = '0'
+        where rel.del_flag = '0' and g.company_id = #{companyId} and rel.group_id = #{groupId}
+        order by rel.level_value, rel.id
+    </select>
+</mapper>
