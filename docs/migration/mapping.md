@@ -370,6 +370,30 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ---
 
+### 4.4 数据层第一批交付：`face_person`（已落地）
+
+阶段 3 的非 pay 技术封装已就绪，pay 沿用暂缓约定；下一阶段从数据层开始，第一批选择只有一张独有表的 face。新建 `nla-modules/nla-face`，登记业务 reactor 和根 POM 坐标管理；共 **4 个主 Java 文件 + 1 个 Mapper XML + 1 个测试类**。本轮只交付 Person / PersonBo / PersonVo / PersonMapper 与 DDL，未引入 JNI、未接入 admin、未迁业务服务/Controller。模块说明见 [`nla-face/README.md`](../../nla-modules/nla-face/README.md)。旧源码与 DDL 保持原位。
+
+**数据契约与修正**：
+
+- `Person` 继承 `BaseEntity`，显式 `Long id` / `IdType.ASSIGN_ID`；旧自增主键取消，`create_user_id/update_user_id` 改 `create_by/update_by`，新增 `create_dept`。时间统一 LocalDateTime；不新增租户字段。
+- 按 §4.3 使用 **String delFlag + @TableLogic(0/1)**，DDL 对应 `char(1)`；两个自定义 XML 查询都显式过滤 `del_flag='0'`，避免逻辑删除人员进入搜索结果和特征缓存。
+- 保留 imgId/imgUrl/personName/personAge/gender/address 和特征字符串字段。旧 `extract varchar(256)` 扩为 **LONGTEXT**，避免数组字符串超长；普通 BaseMapper 查询通过 `@TableField(select=false)` 排除特征，`selectImgIdList` 同样不读取特征。PersonVo 和 PersonBo 不包含 extract，实体 toString 也排除特征。
+- `selectImgIdList` 保留方法名，参数绑定；null/空集合明确返回空结果，不再生成无效 IN SQL。新增内部 `selectFeatureList`，仅选择有效人员 id/img_id/extract，排除空特征。返回部分填充实体，不用于展示人员资料。
+- Bo 使用 AddGroup/EditGroup 与 MapStruct-Plus；新增不得自带 ID，编辑需 Long ID；姓名、图片编号/地址、字段长度、非负年龄和性别 0..2 校验与列定义对应。特征由后续识别服务生成，Bo 转实体后不能直接当完整记录保存。
+- `script/sql/nla_face.sql` 为**新库初始化**脚本：仅 `create table if not exists`，不 drop、不导入旧测试数据、不预置菜单；显式 utf8mb4 / `utf8mb4_cs_0900_ai_ci`。保留旧图片编号无唯一约束的语义，增加 `(img_id, del_flag)` 普通索引；重复图片编号的业务处理留阶段 6.4。已有旧表不自动升级，外部数据库脚本未执行。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `PersonDataContractTest` **9/9 通过，0 跳过，BUILD SUCCESS，MVN_EXIT=0**；实际解析交付 Mapper XML 并在 H2 2.4.240 MySQL 模式执行 SQL，覆盖雪花 ID、审计填充、超过 256 字符的特征持久化、普通读取不带特征、参数绑定与空集合、逻辑删除保留物理行并过滤全部读取、更新保留特征/创建审计、内部特征查询、生成映射/中文 JSON、校验分组、数据库非空/列长约束。日志 `.migration/test-face-data.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **47/47 模块 BUILD SUCCESS，MVN_EXIT=0**；模块 reactor 集成已验。日志 `.migration/build-face-data-reactor.log`。
+- 编译依赖树检查：Boot4 / Spring7、MyBatis-Plus 3.5.17、MyBatis 3.5.19、MapStruct-Plus 1.5.3；H2 仅 test，未依赖旧 starter/cloud 或 JNI。仅在新模块 MyBatis 依赖边界排除 Redis/lock4j 间接引入的 Boot2 AOP starter，沿用 common-core 的 Boot4 AspectJ；基线 MyBatis/Redis 模块未改。日志 `.migration/deps-face-data.log`。
+- 12 份交付文本 UTF-8 严格往返通过，实体列与 DDL 审计列对齐，无旧 Java 包/Swagger2/javax/Date/尾随空白，`git diff --check` 通过。
+
+**范围与剩余验收**：H2 测试只剥离 MySQL 表级引擎/字符集/排序规则/行格式选项，不代表真实 MySQL 排序规则和索引性能验收；固定测试审计填充器不代表生产登录态/权限验收。阶段 4 已开始但未整体完成，后续 video 12 表 / fs 41 表仍待重写；阶段 6.4 的识别、特征缓存、图片输入、业务鉴权和管理接口仍待迁移。
+
+---
+
 ## 5. starter → nla-common 映射
 
 旧 `spring-boot-starter` 21 个子模块共 744 Java 文件。
@@ -593,7 +617,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 基线覆盖复核后**仅 `sys_area` 需迁**（mini/mini_user→`sys_social`+`sys_user`、user_set→`sys_user.status`+超管角色，不新建）；老数据丢弃、流B 数据迁移取消；表映射见下，交付见 6.1.1 | ✅ 完成 |
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
-| 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**前置 `nla-common-facesdk` 已就绪（见 5.1.3）** | 待推进（前置已解除） |
+| 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | 业务待推进（数据层已就绪） |
 | 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2）**；`video.MediaServer` 与 `fs.MediaServer` **同名不同表**，需消歧 | 待推进（前置已解除） |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1）** | 待推进（前置已解除） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
@@ -662,8 +686,8 @@ bean 独有表初判 4 张（`bean_user_set`/`bean_mini`/`bean_mini_user`/`sys_a
 - **沿用不变的铁律**：
   - 缓存刷新 `@TransactionalEventListener(AFTER_COMMIT)` + 定向刷新 + 禁 `delAll()`
   - 写操作 `@Transactional(rollbackFor = Exception.class)`
-  - 物理删除前引用校验（`return R.fail("请先删除xxx")`）
-  - 无逻辑删除、不建物理外键
+  - 删除前引用校验（采用 §4.3 逻辑删除仍保留，`return R.fail("请先删除xxx")`）
+  - 业务表按 §4.3 使用 String delFlag 逻辑删除，不建物理外键
   - 密码/密钥只写不读；手机号脱敏
 
 ### 6.4 `oa` 废弃决策（批次 6.2 终止）
@@ -1165,7 +1189,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | ⬜ 未开始 | 实体 + Bo/Vo + DDL + 91 个 Mapper XML |
+| **4** | 数据层重写 | 🟡 首批完成 | `nla-face` 的 Person + Bo/Vo + Mapper/XML + DDL 已落地（见 4.4），9 项数据契约测试全通过，全工程 47/47 编译 GREEN；其余数据层和真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
@@ -1212,6 +1236,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 4. **阶段 5 的鉴权模型变更引入了原项目没有的能力** ——
    项目铁律 `gaps-and-fs-tables.md` 明确"方法级权限注解不存在"，而基线用 `@SaCheckPermission`。
    这是已明示的架构基线变更，不是违反铁律，但迁移时需同步更新铁律文档。
+5. **已迁短信数据层的删除标志仍需统一** —— 本轮核对发现 `SmsConfig.delFlag` 为 Long，
+   `nla_message.sql` 的配置/模板表列也为 bigint，与 §4.3 的 String/char(1) 约定不一致。
+   Person 首批已按新约定落实；短信数据层校正留阶段 4 后续，未在本轮改动短信业务。
 
 ---
 

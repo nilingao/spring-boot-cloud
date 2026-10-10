@@ -23,6 +23,7 @@
         <module>nla-workflow</module>
         <module>nla-ai</module>
         <module>nla-message</module>
+        <module>nla-face</module>
     </modules>
 
 </project>

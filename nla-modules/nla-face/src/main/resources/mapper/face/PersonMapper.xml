@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.face.mapper.PersonMapper">
+    <resultMap id="PersonResultMap" type="cn.com.nla.face.domain.Person">
+        <id column="id" property="id"/>
+        <result column="img_id" property="imgId"/>
+        <result column="img_url" property="imgUrl"/>
+        <result column="extract" property="extract"/>
+        <result column="person_name" property="personName"/>
+        <result column="person_age" property="personAge"/>
+        <result column="gender" property="gender"/>
+        <result column="address" property="address"/>
+        <result column="create_dept" property="createDept"/>
+        <result column="create_by" property="createBy"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_by" property="updateBy"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="del_flag" property="delFlag"/>
+    </resultMap>
+
+    <sql id="PersonColumns">
+        id, img_id, img_url, person_name, person_age, gender, address,
+        create_dept, create_by, create_time, update_by, update_time, del_flag
+    </sql>
+
+    <select id="selectImgIdList" resultMap="PersonResultMap">
+        select <include refid="PersonColumns"/> from face_person
+        where del_flag = '0'
+        <choose>
+            <when test="imgIdList != null and imgIdList.size() > 0">
+                and img_id in
+                <foreach collection="imgIdList" item="imgId" open="(" close=")" separator=",">
+                    #{imgId}
+                </foreach>
+            </when>
+            <otherwise>and 1 = 0</otherwise>
+        </choose>
+        order by id
+    </select>
+
+    <select id="selectFeatureList" resultMap="PersonResultMap">
+        select id, img_id, `extract` from face_person
+        where del_flag = '0' and `extract` is not null and `extract` &lt;&gt; ''
+        order by id
+    </select>
+</mapper>
