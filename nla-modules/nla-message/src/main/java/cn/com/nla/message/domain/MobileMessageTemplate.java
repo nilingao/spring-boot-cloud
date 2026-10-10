@@ -67,9 +67,9 @@ public class MobileMessageTemplate extends BaseEntity {
     private String variable;
 
     /**
-     * 删除标志
+     * 删除标志（0存在 1删除）
      */
-    @TableLogic
-    private Long delFlag;
+    @TableLogic(value = "0", delval = "1")
+    private String delFlag;
 
 }

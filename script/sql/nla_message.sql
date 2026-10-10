@@ -1,7 +1,8 @@
 -- ----------------------------
 -- nla-message 短信模块建表脚本
 -- 表驱动短信：渠道配置(sms_sms_config) + 模板(sms_mobile_message_template) + 发送记录(sms_mobile_message)
--- 约定：主键雪花(ASSIGN_ID)、审计字段自动填充、逻辑删除 del_flag(0存在 1删除，发送记录为追加型不做逻辑删除)
+-- 约定：主键雪花(ASSIGN_ID)、审计字段自动填充、String delFlag / char(1)(0存在 1删除，发送记录为追加型不做逻辑删除)
+-- 字符集/排序规则：显式 utf8mb4 / utf8mb4_cs_0900_ai_ci，与阶段4数据层约定一致
 -- 说明：渠道类型 sms_type=2(创蓝网)已废弃；新增 app_id 列承载腾讯云 sdkAppId / 容联云通讯 appId（替代旧硬编码常量）
 -- 初始化：三表不预置数据，需在管理端「短信渠道配置」录入真实账号并配置模板后方可发送
 -- ----------------------------
@@ -21,7 +22,7 @@ create table sms_sms_config (
     is_active         int(1)          default 1                  comment '是否启用（0停用 1启用）',
     sign              varchar(100)    default ''                 comment '签名',
     sign_place        int(1)          default 1                  comment '签名位置（1左边 2右边）',
-    del_flag          bigint(20)      default 0                  comment '删除标志（0代表存在 1代表删除）',
+    del_flag          char(1)         not null default '0'       comment '删除标志（0代表存在 1代表删除）',
     create_dept       bigint(20)      default null               comment '创建部门',
     create_by         bigint(20)      default null               comment '创建者',
     create_time       datetime                                   comment '创建时间',
@@ -30,7 +31,7 @@ create table sms_sms_config (
     primary key (id),
     key idx_sms_config_type   (sms_type),
     key idx_sms_config_active (is_active)
-) engine=innodb comment = '短信渠道配置表';
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_cs_0900_ai_ci comment = '短信渠道配置表';
 
 
 -- ----------------------------
@@ -46,7 +47,7 @@ create table sms_mobile_message_template (
     content           varchar(500)    default ''                 comment '内容（含变量占位）',
     receiver          varchar(255)    default ''                 comment '接收人',
     variable          varchar(1000)   default null               comment '变量定义（JSON）',
-    del_flag          bigint(20)      default 0                  comment '删除标志（0代表存在 1代表删除）',
+    del_flag          char(1)         not null default '0'       comment '删除标志（0代表存在 1代表删除）',
     create_dept       bigint(20)      default null               comment '创建部门',
     create_by         bigint(20)      default null               comment '创建者',
     create_time       datetime                                   comment '创建时间',
@@ -55,7 +56,7 @@ create table sms_mobile_message_template (
     primary key (id),
     key idx_sms_template_config (config_id),
     key idx_sms_template_type   (type)
-) engine=innodb comment = '短信模板表';
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_cs_0900_ai_ci comment = '短信模板表';
 
 
 -- ----------------------------
@@ -84,7 +85,7 @@ create table sms_mobile_message (
     key idx_sms_message_mobile (mobile),
     key idx_sms_message_type   (type),
     key idx_sms_message_ct     (create_time)
-) engine=innodb comment = '短信发送记录表';
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_cs_0900_ai_ci comment = '短信发送记录表';
 
 
 -- ----------------------------

@@ -83,6 +83,25 @@
             <artifactId>nla-common-sensitive</artifactId>
         </dependency>
 
+        <!-- 数据层契约测试，不进入应用运行时依赖 -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../script/sql</directory>
+                <includes><include>nla_message.sql</include></includes>
+                <filtering>false</filtering>
+            </testResource>
+        </testResources>
+    </build>
 
 </project>

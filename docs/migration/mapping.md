@@ -394,6 +394,27 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ---
 
+### 4.5 短信数据层删除标志校正（已落地）
+
+核对已迁 `nla-message` 时发现 SmsConfig / MobileMessageTemplate 的 `Long delFlag` 与 §4.3 的 String/char(1) 约定不一致。本轮已修正两张实体及初始化 DDL；说明和已有表升级检查示例见 [`nla-message/README.md`](../../nla-modules/nla-message/README.md)。
+
+**改动与兼容边界**：
+
+- 两张实体改为 **String delFlag**，显式 `@TableLogic(value="0", delval="1")`；DDL 两列改为 **char(1) not null default '0'**。Bo/Vo 未暴露删除标志，管理接口字段不变。
+- 短信三张表的初始化 DDL 补齐显式 **utf8mb4 / utf8mb4_cs_0900_ai_ci**，符合阶段 4 约定。菜单/角色授权种子、其他列定义及业务发送路径未改。
+- `MobileMessage` 仍是追加型发送记录，不新增 delFlag，保留物理删除。渠道/模板逻辑删除后保留物理行，删除前有效模板引用校验继续生效。
+- 初始化脚本原有 drop 和种子语句保留，本轮未向外部数据库执行脚本。已有表须先核对 0/1/null 值和 schema，再以独立列升级方式处理；重新初始化不能代替数据库升级。
+
+**验证（2026-10-10，Windows / JDK21）**：
+
+- `mvn -o -B -pl nla-modules/nla-message -am -Dtest=SmsDataContractTest -Dsurefire.failIfNoSpecifiedTests=false test` → **8/8 通过，0 跳过，BUILD SUCCESS，MVN_EXIT=0**。实际加载交付 DDL 的三张表，在 H2 2.4.240 MySQL 模式执行真实 Mapper 与业务查询：String/char(1) 默认值与非空列定义、供应商读取排除删除渠道、删除最新模板后的回退、可用渠道排除删除模板/渠道和停用项、删除前引用校验及定向注销、批量逻辑删除/分页计数、更新与重复删除不恢复删除项、发送记录物理删除。只将注销回调 mock，不创建供应商客户端或发送短信。日志 `.migration/test-sms-data.log`。
+- 根工程 `mvn -o -B -DskipTests compile` → **47/47 模块 BUILD SUCCESS，MVN_EXIT=0**；实体类型变更与 admin 依赖编译通过。日志 `.migration/build-sms-data-reactor.log`。
+- H2 仅 test 依赖；测试资源引用交付 DDL，不另维护一份建表定义。7 份交付文本严格 UTF-8 往返通过，两个删除字段与 DDL 类型对齐，菜单/角色种子保持一致，`git diff --check` 通过。
+
+**剩余验收**：H2 剥离 MySQL 表级引擎/字符集/排序规则选项，不执行 drop 或菜单种子。真实 MySQL 列转换与排序规则、完整应用启动、Redis 与供应商发送联调未执行；短信发送入口仍按 §6.6.1 待定。阶段 4 后续 video 12 表 / fs 41 表待重写。
+
+---
+
 ## 5. starter → nla-common 映射
 
 旧 `spring-boot-starter` 21 个子模块共 744 Java 文件。
@@ -852,7 +873,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 - 三表管理 CRUD `I*Service`+`*ServiceImpl`+`*Controller`：`SmsConfig` 写后定向 `refresh`/`remove` 通道、`password` 只写不读（编辑留空保持原值，依赖 `updateStrategy=NOT_NULL`）；`MobileMessage` 记录型仅 list/export/remove/clean（无 add/edit）；URL `/sms/{config,template,record}`，权限 `sms:{config,template,record}:*`；
 - 表驱动主链 `sms/`：`DbSmsReadConfig`(implements sms4j `SmsReadConfig`，实时读 `sms_sms_config`) + `SmsChannelManager`(`@EventListener(ApplicationReadyEvent)` 初始化 + `refresh`/`remove`/`refreshAll` 定向热更，对齐"AFTER_COMMIT 定向刷新、禁 delAll") + `SmsSendManager`(选活跃且含该 type 模板的渠道、随机负载 + 故障转移、落 `sms_mobile_message`) + `SmsSendResult` + `SmsSendBo` + `SmsChannelEnum`/`SmsConstant`。
 
-**DDL** `script/sql/nla_message.sql`：三表，雪花主键无 `auto_increment`、审计 5 列；`sms_sms_config`/`sms_mobile_message_template` 带 `del_flag bigint` 逻辑删除，`sms_mobile_message` 追加型物理删除；`sms_sms_config` 新增 `app_id` 列承载腾讯云 sdkAppId / 容联云 appId；创蓝网 `sms_type=2` 空位保留不复用。
+**DDL** `script/sql/nla_message.sql`：三表，雪花主键无 `auto_increment`、审计 5 列；`sms_sms_config`/`sms_mobile_message_template` 使用 `String delFlag` / `del_flag char(1)` 逻辑删除（阶段 4 已校正，见 4.5），`sms_mobile_message` 追加型物理删除；三表显式 utf8mb4 / `utf8mb4_cs_0900_ai_ci`；`sms_sms_config` 新增 `app_id` 列承载腾讯云 sdkAppId / 容联云 appId；创蓝网 `sms_type=2` 空位保留不复用。
 
 **收尾增量（本轮补齐 2 项，`nla-message -am` 编译 `MVN_EXIT=0`）**：
 - **菜单权限 SQL 已生成**：`script/sql/nla_message.sql` 追加「短信管理」目录 + 3 菜单（渠道配置/短信模板/发送记录）+ 12 按钮 + 16 条 `sys_role_menu` 授权；`menu_id` 用 `1761400000000002000` 独立号段（现有菜单最大 `1761400000000001623`，job/ai/workflow 无 `sys_menu` 插入，无冲突）；perms 与 3 controller 的 `@SaCheckPermission` 逐一对齐（config/template 各 list+query+add+edit+remove+export，record 仅 list+export+remove）；超级管理员自动可见，普通角色 `1761300000000000003` 按种子约定授权。前端 Vue 页面（`sms/{config,template,record}/index`）由独立前端任务线补齐，不影响后端鉴权。
@@ -1189,7 +1210,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 首批完成 | `nla-face` 的 Person + Bo/Vo + Mapper/XML + DDL 已落地（见 4.4），9 项数据契约测试全通过，全工程 47/47 编译 GREEN；其余数据层和真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 数据层已落地（见 4.4，9 项测试），短信 String/char(1) 删除标志及排序规则已校正（见 4.5，8 项测试）；全工程 47/47 编译 GREEN；video/fs 数据层和真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | ⬜ 未开始 | OAuth2 → Sa-Token 重写；网关集中鉴权 → 注解式鉴权（**引入原项目没有的方法级权限注解，属架构基线变更**） |
 | **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
@@ -1236,9 +1257,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 4. **阶段 5 的鉴权模型变更引入了原项目没有的能力** ——
    项目铁律 `gaps-and-fs-tables.md` 明确"方法级权限注解不存在"，而基线用 `@SaCheckPermission`。
    这是已明示的架构基线变更，不是违反铁律，但迁移时需同步更新铁律文档。
-5. **已迁短信数据层的删除标志仍需统一** —— 本轮核对发现 `SmsConfig.delFlag` 为 Long，
-   `nla_message.sql` 的配置/模板表列也为 bigint，与 §4.3 的 String/char(1) 约定不一致。
-   Person 首批已按新约定落实；短信数据层校正留阶段 4 后续，未在本轮改动短信业务。
+5. **短信数据层删除标志不一致已修正** —— SmsConfig / MobileMessageTemplate 已统一为
+   String delFlag，DDL 为 char(1)，8 项数据契约测试通过（见 4.5）。已有数据库的列升级
+   和排序规则验收尚未执行，不能用初始化脚本重跑代替升级。
 
 ---
 
