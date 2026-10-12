@@ -4,6 +4,7 @@ import cn.com.nla.web.service.WechatMiniClient;
 import cn.com.nla.system.service.SysXcxBindingService;
 
 import cn.com.nla.common.core.domain.R;
+import cn.com.nla.common.core.exception.ServiceException;
 import cn.com.nla.common.core.utils.SpringUtils;
 import cn.com.nla.common.satoken.core.service.SaPermissionImpl;
 import cn.com.nla.common.satoken.handler.SaTokenExceptionHandler;
@@ -64,8 +65,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
@@ -360,6 +363,44 @@ class AuthSecurityContractTest {
     }
 
     @Test
+    void xcxProfileRequiresXcxSessionMatchingAppidAndUpdatesOnlyPresentFields() throws Exception {
+        var props = context.getBean(cn.com.nla.web.config.properties.XcxProperties.class);
+        var userService = context.getBean(cn.com.nla.system.service.ISysUserService.class);
+        String body = "{\"appid\":\"wx0123456789abcdef\",\"nickName\":\"Nick\"}";
+        try {
+            assertEquals(401, responseCode(post("/auth/xcx/profile").contentType("application/json").content(body)));
+            // 普通密码会话（无 appid）不能调用资料授权。
+            assertEquals(500, responseCode(authenticated(post("/auth/xcx/profile"), token(Set.of()))
+                .contentType("application/json").content(body)));
+            String xcxToken = xcxToken("wx0123456789abcdef");
+            // xcx 会话但 app 未配置；以及请求 appid 与会话不一致。
+            assertEquals(500, responseCode(authenticated(post("/auth/xcx/profile"), xcxToken)
+                .contentType("application/json").content(body)));
+            assertEquals(500, responseCode(authenticated(post("/auth/xcx/profile"), xcxToken)
+                .contentType("application/json").content("{\"appid\":\"wxfedcba9876543210\",\"nickName\":\"Nick\"}")));
+            props.setEnabled(true);
+            var app = new cn.com.nla.web.config.properties.XcxProperties.App();
+            app.setSecret("test-secret");
+            props.getApps().put("wx0123456789abcdef", app);
+            assertEquals(200, responseCode(authenticated(post("/auth/xcx/profile"), xcxToken)
+                .contentType("application/json").content(body)));
+            var captor = org.mockito.ArgumentCaptor.forClass(cn.com.nla.system.domain.bo.SysUserBo.class);
+            verify(userService).updateUserProfile(captor.capture());
+            assertEquals(9_007_199_254_740_993L, captor.getValue().getUserId());
+            assertEquals("Nick", captor.getValue().getNickName());
+            assertNull(captor.getValue().getAvatar());
+            assertNull(captor.getValue().getPhoneNumber());
+            // 全空字段拒绝，不发起空 SET 更新。
+            assertEquals(500, responseCode(authenticated(post("/auth/xcx/profile"), xcxToken)
+                .contentType("application/json").content("{\"appid\":\"wx0123456789abcdef\"}")));
+            verify(userService, org.mockito.Mockito.times(1)).updateUserProfile(any());
+        } finally {
+            props.setEnabled(false); props.getApps().clear();
+            org.mockito.Mockito.reset(userService);
+        }
+    }
+
+    @Test
     void qrPublicCreationAndPossessionPollingAreMethodScopedAndNeverReturnJwt() throws Exception {
         var qr = context.getBean(cn.com.nla.web.service.QrLoginService.class);
         String scene = "0123456789abcdef0123456789abcdef";
@@ -425,13 +466,30 @@ class AuthSecurityContractTest {
     }
 
     private String issueInBoundRequest(SaLoginParameter parameters, Set<String> permissions, Set<String> roles) {
+        return issueInBoundRequest(parameters, permissions, roles, null);
+    }
+
+    /** 签发携带小程序 appid 的会话 token，用于 /auth/xcx/* 端点测试。 */
+    private String xcxToken(String appid) {
+        return issueInBoundRequest(IAuthStrategy.buildLoginParameter(client), Set.of(), Set.of(), appid);
+    }
+
+    private String issueInBoundRequest(SaLoginParameter parameters, Set<String> permissions, Set<String> roles, String appid) {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest(), new MockHttpServletResponse()));
-        try { return issueToken(parameters, permissions, roles); }
+        try { return issueToken(parameters, permissions, roles, appid); }
         finally { RequestContextHolder.resetRequestAttributes(); }
     }
 
     private String issueToken(SaLoginParameter parameters, Set<String> permissions, Set<String> roles) {
-        LoginUser user = new LoginUser(); user.setUserType("sys_user"); user.setUserId(9_007_199_254_740_993L);
+        return issueToken(parameters, permissions, roles, null);
+    }
+
+    private String issueToken(SaLoginParameter parameters, Set<String> permissions, Set<String> roles, String appid) {
+        LoginUser user = appid == null ? new LoginUser() : new cn.com.nla.system.api.model.XcxLoginUser();
+        if (user instanceof cn.com.nla.system.api.model.XcxLoginUser xcx) {
+            xcx.setAppid(appid); xcx.setOpenid("contract-openid");
+        }
+        user.setUserType("sys_user"); user.setUserId(9_007_199_254_740_993L);
         user.setUsername("contract-user"); user.setDeptId(9_007_199_254_740_999L);
         user.setMenuPermission(permissions); user.setRolePermission(roles);
         user.setIpaddr("127.0.0.1"); user.setLoginLocation("test"); user.setBrowser("test"); user.setOs("test");
@@ -467,6 +525,7 @@ class AuthSecurityContractTest {
             var messages = new ResourceBundleMessageSource(); messages.setBasename("i18n/messages"); return messages;
         }
         @Bean SaTokenExceptionHandler tokenExceptionHandler() { return new SaTokenExceptionHandler(); }
+        @Bean ServiceExceptionAdvice serviceExceptionAdvice() { return new ServiceExceptionAdvice(); }
         @Bean ContractController contractController() { return new ContractController(); }
         @Bean ISysClientService clientService() { return mock(ISysClientService.class); }
         @Bean ISysSocialService socialService() { return mock(ISysSocialService.class); }
@@ -488,6 +547,13 @@ class AuthSecurityContractTest {
             return new AuthController(new SocialProperties(), mock(SysLoginService.class), mock(SysRegisterService.class),
                 mock(ISysConfigService.class), social, clients, scheduler, mock(MessageService.class));
         }
+    }
+
+    /** 镜像生产 GlobalExceptionHandler 对业务异常的映射；不引入 RuntimeException 兜底，避免与 Sa-Token 401/403 处理器争抢顺序。 */
+    @RestControllerAdvice
+    static class ServiceExceptionAdvice {
+        @ExceptionHandler(ServiceException.class)
+        R<Void> handleServiceException(ServiceException e) { return R.fail(e.getMessage()); }
     }
 
     @RestController

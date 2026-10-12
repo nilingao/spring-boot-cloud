@@ -30,5 +30,7 @@ public class XcxProperties {
         private List<String> qrClientIds = List.of();
         private String qrPage;
         private String qrEnvVersion = "release";
+        /** 小程序登录未绑定身份时自动注册系统账号，默认关闭。 */
+        private boolean autoRegister;
     }
 }

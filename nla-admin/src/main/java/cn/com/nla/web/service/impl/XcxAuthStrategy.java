@@ -15,6 +15,7 @@ import cn.com.nla.system.api.model.XcxLoginUser;
 import cn.com.nla.system.domain.vo.SysClientVo;
 import cn.com.nla.system.mapper.SysUserMapper;
 import cn.com.nla.system.service.SysXcxBindingService;
+import cn.com.nla.web.config.properties.XcxProperties;
 import cn.com.nla.web.domain.vo.LoginVo;
 import cn.com.nla.web.service.IAuthStrategy;
 import cn.com.nla.web.service.SysLoginService;
@@ -35,6 +36,7 @@ public class XcxAuthStrategy implements IAuthStrategy {
     private final WechatMiniClient wechatMiniClient;
     private final SysXcxBindingService bindingService;
     private final SysUserMapper userMapper;
+    private final XcxProperties xcxProperties;
 
     /**
      * 执行微信小程序登录，并根据 openid 构建小程序用户登录态。
@@ -48,7 +50,12 @@ public class XcxAuthStrategy implements IAuthStrategy {
         XcxLoginBody loginBody = JsonUtils.parseObject(body, XcxLoginBody.class);
         ValidatorUtils.validate(loginBody);
         var identity = wechatMiniClient.exchange(loginBody.getAppid(), loginBody.getXcxCode(), client.getClientId());
-        Long userId = bindingService.findUserId(identity.appid(), identity.openid());
+        // exchange 已校验 app 启用/密钥/客户端白名单；此处只读自动注册开关。
+        var app = xcxProperties.getApps() == null ? null : xcxProperties.getApps().get(identity.appid());
+        Long userId = app != null && app.isAutoRegister()
+            // 未绑定身份时自动注册；损坏/歧义绑定仍拒绝，不被自动覆盖。
+            ? bindingService.autoRegister(identity.appid(), identity.openid(), identity.unionId())
+            : bindingService.findUserId(identity.appid(), identity.openid());
         var user = userMapper.selectVoById(userId);
         if (user == null) { throw new UserException("user.not.exists", userId); }
         if (SystemConstants.DISABLE.equals(user.getStatus())) { throw new UserException("user.blocked", userId); }

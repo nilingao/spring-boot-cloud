@@ -513,11 +513,25 @@ class LoginStrategyContractTest {
     }
 
     private XcxAuthStrategy prepareXcx(WechatMiniClient provider, SysXcxBindingService bindings) {
+        return prepareXcx(provider, bindings, new XcxProperties());
+    }
+
+    private XcxAuthStrategy prepareXcx(WechatMiniClient provider, SysXcxBindingService bindings, XcxProperties properties) {
         when(provider.exchange("wx0123456789abcdef", "wx-code", "web-client"))
             .thenReturn(new WechatMiniClient.Identity("wx0123456789abcdef", "verified-openid", null));
         when(bindings.findUserId("wx0123456789abcdef", "verified-openid")).thenReturn(USER_ID);
         when(users.selectVoById(USER_ID)).thenAnswer(call -> user);
-        return new XcxAuthStrategy(loginService, provider, bindings, users);
+        return new XcxAuthStrategy(loginService, provider, bindings, users, properties);
+    }
+
+    /** 只对目标 app 开启自动注册的配置。 */
+    private XcxProperties autoRegisterProperties() {
+        var properties = new XcxProperties();
+        properties.setEnabled(true);
+        var app = new XcxProperties.App();
+        app.setAutoRegister(true);
+        properties.getApps().put("wx0123456789abcdef", app);
+        return properties;
     }
 
     private String xcxBody() {
@@ -539,6 +553,35 @@ class LoginStrategyContractTest {
         assertEquals("verified-openid", session.getOpenid());
         assertEquals("verified-openid", view.getOpenid());
         verify(loginService).buildLoginUser(user);
+        // 默认配置下自动注册开关关闭，只能走已有绑定查询。
+        verify(bindings, never()).autoRegister(anyString(), anyString(), any());
+    }
+
+    @Test
+    void autoRegisteredIdentityLogsInWithFreshAccountWhenEnabled() {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = prepareXcx(provider, bindings, autoRegisterProperties());
+        long autoUserId = USER_ID + 7;
+        when(bindings.autoRegister("wx0123456789abcdef", "verified-openid", null)).thenReturn(autoUserId);
+        when(users.selectVoById(autoUserId)).thenAnswer(call -> user);
+        var view = strategy.login(xcxBody(), client);
+        assertSession(view);
+        verify(bindings).autoRegister("wx0123456789abcdef", "verified-openid", null);
+        verify(bindings, never()).findUserId(anyString(), anyString());
+        XcxLoginUser session = LoginHelper.getLoginUser(view.getAccessToken());
+        assertEquals("verified-openid", session.getOpenid());
+    }
+
+    @Test
+    void autoRegisterRejectionDoesNotBuildSession() {
+        var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
+        var strategy = prepareXcx(provider, bindings, autoRegisterProperties());
+        // 损坏/歧义绑定在 autoRegister 内部仍拒绝，不能被自动覆盖。
+        when(bindings.autoRegister(anyString(), anyString(), isNull()))
+            .thenThrow(new ServiceException("damaged binding"));
+        assertThrows(ServiceException.class, () -> strategy.login(xcxBody(), client));
+        assertFalse(StpUtil.isLogin());
+        verify(loginService, never()).buildLoginUser(any());
     }
 
     @ParameterizedTest
@@ -574,7 +617,7 @@ class LoginStrategyContractTest {
     @CsvSource({"appid,''", "appid,invalid", "xcxCode,''", "clientId,''", "grantType,''"})
     void invalidXcxInputCannotReachProvider(String field, String value) {
         var provider = mock(WechatMiniClient.class); var bindings = mock(SysXcxBindingService.class);
-        var strategy = new XcxAuthStrategy(loginService, provider, bindings, users);
+        var strategy = new XcxAuthStrategy(loginService, provider, bindings, users, new XcxProperties());
         var body = baseBody("xcx"); body.put("appid", "wx0123456789abcdef"); body.put("xcxCode", "wx-code");
         body.put(field, value);
         assertThrows(ConstraintViolationException.class, () -> strategy.login(JsonUtils.toJsonString(body), client));

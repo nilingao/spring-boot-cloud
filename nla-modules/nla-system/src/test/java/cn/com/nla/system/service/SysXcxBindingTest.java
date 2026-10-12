@@ -2,6 +2,8 @@ package cn.com.nla.system.service;
 
 import cn.com.nla.common.core.exception.ServiceException;
 import cn.com.nla.common.core.exception.user.UserException;
+import cn.com.nla.common.mybatis.core.mapper.LambdaCrudChainWrapper;
+import cn.com.nla.system.domain.SysUser;
 import cn.com.nla.system.domain.vo.SysUserVo;
 import cn.com.nla.system.mapper.SysSocialMapper;
 import cn.com.nla.system.mapper.SysUserMapper;
@@ -185,5 +187,116 @@ class SysXcxBindingTest {
         assertTrue(unlink.deleteByIdAndUserId(binding.getId(), OWNER));
         assertThrows(ServiceException.class, () -> service.findUserId(APP, "openid"));
         assertEquals(OWNER, service.findUserId(OTHER_APP, "openid"));
+    }
+
+    // ==================== 自动注册 ====================
+
+    private static final long NEW_USER = 9_223_372_036_854_775L;
+
+    /** 替身账号库：查重链按给定序列返回 exists 结果。 */
+    @SuppressWarnings("unchecked")
+    private LambdaCrudChainWrapper<SysUser, SysUserVo> stubUserNameLookup(boolean... exists) {
+        var chain = mock(LambdaCrudChainWrapper.class);
+        doReturn(chain).when(chain).eq(any(), any());
+        var stub = when(chain.exists());
+        for (boolean flag : exists) { stub = stub.thenReturn(flag); }
+        when(users.lambda()).thenReturn(chain);
+        return chain;
+    }
+
+    /** 替身 insert：模拟雪花主键回填。 */
+    private void stubInsertAssignId() {
+        when(users.insert(any(SysUser.class))).thenAnswer(call -> {
+            call.getArgument(0, SysUser.class).setUserId(NEW_USER);
+            return 1;
+        });
+    }
+
+    @Test
+    void autoRegisterCreatesAccountWithScopedBindingAndRandomPassword() {
+        stubUserNameLookup(false); stubInsertAssignId();
+        assertEquals(NEW_USER, service.autoRegister(APP, "openid", "union-1"));
+        var captor = org.mockito.ArgumentCaptor.forClass(SysUser.class);
+        verify(users).insert(captor.capture());
+        var created = captor.getValue();
+        assertEquals("微信用户", created.getNickName());
+        assertEquals("sys_user", created.getUserType());
+        assertEquals(0L, created.getCreateBy());
+        assertTrue(created.getUserName().matches("m[0-9a-zA-Z]{16}"));
+        assertNotNull(created.getPassword());
+        assertNotEquals(created.getUserName(), created.getPassword());
+        assertTrue(created.getPassword().startsWith("$2"));
+        assertEquals(NEW_USER, service.findUserId(APP, "openid"));
+        var binding = social.selectList(null).getFirst();
+        assertEquals(SysXcxBindingService.authId(APP, "openid"), binding.getAuthId());
+        assertEquals("union-1", binding.getUnionId());
+    }
+
+    @Test
+    void autoRegisterWithExistingValidBindingIsIdempotent() {
+        service.bind(OWNER, APP, "openid", null);
+        assertEquals(OWNER, service.autoRegister(APP, "openid", null));
+        verify(users, never()).insert(any(SysUser.class));
+        assertEquals(1, social.selectList(null).size());
+    }
+
+    @Test
+    void autoRegisterRefusesDamagedBindingsWithoutCreatingAccount() throws Exception {
+        service.bind(OWNER, APP, "openid", null);
+        var binding = social.selectList(null).getFirst();
+        try (var connection = database.getConnection(); var statement = connection.prepareStatement(
+            "insert into sys_social(id,user_id,source,open_id,auth_id,user_name,access_token) values(?,?,?,?,?,'other','')")) {
+            statement.setLong(1, binding.getId() + 1); statement.setLong(2, OWNER + 1);
+            statement.setString(3, binding.getSource()); statement.setString(4, "openid"); statement.setString(5, binding.getAuthId());
+            statement.executeUpdate();
+        }
+        session.clearCache();
+        assertThrows(ServiceException.class, () -> service.autoRegister(APP, "openid", null));
+        verify(users, never()).insert(any(SysUser.class));
+    }
+
+    @Test
+    void autoRegisterAfterBrokenAuthIdBindingIsRefused() throws Exception {
+        service.bind(OWNER, APP, "openid", null);
+        try (var connection = database.getConnection(); var statement = connection.createStatement()) {
+            statement.executeUpdate("update sys_social set auth_id='broken-auth-id'");
+        }
+        assertThrows(ServiceException.class, () -> service.autoRegister(APP, "openid", null));
+        verify(users, never()).insert(any(SysUser.class));
+    }
+
+    @Test
+    void autoRegisterAfterLogicalUnlinkCreatesFreshAccount() throws Exception {
+        service.bind(OWNER, APP, "openid", null);
+        try (var connection = database.getConnection(); var statement = connection.createStatement()) {
+            statement.executeUpdate("update sys_social set del_flag='1'");
+        }
+        session.clearCache();
+        stubUserNameLookup(false); stubInsertAssignId();
+        assertEquals(NEW_USER, service.autoRegister(APP, "openid", null));
+        assertEquals(NEW_USER, service.findUserId(APP, "openid"));
+        assertEquals(2, social.selectList(null).size());
+    }
+
+    @Test
+    void autoRegisterRetriesWhenGeneratedUserNameCollides() {
+        var chain = stubUserNameLookup(true, false); stubInsertAssignId();
+        assertEquals(NEW_USER, service.autoRegister(APP, "openid", null));
+        verify(chain, times(2)).exists();
+        verify(users).insert(any(SysUser.class));
+    }
+
+    @Test
+    void autoRegisterGivesUpWhenEveryUserNameCandidateCollides() {
+        stubUserNameLookup(true, true, true);
+        assertThrows(ServiceException.class, () -> service.autoRegister(APP, "openid", null));
+        verify(users, never()).insert(any(SysUser.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not-an-appid|openid", "wx0123456789abcdef|openid!"})
+    void autoRegisterRejectsInvalidIdentity(String raw) {
+        String[] parts = raw.split("\\|", 2);
+        assertThrows(ServiceException.class, () -> service.autoRegister(parts[0], parts[1], null));
     }
 }

@@ -1,11 +1,15 @@
 package cn.com.nla.system.service;
 
 import cn.com.nla.common.core.constant.SystemConstants;
+import cn.com.nla.common.core.enums.UserType;
 import cn.com.nla.common.core.exception.ServiceException;
 import cn.com.nla.common.core.exception.user.UserException;
 import cn.com.nla.system.domain.SysSocial;
+import cn.com.nla.system.domain.SysUser;
 import cn.com.nla.system.mapper.SysSocialMapper;
 import cn.com.nla.system.mapper.SysUserMapper;
+import cn.hutool.core.util.RandomUtil;
+import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.lock.annotation.Lock4j;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/** 使用 sys_social 保存按 appid 隔离的小程序绑定；不自动注册或重建旧 mini 表。 */
+/** 使用 sys_social 保存按 appid 隔离的小程序绑定；自动注册仅在配置开启时创建新账号，不重建旧 mini 表。 */
 @Service
 @RequiredArgsConstructor
 public class SysXcxBindingService {
@@ -73,6 +77,50 @@ public class SysXcxBindingService {
         // 表中 access_token 非空；小程序 session_key 不作为 OAuth token 持久化。
         binding.setAccessToken("");
         if (socialMapper.insert(binding) != 1) { throw new ServiceException("小程序绑定保存失败"); }
+    }
+
+    /**
+     * 自动注册：未绑定身份时创建系统账号并绑定；同 appid 串行，锁内双检。
+     * 已存在唯一有效绑定时幂等返回；损坏/歧义绑定不覆盖，仍拒绝。
+     * 创建账号与写入绑定不在同一事务（与 {@link #bind} 同样的协作锁约束），
+     * 绑定写入失败可能遗留无绑定的孤立账号，重试只会新建不会误覆盖。
+     */
+    @Lock4j(keys = "#appid")
+    public Long autoRegister(String appid, String openid, String unionId) {
+        validateIdentity(appid, openid);
+        var bindings = findIdentity(appid, openid);
+        if (bindings.size() == 1 && bindings.getFirst().getUserId() != null
+            && authId(appid, openid).equals(bindings.getFirst().getAuthId())) {
+            return bindings.getFirst().getUserId();
+        }
+        if (!bindings.isEmpty()) {
+            throw new ServiceException("小程序绑定异常，不能自动注册，请先解绑或联系管理员");
+        }
+        SysUser user = new SysUser();
+        user.setUserName(generateUserName());
+        user.setNickName("微信用户");
+        user.setUserType(UserType.SYS_USER.getUserType());
+        // 随机不可重现密码：自动注册账号不能走密码登录，只能小程序身份认证。
+        user.setPassword(BCrypt.hashpw(RandomUtil.randomString(32)));
+        user.setCreateBy(0L);
+        user.setUpdateBy(0L);
+        if (userMapper.insert(user) != 1 || user.getUserId() == null) {
+            throw new ServiceException("小程序自动注册失败");
+        }
+        bind(user.getUserId(), appid, openid, unionId);
+        return user.getUserId();
+    }
+
+    /** 生成随机账号名并在库内查重，避免与存量账号碰撞。 */
+    private String generateUserName() {
+        for (int i = 0; i < 3; i++) {
+            String candidate = "m" + RandomUtil.randomString(16);
+            boolean exist = userMapper.lambda().eq(SysUser::getUserName, candidate).exists();
+            if (!exist) {
+                return candidate;
+            }
+        }
+        throw new ServiceException("小程序自动注册账号名生成失败，请重试");
     }
 
     private List<SysSocial> findIdentity(String appid, String openid) {
