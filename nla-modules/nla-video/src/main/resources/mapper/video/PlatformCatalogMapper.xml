@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.PlatformCatalogMapper">
+    <!-- 目录详情，附带子目录数量 -->
+    <select id="selectCatalogDetail" resultType="cn.com.nla.common.video.basic.vo.video.PlatformCatalogVo">
+        select cat.*,
+        (select count(1) from video_platform_catalog sub where sub.parent_id = cat.id and sub.del_flag = '0') as childrenCount
+        from video_platform_catalog cat
+        where cat.del_flag = '0'
+        and cat.id = #{id}
+    </select>
+
+    <!-- 目录列表伪装成通道节点，供上级平台目录树推送使用 -->
+    <select id="selectCatalogChannelListInPlatform" resultType="cn.com.nla.common.video.basic.vo.video.DeviceChannelVo">
+        select
+        cat.id as channelId,
+        cat.name as name,
+        cat.civil_code as civilCode,
+        cat.business_group_id as businessGroupId,
+        '1' as parental,
+        '2' as channelType,
+        cat.parent_id as parentId
+        from video_platform_catalog cat
+        where cat.del_flag = '0'
+        and cat.platform_id = #{serverGbId}
+    </select>
+</mapper>

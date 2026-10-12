@@ -417,7 +417,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ### 4.6 视频监控数据层：12 张表（已落地）
 
-新建 `nla-modules/nla-video`，登记业务 reactor 和根 POM 坐标管理，交付 **48 个主 Java 文件（12 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_video.sql`](../../script/sql/nla_video.sql)，模块说明见 [`nla-video/README.md`](../../nla-modules/nla-video/README.md)。旧源码/DDL 保留，不导入旧测试数据；未依赖协议封装、未接入 admin，Controller/Service/权限/菜单留阶段 6.5。
+新建 `nla-modules/nla-video`，登记业务 reactor 和根 POM 坐标管理，交付 **48 个主 Java 文件（12 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_video.sql`](../../script/sql/nla_video.sql)，模块说明见 [`nla-video/README.md`](../../nla-modules/nla-video/README.md)。旧源码/DDL 保留，不导入旧测试数据；当时未依赖协议封装、未接入 admin，Controller/Service/权限/菜单留阶段 6.5（**第一轮已落地，见 6.8**）。
 
 | 旧实体 / 表 | 新实体 / 主键 | 迁移约束 |
 |---|---|---|
@@ -552,7 +552,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - **HTTP 去 Forest 化**：ZLM 使用 Hutool GET，保留 HTTP/HTTPS、路径前缀、secret、查询参数编码与 10 秒超时；关闭 HTTP 响应，传输失败返回协议错误 code=2。移除旧工程 starter/cloud、Spring Data Redis、`javax.annotation` 和直接 Spring Web 引用；日志统一 SLF4J，JAIN-SIP 的旧 Log4j API 由 `log4j-over-slf4j` 桥接。
 - **Redis 改用既有 Redisson**：缓存基于 `RedisUtils`，`VideoCache` 补齐秒级 TTL、非正 TTL 永久保存、原子计数、hash/set/zset 操作。所有协议 Topic 保持 **`SerializationUtils.serialize(...)` → `byte[]` → 接收方反序列化一次** 的跨模块契约。
 - **异步与订阅**：`VideoRestResult<T>` 改为 `CompletableFuture<T>`，超时回调惰性求值；回调按 key/id 隔离并在完成/超时后清理。每节点只监听一个回调 Topic；Hook 按类型共享订阅并按字段过滤，删除/续期按 HookKey 身份操作，过期时间不参与 hash identity；SIP 成功/错误及录像查询订阅在完成、替换和关闭时释放。动态调度线程池随上下文关闭。
-- **模型与消费方 SPI**：业务 DTO 时间转 `LocalDateTime`，SIP 日期编码与 Hook 过期计时保留 `Date`。`ProtocolResult` 保留 **0-success** 协议码，阶段 6.5 的 Controller 须转换成 `R<T>` 语义。移除旧 JWT，`CurrentUserProvider` 可由消费方覆盖，默认 null 触发旧下载默认用户；业务服务与流鉴权 SPI 留给 6.5 实现。启用模块须提供 `DeviceChannelVoService` Bean，其他 SPI 随 Runner/协议流程使用，未实现时不可直接启用完整业务。ZLM Hook HTTP 路由由消费方调用 `MediaHookServer`。
+- **模型与消费方 SPI**：业务 DTO 时间转 `LocalDateTime`，SIP 日期编码与 Hook 过期计时保留 `Date`。`ProtocolResult` 保留 **0-success** 协议码，阶段 6.5 的 Controller 须转换成 `R<T>` 语义。移除旧 JWT，`CurrentUserProvider` 可由消费方覆盖，默认 null 触发旧下载默认用户；业务服务与流鉴权 SPI 留给 6.5 实现。启用模块须提供 `DeviceChannelVoService` Bean，其他 SPI 随 Runner/协议流程使用，未实现时不可直接启用完整业务。ZLM Hook HTTP 路由由消费方调用 `MediaHookServer`（上述消费方 SPI 实现与 Hook 路由已在批次 6.5 第一轮落地，见 6.8）。
 
 **验证（2026-10-10，JDK21）**：
 
@@ -811,7 +811,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | ✅ 完成（业务层见 6.7） |
-| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 业务待推进（数据层已就绪） |
+| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 🟡 第一轮已落地（12 表 CRUD + SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8）；SIP 实时指令端点待第二轮 |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1），41 表数据层已建（见 4.7）** | 业务待推进（数据层已就绪） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
 
@@ -1080,6 +1080,35 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **构建卫生**：全量回归首轮 `mvn -o -B test`（未 clean）在 `WarmFlowConfigTest` 报 5 项失败——该测试源文件已由提交 `5317dd8` 删除，失败来自 `target/test-classes` 中的**陈旧编译产物**被 surefire 继续拾跑，非真实回归；改为 `mvn -o -B clean test` 后全绿。教训记入 10.1 第 5 条。
 
+### 6.8 批次 6.5（video 业务层第一轮）交付结果（已落地）
+
+> 编号说明：本节是第 6 节按小节顺序的下一个可用编号，记录**批次 6.5（video）第一轮**的交付；
+> 与 6.5 节那个「迁移边界重划」小节不是同一回事，不要混淆。
+
+按用户决策拆分两轮：本轮做 **12 表管理 CRUD + `nla-common-video` 遗留的 SPI 实现 + MediaHook 回调端点 + 菜单 SQL**，SIP 点播/回放/云台/报警应答等实时指令端点留下一轮。门控同样按用户决策取 **`video.enabled` 缺省关闭**，并已验证关闭态不致启动失败（见下）。
+
+全 reactor `mvn -o -B clean test` **BUILD SUCCESS（49/49 模块）**、`MVN_EXIT=0`（6:20）。`nla-video` 57 项测试全绿（阶段 4.6 的 `VideoDataContractTest` 47 项 + 本轮新增 `VideoServiceContractTest` 10 项），`nla-common-video` 15 项、`nla-face` 41 项、`nla-callcenter` 121 项无回归。本轮只更新仓库文件，未对外部数据库执行 SQL，未提交。
+
+> **全量回归首轮的环境假阳性**（不是代码回归，重跑即绿）：`nla-common-video.VideoContractTest.jdk21SipUdpReceivesARealLoopbackMessageAndReleasesTransportPorts` 报 1 个 error，栈顶是 `BindException: Address already in use: bind`，目标 `UDP 127.0.0.1:55326`。实测该端口由**用户同时在本机调试的另一个工程**（IDE 挂起的 `com.sw.DromaraApplication`，占用 UDP 55321~55326）持有；该测试先用 `new ServerSocket(0)` 取一个“空闲端口”再拿它绑 UDP，**TCP 空闲不代表 UDP 空闲**，属端口池竞争而非代码缺陷。已记入 8.2，不要靠修改测试“修复”它。
+
+**pom 接线**：`nla-modules/nla-video/pom.xml` 新增 `nla-common-video`（SPI 接口与协议模型）、`nla-common-json`、`nla-common-web`（`BaseController`/`R`）、`nla-common-log`（`@Log`）、`nla-common-redis`（`@RepeatSubmit`）、`nla-common-security`（`LoginHelper` 经其传递依赖 satoken）；阶段 4.6 的 `nla-common-mybatis`（含 Boot2 AOP 排除）保留。本轮未铺 Excel 导出，因此**不声明** `nla-common-excel`（避开未使用依赖）。`nla-admin/pom.xml` 引入 `nla-video`；`nla-admin/src/main/resources/application.yml` 的 `security.excludes` 追加 `- /index/hook/**`（ZLMediaKit 回调无登录态）。根 pom `dependencyManagement`、`nla-modules/pom.xml` 模块注册与 `nla-common-bom` 的 `nla-common-video` 条目早在阶段 3.2 / 4.6 已就位，本轮未动。
+
+**门控安全性**：`nla-common-video` 的 `SipConfig` 自动配置本就带 `@ConditionalOnProperty(prefix = "video", name = "enabled", havingValue = "true")`，本模块 14 个 SPI/工具类中的 12 个 `@Component` 与 `MediaHookController` 全部沿用同一条件；缺省不配置 `video.enabled` 时 SIP 栈、监听端口、hook 端点与 SPI Bean 完全不创建，不会出现“SPI 无实现/协议组件缺失”导致的启动失败，而管理 CRUD 的 Service/Controller 不受门控、始终可用。`nla-admin` 本轮**未新增** `video:` 配置块。
+
+**业务层（`nla-modules/nla-video`，主代码 99 类 = 阶段 4.6 的 48 类数据层 + 本轮 51 类：12 `I*Service` + 12 `*ServiceImpl` + 13 Controller + 14 SPI/Helper/转换器，另 6 份新 Mapper XML）**：
+- **管理 CRUD**：每表标准 `queryById`/`queryPageList`/`queryList`/`insertByBo`/`updateByBo`/`deleteWithValidByIds`，额外只读方法按旧语义保留（`queryByDeviceId`、`queryByDeviceIdAndChannelId`、`queryByGbId`、`queryByServerGbId`、`queryByPlatformId`、`queryByAppAndStream`、`queryOnlineList`/`queryEnableList`/`queryOnlineMessageChannelList`）。写路径统一做**业务键查重（编辑排除自身）**与**删除前引用校验**：设备←通道、通道←级联共享关系、目录←子目录/级联通道与流/上级平台共享根目录、上级平台←目录与级联关系、流媒体节点←设备/直播流/拉流代理/推流、直播流←级联共享。报警与移动位置是协议侧写入的记录表，Service 只供 SPI 新增，Controller 只开放查询与删除。
+- **协议 SPI**：`spi/` 下 10 个 `*VoServiceImpl` 实现 `nla-common-video` 的设备/通道/报警/移动位置/流媒体/上级平台/目录/国标流/拉流代理/推流视图服务，另有 `TokenServiceImpl`（播放与推流鉴权改用单体 Sa-Token 登录态，旧工程是微服务 Token 接口）、`VideoLoginUserProvider`（把登录用户交给点播/下载流程记账，覆盖 `SipConfig` 的 `() -> null` 兜底）、`PlatformShareHelper`（级联共享清理，双键缺一短路）与包内工具 `VideoSpiConvert`（hutool `BeanUtil` 转 Vo）。全部只读写本模块 12 张表，不再依赖旧微服务的 Feign 与静态 ServiceLocator。
+- **自定义 XML**：新增 `Device`/`DeviceChannel`/`GbStream`/`ParentPlatform`/`PlatformCatalog`/`StreamPush` 六份 Mapper XML，承担平台反查通道与设备、级联目录通道查询、国标流伪装通道列表、子通道计数重算、设备在线统计与推流状态聚合；与旧 SQL 的**主要差异是逐表补 `del_flag = '0'` 过滤并改用 INNER JOIN**（旧语句只过滤主表）。
+- **回调入口**：`MediaHookController` 暴露 9 个 ZLMediaKit hook（`on_server_keepalive`/`on_play`/`on_publish`/`on_stream_changed`/`on_stream_none_reader`/`on_stream_not_found`/`on_server_started`/`on_send_rtp_stopped`/`on_rtp_server_timeout`），路径常量取自 `ZLMediaKitConstant`，全部直接委派 `MediaHookServer`；本控制器不挂任何权限注解，依赖上一段的 `security.excludes` 匿名放行。
+
+**DDL 与菜单**：`script/sql/nla_video.sql`（318→486 行）追加「视频监控」目录 `1761400000000004000`（父级 0、`order_num` 9）+ 12 个 C 型菜单 `4001~4012` + 44 个 F 型按钮（`4101~4214`）+ 57 条 `sys_role_menu`（普通角色 `1761300000000000003`，超管自动可见），共 57 行 `sys_menu`；perms 与 12 个控制器的 `@SaCheckPermission` 逐一对齐（10 个全 CRUD 业务 `list/query/add/edit/remove`，报警与移动位置只有 `list/query/remove`）；`menu_id` 用 `...4000` 独立号段，避开 face 的 `...3000` 与 sms 的 `...2000`。**菜单插入会打破阶段 4.6 的 H2 契约测试**：`prepareDatabaseAndMappers` 原对每条分句断言 `create table` 匹配，已改为只回放 `create table` 段，并新增「建表数量 == 实体数量」断言（改后 47 项重跑全绿实证）。
+
+**测试（新增 2 个测试文件）**：`VideoSpringSupport` 沿用 `nla-face` 的 `GenericApplicationContext` + `io.github.linpeilie.Converter` **子类桩**方案，解决 `MapstructUtils`/`JsonUtils` 静态 `SpringUtils.getBean` 在纯单测中的类初始化问题；桩实现按 mapstruct-plus 生成类命名规则（`<Bo 包>.<Bo>To<Entity>Mapper`）反射定位 `Mappers.getMapper` + `getMethod("convert", …)`，避免为 12 张表手写桩，生成类缺失时直接报错暴露意外依赖。`VideoServiceContractTest`(10) 在 H2 MySQL 模式上回放交付 DDL（12 表）+ 装载 12 个真实 Mapper 与 8 份真实 XML + 分页拦截器，手工装配 12 个 ServiceImpl 与 `DeviceChannelVoServiceImpl`/`PlatformShareHelper`，覆盖业务键查重、编辑排自身、删除前引用校验（含设备→通道、目录→子目录/级联/共享根目录、流媒体→设备/直播流/拉流代理三级绑定）、级联共享清理、自定义 XML 查询、子通道计数重算、分页 `PageResult` 和语音对讲 `CODE_2` 占位；不启动 Spring Boot、不连 SIP/ZLM/Redis。**仅** `DeviceChannelVoServiceImpl.save()` 与 `MediaServerVoServiceImpl` 部分路径依赖 `VideoService`/`RedisService` 静态入口（属实时指令链路），本轮不做纯单测断言。验证入口 `.migration/test-video.ps1`（单模块）与 `.migration/test-video-all.ps1`（全量）。
+
+**有意偏离**（同步旧工程或后续重做时必须保留）：① 语音对讲 3 方法（`findAudioPushPath`/`findAudioPushStatus`/`stopAudioPushStatus`）返回 `RespCode.CODE_2` + 「语音对讲功能将在后续批次迁移」，不抛异常；② `findMediaServerForMinimumLoad()` 不读 Redis 实时连接数，改为取数据库「启用且在线」节点（单体无跨实例负载统计，已写进类 JavaDoc）；③ **修正旧 `DeviceMobilePositionVoServiceImpl.findLastChannelId` 的判空反转**（旧代码 `if (entity != null) return null;` 导致查到也返回 null）；④ **修正旧 `updateParentPlatformStatus` 缺 `eq(server_gb_id)` 的全表更新**（旧代码会把所有平台状态一起改）；⑤ `findMediaServerForMinimumLoad(DeviceVo)` 补齐旧实现的潜在 NPE 分支；⑥ 旧 `VideoException`（受检）统一换为 `ServiceException`，与本工程异常基线一致；⑦ Service 层查重与 DDL 唯一键不完全对齐（DDL 用 `active_marker` 生成列限定有效行，Service 只查有效行，并发窗口靠前端重试）；⑧ 控制器路由由旧 `/api/**` 改为 `/video/{business}`，权限按 `${module}:${business}:${action}` 重建（旧工程无对应权限点）；⑨ 报警与移动位置不提供新增/修改端点（只读记录表）；⑩ hook 异步回复由旧 `DeferredResult` 改为 `CompletableFuture`（`MediaHookServer` 已返回异步结果）；⑪ `/index/hook/**` 是**全局**写入 `security.excludes` 的匿名路径，不区分 `video.enabled` 开关（协议未启用时根本没有对应 Controller Bean，返回 404）。⑫ **新发现（尚未修）**：`selectChannelWithCatalog` 写了 `ch.longitude_wgs84 as longitude`，但同一列的 `ch.*` 已先产生 `LONGITUDE` 标签，MyBatis 自动映射按列标签去重后**取第一个**，WGS84 覆盖实际不生效；已比对旧 `spring-boot-video` 的同名 XML，确认旧工程同款写法，属忠实迁移而非本轮引入的回归，因此**不改生产 SQL**，测试改为断言设备/通道关系与 `del_flag` 过滤（已验证共享关系或目录任一逻辑删除后查询没有该通道）；若后续要修，应改成 `ch.longitude_wgs84 AS "longitude"` 并控住旧行为差异。
+
+**剩余验收**：SIP 实时指令端点（点播/回放/云台/报警应答/目录订阅）、Excel 导出、`queryOnlineList`/`queryEnableList`/`queryByGbId` 等未开放 HTTP 端点的协议侧查询留下一轮；真实 ZLMediaKit/SIP 设备联调、`nla_video.sql`（含菜单）在真实 MySQL 8 执行、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。
+
 ---
 
 ## 7. 有意偏离上游的清单
@@ -1198,7 +1227,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 1894 files` / `scanned(text)=1886  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.4 后实测；历史基线演变见下方两段引用）
+**`scanning 1953 files` / `scanned(text)=1945  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.5 第一轮后实测；上一次基线是批次 6.4 后的 `1894 / 1886`，+59 来自本轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
@@ -1410,12 +1439,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
-| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7），余 6.5~6.7 待推进 |
+| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 第一轮已落地**（12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.8），余 6.5 第二轮（SIP 实时指令）~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
-| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -o -B clean test` 已在批次 6.4 跑通（**49/49 BUILD SUCCESS**），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
+| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -o -B clean test` 已在批次 6.4 / 6.5 第一轮跑通（**49/49 BUILD SUCCESS**），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1460,6 +1489,11 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 5. **短信数据层删除标志不一致已修正** —— SmsConfig / MobileMessageTemplate 已统一为
    String delFlag，DDL 为 char(1)，8 项数据契约测试通过（见 4.5）。已有数据库的列升级
    和排序规则验收尚未执行，不能用初始化脚本重跑代替升级。
+6. **真实 socket 冒烟测试会与本机并发调试进程抢端口** ——
+   `nla-common-video.VideoContractTest.jdk21SipUdpReceivesARealLoopbackMessageAndReleasesTransportPorts`
+   先用 `new ServerSocket(0)` 取“空闲端口”、关闭后再拿同号绑 UDP，而 **TCP 空闲不代表 UDP 空闲**。
+   批次 6.5 首轮全量回归因此报 `BindException: Address already in use`（UDP 55326 被用户本机
+   另一工程的 IDE 调试进程持有），重跑即绿（见 6.8）。**遇到该失败先查端口占用，不要改测试。**
 
 ---
 
@@ -1534,7 +1568,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对 24 份关键交付物（批次 6.4 已把 `nla_face.sql` + `nla-face` README + 4 个核心类纳入清单）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 31 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `verify-tracked.ps1` | 跟踪完整性校验：对比 `git ls-files` 与新目录的磁盘实际文件，分别列出"在盘但未跟踪"与"已跟踪但已从磁盘消失"（后者用于发现误删）。已内置 `core.quotepath=false` 与 `[Console]::OutputEncoding = UTF8` 两个必要修正，否则 CJK 路径会产生假阳性 | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 | `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
@@ -1547,6 +1581,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `build-face-biz.ps1` | 批次 6.4 编译入口：`-Targets <模块\|all>` 走 `-pl ... -am -DskipTests compile`，设 `JAVA_HOME` + 全路径 mvn，日志落 `.migration/build-face-biz.log` | ✅ |
 | `test-face-biz.ps1` | 批次 6.4 单模块测试入口：`-pl nla-modules/nla-face -am test` + `-Dtest` 过滤器（默认 `*Face*,*Person*,*Detector*`），日志落 `.migration/test-face-biz.log` | ✅ |
 | `test-face-all.ps1` | 全量回归入口：`mvn -o -B clean test`（`-Goals` 可覆盖，默认含 `clean`，见 10.1 第 5 条），日志落 `.migration/test-face-all.log` | ✅ |
+| `build-video.ps1` | 批次 6.5 单模块编译入口：`mvn -o -B -pl nla-modules/nla-video -am compile`，日志落 `.migration/build-video.log` | ✅ |
+| `test-video.ps1` | 批次 6.5 单模块测试入口：`mvn -o -B -pl nla-modules/nla-video clean test`（跑 `VideoDataContractTest` + `VideoServiceContractTest` 共 57 项），日志落 `.migration/test-video.log` | ✅ |
+| `test-video-all.ps1` | 批次 6.5 全量回归入口：与 `test-face-all.ps1` 同构（`-Goals` 默认 `clean test`），日志落 `.migration/test-video-all.log` | ✅ |
 | `probe-test-log.ps1` | 从 maven 日志里定位失败测试行与首个失败上下文 | ✅ |
 | `probe-mapping-lines.ps1` | 用 `Select-String` 列出本台账指定模式的行号与内容（绕开 Grep 对本文件的假阴性，见 10.1 陷阱） | ✅ |
 | `probe-mapping-enc.ps1` | 校验本台账字节级编码（BOM / UTF-8 有效性），编辑前后自查 | ✅ |

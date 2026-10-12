@@ -8,8 +8,32 @@
         <version>${revision}</version>
     </parent>
     <artifactId>nla-video</artifactId>
-    <description>视频监控数据层，协议与管理业务待阶段 6.5 接入</description>
+    <description>视频监控业务模块：设备/通道/媒体服务器/流代理与推流管理，算法底座为 nla-common-video（迁移自旧 spring-boot-video）</description>
     <dependencies>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-video</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-log</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-security</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.com.nla</groupId>
             <artifactId>nla-common-mybatis</artifactId>

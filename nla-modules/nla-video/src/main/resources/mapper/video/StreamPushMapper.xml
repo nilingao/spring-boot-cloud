@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.StreamPushMapper">
+    <!-- 查询挂在指定流媒体下且未登记为国标流的推流记录 -->
+    <select id="selectNotSharedByMediaServer" resultType="cn.com.nla.video.domain.StreamPush">
+        select push.*
+        from video_stream_push push
+        left join video_gb_stream gs on gs.app = push.app and gs.stream = push.stream and gs.del_flag = '0'
+        where push.del_flag = '0'
+        and push.media_server_id = #{mediaServerId}
+        and gs.gb_id is null
+    </select>
+</mapper>

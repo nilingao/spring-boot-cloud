@@ -110,6 +110,8 @@ security:
     - /warm-flow-ui/config
     - /snail-chat/**
     - /api/snail/chat/**
+    # ZLMediaKit 流媒体回调（video.enabled=true 时生效），调用方无登录态
+    - /index/hook/**
 
 # MyBatisPlus配置
 # https://baomidou.com/config/

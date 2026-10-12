@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.DeviceChannelMapper">
+    <!-- 平台共享通道反查设备通道 -->
+    <select id="selectChannelByPlatformChannel" resultType="cn.com.nla.video.domain.DeviceChannel">
+        select ch.*
+        from video_device_channel ch
+        join video_platform_gb_channel rel on rel.device_channel_id = ch.channel_id and rel.del_flag = '0'
+        where ch.del_flag = '0'
+        and rel.platform_id = #{platformId}
+        and ch.channel_id = #{channelId}
+    </select>
+
+    <!-- 目录级联通道列表：通道坐标取 WGS84，父级目录取共享目录编号 -->
+    <select id="selectChannelWithCatalog" resultType="cn.com.nla.video.domain.DeviceChannel">
+        select ch.*,
+        ch.longitude_wgs84 as longitude,
+        ch.latitude_wgs84 as latitude,
+        '0' as channelType,
+        cat.id as parentId
+        from video_device_channel ch
+        join video_platform_gb_channel rel on rel.device_channel_id = ch.channel_id and rel.del_flag = '0'
+        join video_platform_catalog cat on cat.id = rel.catalog_id and cat.platform_id = rel.platform_id and cat.del_flag = '0'
+        where ch.del_flag = '0'
+        and rel.platform_id = #{serverGbId}
+    </select>
+
+    <!-- 重算通道下挂的子通道数量 -->
+    <update id="updateChannelSubCount">
+        update video_device_channel
+        set sub_count = (select a.cnt from (select count(1) as cnt from video_device_channel
+        where del_flag = '0' and device_id = #{deviceId} and parent_id = #{channelId}) a)
+        where del_flag = '0'
+        and device_id = #{deviceId}
+        and channel_id = #{channelId}
+    </update>
+
+    <!-- 目录级联国标流列表：国标流伪装成通道，状态取推流或拉流代理状态 -->
+    <select id="selectGbStreamChannelListInPlatform" resultType="cn.com.nla.common.video.basic.vo.video.DeviceChannelVo">
+        select
+        gs.gb_id as channelId,
+        '1' as channelType,
+        gs.name as name,
+        gs.longitude as longitude,
+        gs.latitude as latitude,
+        cat.id as parentId,
+        '1' as registerWay,
+        cat.civil_code as civilCode,
+        'live' as model,
+        '0' as parental,
+        '0' as secrecy,
+        <choose>
+            <when test="usePushingAsStatus">ifnull(push.push_ing, 0)</when>
+            <otherwise>ifnull(push.status, ifnull(proxy.status, 0))</otherwise>
+        </choose> as status
+        from video_gb_stream gs
+        join video_platform_gb_stream rel on rel.gb_stream_id = gs.gb_id and rel.del_flag = '0'
+        join video_platform_catalog cat on cat.id = rel.catalog_id and cat.platform_id = rel.platform_id and cat.del_flag = '0'
+        left join video_stream_push push on push.app = gs.app and push.stream = gs.stream and push.del_flag = '0'
+        left join video_stream_proxy proxy on proxy.app = gs.app and proxy.stream = gs.stream and proxy.del_flag = '0'
+        where gs.del_flag = '0'
+        and rel.platform_id = #{serverGbId}
+        <if test="gbId != null and gbId != ''">
+            and gs.gb_id = #{gbId}
+        </if>
+    </select>
+</mapper>

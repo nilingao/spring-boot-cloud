@@ -76,15 +76,18 @@ class VideoDataContractTest {
             .replaceAll("(?i)\\) engine=innodb[^;]*;", ");")
             .replaceAll("(?i)\\bstored\\b", "");
         try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            int created = 0;
             for (String sql : ddl.split("(?m);\\s*$")) {
-                if (!sql.isBlank()) {
-                    // MySQL 索引名属于各表，H2 索引名属于 schema；仅在测试中加表名前缀。
-                    var table = java.util.regex.Pattern.compile("create table if not exists (\\w+)").matcher(sql);
-                    assertTrue(table.find());
-                    sql = sql.replaceAll("(?i)\\bkey (idx_\\w+)", "key " + table.group(1) + "_$1");
-                    statement.execute(sql);
-                }
+                // 菜单与角色授权种子属于 MySQL 交付脚本，H2 只回放建表语句。
+                if (sql.isBlank() || !sql.strip().regionMatches(true, 0, "create table", 0, 12)) { continue; }
+                // MySQL 索引名属于各表，H2 索引名属于 schema；仅在测试中加表名前缀。
+                var table = java.util.regex.Pattern.compile("create table if not exists (\\w+)").matcher(sql);
+                assertTrue(table.find());
+                sql = sql.replaceAll("(?i)\\bkey (idx_\\w+)", "key " + table.group(1) + "_$1");
+                statement.execute(sql);
+                created++;
             }
+            assertEquals(entities().count(), created, "交付 DDL 建表数量应与实体数量一致");
         }
         var configuration = new MybatisConfiguration();
         configuration.setMapUnderscoreToCamelCase(true);

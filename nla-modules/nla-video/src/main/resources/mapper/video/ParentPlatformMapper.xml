@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.ParentPlatformMapper">
+    <!-- 统计某个国标编号在本平台下命中的通道来源与国标流来源数量 -->
+    <select id="selectChannelSource" resultType="cn.com.nla.common.video.basic.vo.sip.ChannelSourceInfo">
+        select 'channel' as name, count(1) as count
+        from video_platform_gb_channel rel
+        join video_device_channel ch on ch.channel_id = rel.device_channel_id and ch.del_flag = '0'
+        where rel.del_flag = '0' and rel.platform_id = #{serverGbId} and ch.channel_id = #{channelId}
+        union
+        select 'stream' as name, count(1) as count
+        from video_platform_gb_stream rel
+        join video_gb_stream gs on gs.gb_id = rel.gb_stream_id and gs.del_flag = '0'
+        where rel.del_flag = '0' and rel.platform_id = #{serverGbId} and gs.gb_id = #{channelId}
+    </select>
+
+    <!-- 查询共享了指定通道且在线的上级平台 -->
+    <select id="selectPlatformListForChannel" resultType="cn.com.nla.video.domain.ParentPlatform">
+        select p.*
+        from video_parent_platform p
+        join video_platform_gb_channel rel on rel.platform_id = p.server_gb_id and rel.del_flag = '0'
+        join video_device_channel ch on ch.channel_id = rel.device_channel_id and ch.del_flag = '0'
+        where p.del_flag = '0'
+        and p.status = 1
+        and ch.channel_id = #{channelId}
+        and rel.platform_id in
+        <foreach collection="allPlatformId" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <!-- 查询共享了指定国标流的上级平台 -->
+    <select id="selectPlatformListForStream" resultType="cn.com.nla.video.domain.ParentPlatform">
+        select p.*
+        from video_parent_platform p
+        join video_platform_gb_stream rel on rel.platform_id = p.server_gb_id and rel.del_flag = '0'
+        join video_gb_stream gs on gs.gb_id = rel.gb_stream_id and gs.del_flag = '0'
+        where p.del_flag = '0'
+        and gs.app = #{app}
+        and gs.stream = #{stream}
+        <if test="allPlatformId != null and allPlatformId.size() > 0">
+            and rel.platform_id in
+            <foreach collection="allPlatformId" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+</mapper>

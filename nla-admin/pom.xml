@@ -116,6 +116,12 @@
             <artifactId>nla-face</artifactId>
         </dependency>
 
+        <!--  视频监控业务模块  -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-video</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>

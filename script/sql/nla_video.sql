@@ -345,3 +345,142 @@ create table if not exists video_stream_push (
     PRIMARY KEY (id),
     UNIQUE KEY idx_stream (app,stream, active_marker)
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_cs_0900_ai_ci row_format=dynamic comment='推流信息';
+
+-- ----------------------------
+-- 2、菜单权限（阶段 6.5 第一轮）
+-- 依赖：需先执行 nla_system.sql（建 sys_menu / sys_role_menu 表并初始化角色），本脚本在其后运行
+-- 号段：menu_id 采用 1761400000000004000 独立号段（face 用 3000 段，sms 用 2000 段，无冲突）
+-- 授权：超级管理员(role 1761300000000000001)自动可见全部菜单，无需授权；下列授权面向普通角色 1761300000000000003(test1)，与 nla_system.sql 种子约定一致
+-- 前端：component 路径(video/device/index 等)为前端页面预留，Vue 页面由独立前端任务线补齐；后端 @SaCheckPermission 鉴权不依赖前端页面是否存在
+-- 门控：菜单与 video.enabled 无关，管理端 CRUD 始终可用；ZLM 回调 /index/hook/** 不占菜单，已在 security.excludes 匿名放行
+-- ----------------------------
+-- 视频监控目录
+insert into sys_menu values(1761400000000004000, '视频监控', 0, 9, 'video', null, '', 'N', 'Y', 'M', '0', '0', '', 'camera', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '视频监控目录');
+-- 视频监控菜单
+insert into sys_menu values(1761400000000004001, '设备管理', 1761400000000004000, 1, 'device', 'video/device/index', '', 'N', 'Y', 'C', '0', '0', 'video:device:list', 'monitor', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '国标设备管理菜单');
+insert into sys_menu values(1761400000000004002, '通道管理', 1761400000000004000, 2, 'deviceChannel', 'video/deviceChannel/index', '', 'N', 'Y', 'C', '0', '0', 'video:deviceChannel:list', 'list', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '设备通道管理菜单');
+insert into sys_menu values(1761400000000004003, '报警记录', 1761400000000004000, 3, 'deviceAlarm', 'video/deviceAlarm/index', '', 'N', 'Y', 'C', '0', '0', 'video:deviceAlarm:list', 'message', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '设备报警记录菜单');
+insert into sys_menu values(1761400000000004004, '移动位置', 1761400000000004000, 4, 'deviceMobilePosition', 'video/deviceMobilePosition/index', '', 'N', 'Y', 'C', '0', '0', 'video:deviceMobilePosition:list', 'international', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '设备移动位置轨迹菜单');
+insert into sys_menu values(1761400000000004005, '流媒体服务器', 1761400000000004000, 5, 'mediaServer', 'video/mediaServer/index', '', 'N', 'Y', 'C', '0', '0', 'video:mediaServer:list', 'server', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '流媒体服务器管理菜单');
+insert into sys_menu values(1761400000000004006, '国标流', 1761400000000004000, 6, 'gbStream', 'video/gbStream/index', '', 'N', 'Y', 'C', '0', '0', 'video:gbStream:list', 'video', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '国标流信息管理菜单');
+insert into sys_menu values(1761400000000004007, '拉流代理', 1761400000000004000, 7, 'streamProxy', 'video/streamProxy/index', '', 'N', 'Y', 'C', '0', '0', 'video:streamProxy:list', 'online', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '拉流代理管理菜单');
+insert into sys_menu values(1761400000000004008, '推流管理', 1761400000000004000, 8, 'streamPush', 'video/streamPush/index', '', 'N', 'Y', 'C', '0', '0', 'video:streamPush:list', 'upload', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '推流信息管理菜单');
+insert into sys_menu values(1761400000000004009, '上级平台', 1761400000000004000, 9, 'parentPlatform', 'video/parentPlatform/index', '', 'N', 'Y', 'C', '0', '0', 'video:parentPlatform:list', 'peoples', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '国标上级平台管理菜单');
+insert into sys_menu values(1761400000000004010, '平台目录', 1761400000000004000, 10, 'platformCatalog', 'video/platformCatalog/index', '', 'N', 'Y', 'C', '0', '0', 'video:platformCatalog:list', 'tree', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '平台目录管理菜单');
+insert into sys_menu values(1761400000000004011, '共享通道', 1761400000000004000, 11, 'platformGbChannel', 'video/platformGbChannel/index', '', 'N', 'Y', 'C', '0', '0', 'video:platformGbChannel:list', 'tree-table', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '平台共享通道管理菜单');
+insert into sys_menu values(1761400000000004012, '共享流', 1761400000000004000, 12, 'platformGbStream', 'video/platformGbStream/index', '', 'N', 'Y', 'C', '0', '0', 'video:platformGbStream:list', 'code', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '平台共享流管理菜单');
+-- 设备管理按钮
+insert into sys_menu values(1761400000000004101, '设备查询', 1761400000000004001, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:device:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004102, '设备新增', 1761400000000004001, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:device:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004103, '设备修改', 1761400000000004001, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:device:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004104, '设备删除', 1761400000000004001, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:device:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 通道管理按钮
+insert into sys_menu values(1761400000000004111, '通道查询', 1761400000000004002, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceChannel:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004112, '通道新增', 1761400000000004002, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceChannel:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004113, '通道修改', 1761400000000004002, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceChannel:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004114, '通道删除', 1761400000000004002, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceChannel:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 报警记录按钮（上报数据只读，不提供新增与修改）
+insert into sys_menu values(1761400000000004121, '报警查询', 1761400000000004003, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceAlarm:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004122, '报警删除', 1761400000000004003, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceAlarm:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 移动位置按钮（轨迹数据只读，不提供新增与修改）
+insert into sys_menu values(1761400000000004131, '轨迹查询', 1761400000000004004, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceMobilePosition:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004132, '轨迹删除', 1761400000000004004, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:deviceMobilePosition:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 流媒体服务器按钮
+insert into sys_menu values(1761400000000004141, '节点查询', 1761400000000004005, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:mediaServer:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004142, '节点新增', 1761400000000004005, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:mediaServer:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004143, '节点修改', 1761400000000004005, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:mediaServer:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004144, '节点删除', 1761400000000004005, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:mediaServer:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 国标流按钮
+insert into sys_menu values(1761400000000004151, '国标流查询', 1761400000000004006, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:gbStream:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004152, '国标流新增', 1761400000000004006, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:gbStream:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004153, '国标流修改', 1761400000000004006, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:gbStream:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004154, '国标流删除', 1761400000000004006, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:gbStream:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 拉流代理按钮
+insert into sys_menu values(1761400000000004161, '代理查询', 1761400000000004007, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamProxy:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004162, '代理新增', 1761400000000004007, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamProxy:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004163, '代理修改', 1761400000000004007, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamProxy:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004164, '代理删除', 1761400000000004007, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamProxy:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 推流管理按钮
+insert into sys_menu values(1761400000000004171, '推流查询', 1761400000000004008, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamPush:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004172, '推流新增', 1761400000000004008, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamPush:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004173, '推流修改', 1761400000000004008, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamPush:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004174, '推流删除', 1761400000000004008, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:streamPush:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 上级平台按钮
+insert into sys_menu values(1761400000000004181, '平台查询', 1761400000000004009, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:parentPlatform:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004182, '平台新增', 1761400000000004009, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:parentPlatform:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004183, '平台修改', 1761400000000004009, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:parentPlatform:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004184, '平台删除', 1761400000000004009, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:parentPlatform:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 平台目录按钮
+insert into sys_menu values(1761400000000004191, '目录查询', 1761400000000004010, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformCatalog:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004192, '目录新增', 1761400000000004010, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformCatalog:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004193, '目录修改', 1761400000000004010, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformCatalog:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004194, '目录删除', 1761400000000004010, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformCatalog:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 共享通道按钮
+insert into sys_menu values(1761400000000004201, '共享通道查询', 1761400000000004011, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbChannel:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004202, '共享通道新增', 1761400000000004011, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbChannel:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004203, '共享通道修改', 1761400000000004011, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbChannel:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004204, '共享通道删除', 1761400000000004011, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbChannel:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 共享流按钮
+insert into sys_menu values(1761400000000004211, '共享流查询', 1761400000000004012, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbStream:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004212, '共享流新增', 1761400000000004012, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbStream:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004213, '共享流修改', 1761400000000004012, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbStream:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000004214, '共享流删除', 1761400000000004012, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'video:platformGbStream:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+
+-- 角色菜单授权（普通角色 test1；超级管理员自动可见，无需授权）
+insert into sys_role_menu values (1761300000000000003, 1761400000000004000);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004001);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004002);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004003);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004004);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004005);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004006);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004007);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004008);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004009);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004010);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004011);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004012);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004101);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004102);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004103);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004104);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004111);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004112);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004113);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004114);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004121);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004122);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004131);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004132);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004141);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004142);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004143);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004144);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004151);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004152);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004153);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004154);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004161);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004162);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004163);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004164);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004171);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004172);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004173);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004174);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004181);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004182);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004183);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004184);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004191);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004192);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004193);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004194);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004201);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004202);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004203);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004204);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004211);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004212);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004213);
+insert into sys_role_menu values (1761300000000000003, 1761400000000004214);

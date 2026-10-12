@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.com.nla.video.mapper.DeviceMapper">
+    <!-- 级联通道反查设备：平台共享的通道 -> 通道 -> 设备 -->
+    <select id="selectDeviceByPlatformChannel" resultType="cn.com.nla.video.domain.Device">
+        select d.*
+        from video_device d
+        join video_device_channel ch on ch.device_id = d.device_id and ch.del_flag = '0'
+        join video_platform_gb_channel rel on rel.device_channel_id = ch.channel_id and rel.del_flag = '0'
+        where d.del_flag = '0'
+        and rel.platform_id = #{platformId}
+        and ch.channel_id = #{channelId}
+    </select>
+    <!-- 级联通道反查设备，并以通道编号、通道名称覆盖设备编号与名称 -->
+    <select id="selectDeviceChannelInfoByPlatformChannel" resultType="cn.com.nla.video.domain.Device">
+        select d.*, ch.channel_id as deviceId, ch.name as name
+        from video_device d
+        join video_device_channel ch on ch.device_id = d.device_id and ch.del_flag = '0'
+        join video_platform_gb_channel rel on rel.device_channel_id = ch.channel_id and rel.del_flag = '0'
+        where d.del_flag = '0'
+        and rel.platform_id = #{platformId}
+        and ch.channel_id = #{channelId}
+    </select>
+</mapper>
