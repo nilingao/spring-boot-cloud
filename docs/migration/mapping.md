@@ -810,7 +810,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.1 | `bean`(98) + `sys` 实体 | 合并进 `nla-modules/nla-system` | 基线覆盖复核后**仅 `sys_area` 需迁**（mini/mini_user→`sys_social`+`sys_user`、user_set→`sys_user.status`+超管角色，不新建）；老数据丢弃、流B 数据迁移取消；表映射见下，交付见 6.1.1 | ✅ 完成 |
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
-| 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | 业务待推进（数据层已就绪） |
+| 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | ✅ 完成（业务层见 6.7） |
 | 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 业务待推进（数据层已就绪） |
 | 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1），41 表数据层已建（见 4.7）** | 业务待推进（数据层已就绪） |
 | 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
@@ -1053,6 +1053,33 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **发送入口进度**：阶段 5.3 已通过 `CaptchaController` → `SmsLoginCodeService` 内部调用接入登录验证码（见 5.6），沿用 `/resource/sms/code`。注册/重置验证码业务尚未接入；没有新增通用短信发送 REST 接口。
 
+### 6.7 批次 6.4（face 业务层）交付结果（已落地）
+
+> 编号说明：本节是第 6 节按小节顺序的下一个可用编号，记录的是**批次 6.4（face）**的交付；
+> 与批次表中 `6.7 | pay` 那个批次**不是同一回事**，不要混淆。
+
+全 reactor `-DskipTests compile` 与 `mvn -o -B clean test` 均 **BUILD SUCCESS（49/49 模块）**、`MVN_EXIT=0`（clean test 耗时 6:55）。`nla-face` 41 项测试全绿（阶段 4.4 既有 `PersonDataContractTest` 9 项 + 本轮新增 32 项），`nla-common-facesdk` 链 14 项（2 项真实 native 冒烟按条件跳过）。本轮只更新仓库文件，未对外部数据库执行 SQL，未提交。
+
+**pom 接线**：本轮改 `nla-modules/nla-face/pom.xml`（新增依赖 `nla-common-facesdk`）与 `nla-admin/pom.xml`（引入 `nla-face`）；根 pom `dependencyManagement`、`nla-modules/pom.xml` 的模块注册与 `nla-common-bom` 的 `nla-common-facesdk` 条目早在阶段 4.4 / 3.3 已就位，本轮未动。
+
+**业务层（`nla-modules/nla-face`，主代码 14 类 + `mapper/face/PersonMapper.xml`）**：
+- `core/FacePipeline`：下载/上传字节 → 检测 → 裁剪 → 关键点 → 质量/遮挡/眼睛/性别 → 特征 → 比对/识别 的流水线封装，图像输入统一 `InputStream`，输出真实 PNG/JPEG 字节；8 个算法代理经 `ObjectProvider` 延迟获取，`face.enabled=false` 时 Person 管理 CRUD 仍可启动，调用识别能力抛 `ServiceException("人脸识别功能未启用，请先配置 face.enabled=true")`；
+- `core/FaceFeatureCache`：`ConcurrentHashMap<imgId, float[]>` 进程内特征缓存，`@EventListener(ApplicationReadyEvent)` 全量装载（脏 JSON 跳过、重复 `img_id` 用 `putIfAbsent` 保留先到者），`put`/`remove`/`clear`/`snapshot`/`parseFeatures` 供 CRUD 同步与 1:N 检索；
+- `core/FaceImageDownloader`：按 `person.img_url` 下载，带体积上限与私有/内网地址拦截；
+- `IPersonService`/`PersonServiceImpl`：`queryById`/`queryPageList`/`queryList`/`insertByBo`/`updateByBo`/`deleteWithValidByIds`/`selectByImgIds`，落地**用户决策的特征来源 = imgUrl 自动提取**：新增时下载 → `extract`，识别失败拒绝保存；修改时 `imgUrl` 不变则不重算（显式 `select` 取出 `select=false` 的 `extract` 大字段比对），URL 或 `imgId` 变更时重提取并迁移缓存键；DB 存量特征为脏 JSON 时回退重提取；删除同步清缓存；`selectByImgIds` 对空集合/null 短路；
+- `IFaceDetectorService`/`FaceDetectorServiceImpl`：`findFaceInfo`（属性分析）、`comparison`（1:1 相似度）、`search`（1:N，`calculate` 默认 70 分阈值、`size` 默认 1，按相似度降序取 topN）；
+- `PersonController`（`/face/person`，权限 `face:person:{list,query,add,edit,remove,export}`，配 `@Log`/`@RepeatSubmit`/`AddGroup`/`EditGroup`/Excel 导出）、`FaceDetectorController`（`/face/detector/{analyze,comparison,search}`，`MultipartFile` 入参，仅 `@SaCheckLogin`）。
+
+**DDL 与菜单**：`script/sql/nla_face.sql`（表结构见 4.4）追加「人脸识别」目录 `1761400000000003000` + 人员管理菜单 `3001` + 5 个按钮 `3010~3014` + 7 条 `sys_role_menu`（普通角色 `1761300000000000003`；超管自动可见）。`menu_id` 用 `...3000` 独立号段，避开 sms 的 `...2000` 号段；perms 与 `PersonController` 的 `@SaCheckPermission` 逐一对齐。追加的 insert 全部位于表 DDL 之后，H2 契约测试的 `ddl.replaceFirst("(?is)\\) engine=innodb.*;\\s*$", ");")` 贪婪匹配会把菜单语句一并剥离，不会破坏测试（改后重跑 41 项全绿实证）。
+
+**测试（新增 6 个测试文件）**：`FaceSpringSupport` 用 `GenericApplicationContext` + `registerBean(SpringUtils.class, SpringUtils::new)` 安装最小上下文，并以 `io.github.linpeilie.Converter` 的**子类桩**（内部委托 mapstruct 生成的 `PersonBoToPersonMapper` / `PersonToPersonVoMapper`）解决 `MapstructUtils` / `JsonUtils` 静态 `SpringUtils.getBean` 在纯单测中的类初始化问题——该手法与 `nla-admin` 既有 `QrSceneStoreTest` 同构，`Converter` 经 `javap` 确认公共非 final 且有无参构造，比 mock 泛型重载更稳。`FacePipelineTest`(10) 全 mock 代理 + 真实 100x100 `TYPE_3BYTE_BGR` PNG，含**右眼状态 bug 回归**（双眼分别打桩 CLOSE/RANDOM，断言 `leftEyeState=0` / `rightEyeState=2`）与门控报错断言；`PersonServiceContractTest`(9) 真实 H2 mapper + mock pipeline/downloader + 真实 cache；`FaceDetectorServiceContractTest`(6)、`FaceFeatureCacheTest`(4)、`FaceImageDownloaderTest`(3)。验证入口 `.migration/test-face-biz.ps1`（单模块）与 `.migration/test-face-all.ps1`（全量）。
+
+**有意偏离**（同步上游或后续重做时须保留）：① 旧代码右眼状态误取左眼结果，已修正并有测试锁定；② 特征缓存为**进程内本地内存**（与旧实现同款），多实例部署时各节点独立装载、增删改只在处理该请求的实例生效，跨实例一致依赖重启，属已知限制；③ 检测/比对/检索端点只要求登录不加 `@SaCheckPermission`（旧工程无对应权限点，菜单未铺 F 型按钮）；④ 特征提取改为**服务端按 imgUrl 下载触发**（用户决策），旧工程由外部流程直接写 `extract` 字段；⑤ 图像输入去 `MultipartFile` 化，见 5.1.3。
+
+**剩余验收**：真实 JNI 环境（`face.enabled=true` + native 库 + 模型）下的人脸检测/识别/活体效果与准确率未测；`nla_face.sql`（含菜单）未在真实 MySQL 执行；前端 `face/person/index` 页面由独立前端任务线补齐，不影响后端鉴权。
+
+**构建卫生**：全量回归首轮 `mvn -o -B test`（未 clean）在 `WarmFlowConfigTest` 报 5 项失败——该测试源文件已由提交 `5317dd8` 删除，失败来自 `target/test-classes` 中的**陈旧编译产物**被 surefire 继续拾跑，非真实回归；改为 `mvn -o -B clean test` 后全绿。教训记入 10.1 第 5 条。
+
 ---
 
 ## 7. 有意偏离上游的清单
@@ -1171,7 +1198,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 998 files` / `scanned(text)=993  hits=0  allowlisted=5  file-exceptions=1`**
+**`scanning 1894 files` / `scanned(text)=1886  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.4 后实测；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
@@ -1383,12 +1410,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，9 项测试），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，47 项测试），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
-| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1），余 6.4~6.7 待推进 |
+| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7），余 6.5~6.7 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
-| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全量回归未做 |
+| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -o -B clean test` 已在批次 6.4 跑通（**49/49 BUILD SUCCESS**），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1507,7 +1534,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对 18 份关键交付物做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 24 份关键交付物（批次 6.4 已把 `nla_face.sql` + `nla-face` README + 4 个核心类纳入清单）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `verify-tracked.ps1` | 跟踪完整性校验：对比 `git ls-files` 与新目录的磁盘实际文件，分别列出"在盘但未跟踪"与"已跟踪但已从磁盘消失"（后者用于发现误删）。已内置 `core.quotepath=false` 与 `[Console]::OutputEncoding = UTF8` 两个必要修正，否则 CJK 路径会产生假阳性 | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 | `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
@@ -1517,8 +1544,15 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `rename-ai-skill.ps1` | ai-coding skill 改名与修复的唯一事实来源：目录 `ruoyi-plus-ai-coding` → `nla-plus-ai-coding`，10 条带 min 断言的替换规则，保护 2 条真实上游链接（见 7.6.1） | ✅ |
 | `probe-collation.ps1` | 全仓扫描 `utf8mb4_unicode_ci`，按文件列出命中数并**区分可改文件与老项目只读文件**（老项目命中必须保持不动，见 7.7） | ✅ |
 | `fix-ai-collation.ps1` | 把 `nla_ai.sql` 的 22 处显式 `COLLATE` 统一为 `utf8mb4_cs_0900_ai_ci`；带 min 断言与残留 0 校验，保留原 BOM 状态，`-Apply` 才写盘（见 7.7）。⚠️ `regen-sql.ps1` 重生后必须重跑 | ✅ |
+| `build-face-biz.ps1` | 批次 6.4 编译入口：`-Targets <模块\|all>` 走 `-pl ... -am -DskipTests compile`，设 `JAVA_HOME` + 全路径 mvn，日志落 `.migration/build-face-biz.log` | ✅ |
+| `test-face-biz.ps1` | 批次 6.4 单模块测试入口：`-pl nla-modules/nla-face -am test` + `-Dtest` 过滤器（默认 `*Face*,*Person*,*Detector*`），日志落 `.migration/test-face-biz.log` | ✅ |
+| `test-face-all.ps1` | 全量回归入口：`mvn -o -B clean test`（`-Goals` 可覆盖，默认含 `clean`，见 10.1 第 5 条），日志落 `.migration/test-face-all.log` | ✅ |
+| `probe-test-log.ps1` | 从 maven 日志里定位失败测试行与首个失败上下文 | ✅ |
+| `probe-mapping-lines.ps1` | 用 `Select-String` 列出本台账指定模式的行号与内容（绕开 Grep 对本文件的假阴性，见 10.1 陷阱） | ✅ |
+| `probe-mapping-enc.ps1` | 校验本台账字节级编码（BOM / UTF-8 有效性），编辑前后自查 | ✅ |
+| `probe-converter.ps1` | 用 `mvn help:evaluate` 定位真实本地仓库 + `javap` 反编译 mapstruct-plus `Converter` 签名，确认可子类化桩 | ✅ |
 
-### 10.1 脚本编写的四条踩坑教训
+### 10.1 脚本编写的五条踩坑教训
 
 1. **不要用 Bash 工具跑内联 PowerShell** —— `$`、引号、反引号会被剥离，`&&` 不被 5.1 支持。
    一切含这些字符的逻辑写入 `.ps1`，用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 执行。
@@ -1538,12 +1572,22 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
    另外 `audit-brand.ps1` 与 `verify-encoding.ps1` 的 BOM 也在无人编辑的情况下自行消失。
    **关键结论必须写进本文档**，脚本只当可再生的一次性工具；
    每次引用本节索引前先跑 `probe-script-ledger.ps1` 对账。
+5. **全量回归必须 `clean test`，不能只 `test`** —— surefire 会执行 `target/test-classes`
+   里**源文件已被删除的陈旧测试 class**：批次 6.4 首轮 `mvn -o -B test` 报
+   `WarmFlowConfigTest` 5 项失败，而该测试源早已被提交 `5317dd8` 删除（`Test-Path=False`），
+   属于构建卫生问题而非真实回归。另：向 `& $mvn` 传多个 goal 时参数必须声明为
+   `[string[]]$Goals`，用单个字符串会让 `clean test` 被当成一个 goal 而失败。
 
-附带三条工具级陷阱：
+附带四条工具级陷阱：
 
 - **`Grep` 尊重 `.gitignore`** —— 对被忽略的目录会返回假阴性的 0 匹配，即使文件里确实有内容。
   本项目 `.migration/` 至今被忽略，`.qoder/` 也曾一度被忽略（当时就是靠 `Get-ChildItem`
   脚本才发现 `rules/backend-*.md` 里 9 处真实品牌残留）。审计这类目录一律走脚本（见 7.6）。
+- **`Grep` 对超大单文件同样返回假阴性** —— 批次 6.4 实测：本文件已入库且未被 ignore
+  （`git check-ignore` 无输出、`git ls-files` 命中），但对 ASCII 与 CJK 模式均返回 0 匹配，
+  而同模式在 `**/README.md` 上正常命中；本文件当前 163534 字节。结论：**检索本台账一律走
+  `Select-String` 脚本（`probe-mapping-lines.ps1`）或直接 `Read` 指定行段**，
+  不要把 `Grep` 的 0 匹配当成"内容不存在"的证据。
 - **`-like '??*'` 里的 `?` 是单字符通配符** —— 想筛 `git status --porcelain` 的未跟踪行
   不能用它，会匹配全部行；改用 `.Substring(0,2) -eq '??'`。
 - **`Get-Content` 默认按 ANSI/GBK 解码无 BOM 的 UTF-8 文件** —— 实测本文件
@@ -1551,7 +1595,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
   `[IO.File]::ReadAllText` 按 LF 切得 802 段（含末尾空段），凭空少了 146 行。
   **读数、比对、写回一律显式指定 UTF-8**（`Get-Content -Encoding UTF8` 或
   `[IO.File]::ReadAllText/ReadAllBytes`）；`Set-Content` 默认编码同样会损坏中文。
-  已用 `verify-encoding.ps1` 对 18 份关键交付物做字节级往返比对，全部 `roundtrip=True`、
+  已用 `verify-encoding.ps1` 对 24 份关键交付物做字节级往返比对，全部 `roundtrip=True`、
   无乱码特征字，确认迁移过程未发生编码损坏。
 
 ### 10.2 "从上游重建"范式

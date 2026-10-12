@@ -110,6 +110,12 @@
             <artifactId>nla-message</artifactId>
         </dependency>
 
+        <!--  人脸业务模块  -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-face</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>
