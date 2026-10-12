@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -77,6 +78,42 @@ public class DeviceMobilePositionServiceImpl implements IDeviceMobilePositionSer
             .eqIfText(DeviceMobilePosition::getChannelId, bo.getChannelId())
             .orderByDesc(DeviceMobilePosition::getTime)
             .build();
+    }
+
+    /**
+     * 查询设备历史轨迹，起止时间同时传入时才按时间过滤。
+     *
+     * @param deviceId  设备国标编号
+     * @param channelId 通道国标编号，可为空
+     * @param startTime 起始时间，可为空
+     * @param endTime   结束时间，可为空
+     * @return 轨迹列表，按上报时间倒序
+     */
+    @Override
+    public List<DeviceMobilePositionVo> queryHistory(String deviceId, String channelId, LocalDateTime startTime,
+                                                    LocalDateTime endTime) {
+        LambdaQueryWrapper<DeviceMobilePosition> wrapper = QueryBuilder.lambda(DeviceMobilePosition.class)
+            .eq(DeviceMobilePosition::getDeviceId, deviceId)
+            .eqIfText(DeviceMobilePosition::getChannelId, channelId)
+            .between(startTime != null && endTime != null, DeviceMobilePosition::getTime, startTime, endTime)
+            .orderByDesc(DeviceMobilePosition::getTime)
+            .build();
+        return mobilePositionMapper.selectVoList(wrapper);
+    }
+
+    /**
+     * 查询设备最新一条位置记录。
+     *
+     * @param deviceId 设备国标编号
+     * @return 最新位置记录，无记录返回 {@code null}
+     */
+    @Override
+    public DeviceMobilePositionVo queryLatest(String deviceId) {
+        return mobilePositionMapper.selectVoOne(QueryBuilder.lambda(DeviceMobilePosition.class)
+            .eq(DeviceMobilePosition::getDeviceId, deviceId)
+            .orderByDesc(DeviceMobilePosition::getTime)
+            .last("limit 1")
+            .build());
     }
 
     /**

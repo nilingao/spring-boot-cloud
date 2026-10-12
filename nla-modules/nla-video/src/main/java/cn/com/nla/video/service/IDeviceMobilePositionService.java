@@ -5,6 +5,7 @@ import cn.com.nla.common.mybatis.core.page.PageQuery;
 import cn.com.nla.video.domain.bo.DeviceMobilePositionBo;
 import cn.com.nla.video.domain.vo.DeviceMobilePositionVo;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -39,6 +40,25 @@ public interface IDeviceMobilePositionService {
      * @return 位置记录列表
      */
     List<DeviceMobilePositionVo> queryList(DeviceMobilePositionBo bo);
+
+    /**
+     * 查询设备历史轨迹，起止时间同时传入时才按时间过滤。
+     *
+     * @param deviceId  设备国标编号
+     * @param channelId 通道国标编号，可为空
+     * @param startTime 起始时间，可为空
+     * @param endTime   结束时间，可为空
+     * @return 轨迹列表，按上报时间倒序
+     */
+    List<DeviceMobilePositionVo> queryHistory(String deviceId, String channelId, LocalDateTime startTime, LocalDateTime endTime);
+
+    /**
+     * 查询设备最新一条位置记录。
+     *
+     * @param deviceId 设备国标编号
+     * @return 最新位置记录，无记录返回 {@code null}
+     */
+    DeviceMobilePositionVo queryLatest(String deviceId);
 
     /**
      * 新增位置记录。

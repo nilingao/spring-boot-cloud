@@ -4,13 +4,21 @@ import cn.com.nla.common.core.exception.ServiceException;
 import cn.com.nla.common.video.basic.enums.ConstEnum;
 import cn.com.nla.common.video.basic.enums.RespCode;
 import cn.com.nla.common.video.basic.enums.VideoStreamType;
+import cn.com.nla.common.video.basic.exception.SsrcTransactionNotFoundException;
 import cn.com.nla.common.video.basic.model.ProtocolResult;
 import cn.com.nla.common.video.basic.vo.video.DeviceChannelVo;
 import cn.com.nla.common.video.basic.vo.video.DeviceVo;
+import cn.com.nla.common.video.basic.vo.video.MediaServerVo;
 import cn.com.nla.common.video.core.demo.InviteInfo;
+import cn.com.nla.common.video.core.demo.SsrcTransaction;
 import cn.com.nla.common.video.core.redis.RedisService;
+import cn.com.nla.common.video.core.redis.impl.SsrcConfigManager;
+import cn.com.nla.common.video.core.redis.impl.SsrcTransactionManager;
 import cn.com.nla.common.video.core.service.VideoService;
 import cn.com.nla.common.video.core.service.video.DeviceChannelVoService;
+import cn.com.nla.common.video.core.sip.SipServer;
+import cn.com.nla.common.video.core.sip.cmd.SIPCommander;
+import cn.com.nla.common.video.core.utils.DynamicTask;
 import cn.com.nla.video.domain.DeviceChannel;
 import cn.com.nla.video.mapper.DeviceChannelMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +28,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sip.InvalidArgumentException;
+import javax.sip.SipException;
+import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,12 +52,15 @@ import java.util.stream.Collectors;
 public class DeviceChannelVoServiceImpl implements DeviceChannelVoService {
 
     /**
-     * 语音对讲依赖 SSRC 事务与 WebRTC 推流地址，属于实时指令能力，随后续批次迁移。
+     * 语音对讲推流的应用名，与协议侧 INVITE 处理保持一致
      */
-    private static final String AUDIO_UNSUPPORTED_MESSAGE = "语音对讲功能将在后续批次迁移";
+    private static final String AUDIO_APP = "audio";
 
     private final DeviceChannelMapper deviceChannelMapper;
     private final PlatformShareHelper platformShareHelper;
+    private final DynamicTask dynamicTask;
+    private final SipServer sipServer;
+    private final SIPCommander sipCommander;
 
     /**
      * 查询设备最新登记的通道。
@@ -332,38 +346,120 @@ public class DeviceChannelVoServiceImpl implements DeviceChannelVoService {
     }
 
     /**
-     * 获取语音对讲推流地址。
+     * 获取语音对讲推流地址：分配 SSRC 并登记推流事务，等待设备 INVITE 建立语音通道。
      *
      * @param deviceId  设备国标编号
      * @param channelId 通道国标编号
-     * @return 暂不支持的业务提示
+     * @return 推流地址，data 为 WebRTC 推流 URL
      */
     @Override
     public ProtocolResult<?> findAudioPushPath(String deviceId, String channelId) {
-        return ProtocolResult.result(RespCode.CODE_2.getValue(), AUDIO_UNSUPPORTED_MESSAGE);
+        SsrcTransactionManager ssrcTransactionManager = RedisService.getSsrcTransactionManager();
+        SsrcTransaction exist = ssrcTransactionManager.getParamOne(deviceId, channelId, null, null, VideoStreamType.audio);
+        if (exist != null) {
+            if (StringUtils.isEmpty(exist.getCallId())) {
+                return ProtocolResult.result(RespCode.CODE_2.getValue(), "语音流正在开启中");
+            }
+            if (channelId.equals(exist.getChannelId())) {
+                return ProtocolResult.result(RespCode.CODE_2.getValue(), "语音通话中,请稍后或关闭语音流");
+            }
+            return ProtocolResult.result(RespCode.CODE_2.getValue(), "每个设备只能一个通道语音对讲");
+        }
+        DeviceChannelVo deviceChannelVo = VideoService.getDeviceChannelService().findDeviceIdChannelId(deviceId, channelId);
+        if (deviceChannelVo == null) {
+            return ProtocolResult.result(RespCode.CODE_2.getValue(), "未获取设备通道信息");
+        }
+        DeviceVo deviceVo = VideoService.getDeviceService().findDeviceGbId(deviceId);
+        if (deviceVo == null) {
+            return ProtocolResult.result(RespCode.CODE_2.getValue(), "未获取设备信息");
+        }
+        MediaServerVo mediaServerVo = VideoService.getMediaServerService().findMediaServerForMinimumLoad(deviceVo);
+        if (mediaServerVo == null) {
+            return ProtocolResult.result(RespCode.CODE_2.getValue(), "未获取流媒体信息");
+        }
+        SsrcConfigManager ssrcConfigManager = RedisService.getSsrcConfigManager();
+        String ssrc = ssrcConfigManager.getPlaySsrc(mediaServerVo.getId());
+        String streamId = String.format("%08x", Integer.parseInt(ssrc)).toUpperCase();
+        ssrcTransactionManager.put(deviceId, channelId, null, AUDIO_APP, streamId, ssrc, mediaServerVo.getId(), null,
+            VideoStreamType.audio);
+        // 15 秒内没有收到设备 INVITE 视为对讲未建立，回收事务与 SSRC
+        dynamicTask.startDelay(audioPushTaskKey(deviceId, channelId), 15, () -> {
+            SsrcTransaction transaction = ssrcTransactionManager.getParamOne(deviceId, channelId, null, null,
+                VideoStreamType.audio);
+            if (transaction != null && StringUtils.isEmpty(transaction.getCallId())) {
+                stopAudioPushStatus(deviceId, channelId);
+            }
+        });
+        boolean ssl = isSsl(mediaServerVo);
+        String pushPath = String.format("%s://%s:%s/%s/index/api/webrtc?app=%s&stream=%s&type=push",
+            ssl ? "https" : "http", mediaServerVo.getStreamIp(),
+            ssl ? mediaServerVo.getHttpSslPort() : mediaServerVo.getHttpPort(),
+            StringUtils.isNotEmpty(mediaServerVo.getVideoHttpPrefix()) ? mediaServerVo.getVideoHttpPrefix() : "",
+            AUDIO_APP, streamId);
+        return ProtocolResult.result(RespCode.CODE_0.getValue(), null, pushPath);
     }
 
     /**
-     * 获取语音对讲推流状态。
+     * 获取语音对讲推流状态，data 为是否已建立推流事务。
      *
      * @param deviceId  设备国标编号
      * @param channelId 通道国标编号
-     * @return 暂不支持的业务提示
+     * @return 推流状态
      */
     @Override
     public ProtocolResult<?> findAudioPushStatus(String deviceId, String channelId) {
-        return ProtocolResult.result(RespCode.CODE_2.getValue(), AUDIO_UNSUPPORTED_MESSAGE);
+        SsrcTransaction transaction = RedisService.getSsrcTransactionManager()
+            .getParamOne(deviceId, channelId, null, null, VideoStreamType.audio);
+        return ProtocolResult.result(RespCode.CODE_0.getValue(), null, transaction != null);
     }
 
     /**
-     * 关闭语音对讲推流。
+     * 关闭语音对讲推流：清理事务与守护任务，并向设备发送 BYE。
      *
      * @param deviceId  设备国标编号
      * @param channelId 通道国标编号
-     * @return 暂不支持的业务提示
+     * @return 关闭结果
      */
     @Override
     public ProtocolResult<?> stopAudioPushStatus(String deviceId, String channelId) {
-        return ProtocolResult.result(RespCode.CODE_2.getValue(), AUDIO_UNSUPPORTED_MESSAGE);
+        DeviceVo deviceVo = VideoService.getDeviceService().findDeviceGbId(deviceId);
+        if (deviceVo == null) {
+            return ProtocolResult.result(RespCode.CODE_2.getValue(), "未获取设备信息");
+        }
+        SsrcTransactionManager ssrcTransactionManager = RedisService.getSsrcTransactionManager();
+        SsrcTransaction transaction = ssrcTransactionManager.getParamOne(deviceId, channelId, null, null,
+            VideoStreamType.audio);
+        if (transaction != null) {
+            ssrcTransactionManager.remove(transaction.getDeviceId(), transaction.getChannelId(), transaction.getStream(),
+                VideoStreamType.audio);
+        }
+        dynamicTask.stop(audioPushTaskKey(deviceId, channelId));
+        try {
+            sipCommander.streamByeCmd(sipServer, deviceVo, channelId, null, null, VideoStreamType.audio, null, null);
+        } catch (SipException | InvalidArgumentException | ParseException | SsrcTransactionNotFoundException e) {
+            log.error("[命令发送失败] 语音流 发送BYE: {}", e.getMessage());
+        }
+        return ProtocolResult.result(RespCode.CODE_0.getValue(), null);
+    }
+
+    /**
+     * 语音推流守护任务键，与协议侧 INVITE 处理停止的键保持一致。
+     *
+     * @param deviceId  设备国标编号
+     * @param channelId 通道国标编号
+     * @return 任务键
+     */
+    private static String audioPushTaskKey(String deviceId, String channelId) {
+        return String.format("audio_push_stream:%s_%s", deviceId, channelId);
+    }
+
+    /**
+     * 流媒体是否启用 SSL，未配置视为未启用。
+     *
+     * @param mediaServerVo 流媒体视图
+     * @return 是否使用 https
+     */
+    private static boolean isSsl(MediaServerVo mediaServerVo) {
+        return mediaServerVo.getSslStatus() != null && mediaServerVo.getSslStatus() == ConstEnum.Flag.YES.getValue();
     }
 }

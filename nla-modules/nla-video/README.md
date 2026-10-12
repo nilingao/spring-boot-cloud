@@ -1,6 +1,6 @@
 # nla-video
 
-交付视频监控 12 张表的管理 CRUD、国标协议 SPI 实现与 ZLMediaKit 回调入口，算法底座为 [`nla-common-video`](../../nla-common/nla-common-video/README.md)（阶段 3.2 交付的 GB28181/SIP + ZLMediaKit 封装）。模块已登记 reactor 与根 POM 坐标管理，并已接入 `nla-admin`。阶段 4 的数据层（12 套 Entity/Bo/Vo/Mapper）说明见下文；SIP 点播/回放/云台/报警应答等实时指令端点留后续批次。
+交付视频监控 12 张表的管理 CRUD、国标协议 SPI 实现、ZLMediaKit 回调入口与 SIP 实时指令端点（SSE 回执），算法底座为 [`nla-common-video`](../../nla-common/nla-common-video/README.md)（阶段 3.2 交付的 GB28181/SIP + ZLMediaKit 封装）。模块已登记 reactor 与根 POM 坐标管理，并已接入 `nla-admin`。阶段 4 的数据层（12 套 Entity/Bo/Vo/Mapper）说明见下文；管理 CRUD 见「业务层（批次 6.5 第一轮）」，实时指令见「实时指令（批次 6.5 第二轮）」。
 
 ## 新库初始化
 
@@ -49,17 +49,25 @@ VideoMediaServer 为旧 video.MediaServer 消歧，避免与 fs.MediaServer 混�
 - 自定义 XML：6 份新增 Mapper XML 承担通道级联目录查询、子通道计数重算、平台反查通道、国标流伪装通道列表、设备在线统计与推流状态聚合，全部语句显式过滤 `del_flag = '0'`。
 - 回调入口：`MediaHookController` 暴露 9 个 ZLMediaKit hook（keepalive/play/publish/stream_changed/none_reader/not_found/server_started/send_rtp_stopped/rtp_server_timeout），路径取自 `ZLMediaKitConstant`，直接委派 `MediaHookServer`；调用方是流媒体服务器、没有登录态，因此 `/index/hook/**` 已在 `nla-admin` 的 `security.excludes` 匿名放行。
 
+## 实时指令（批次 6.5 第二轮）
+
+- 指令受理与 SSE 回执（`command/` 5 类）：`VideoCommandDispatcher` 按回执路由键受理指令——查重在途（重复直接拒绝）、生成 32 位 `requestId` 凭据并立即返回，`VideoCommandHandle` 供业务回填；协议侧 ACK / 业务失败 / 超时统一 `normalize` 为 `VideoCommandResultVo`，经 `DefaultVideoCommandNotifier` 走 `PushHelper`（Redis 主题 + SSE）推给发起用户，推送类型为 `video-command`，集群下由持有连接的节点送出。默认超时 30s，超时结果以 `Supplier` 提供以便语音广播等回收已分配事务；无登录上下文的协议侧触发只受理不推送。`VideoCommandKeys` 维护 14 个回执路由键，与 `nla-common-video` 协议回调发布方逐一对齐。
+- 10 个门控服务共 79 个端点：指令组（点播/回放/录像/云台/设备控制/语音）走受理 + SSE；查询组（流媒体运行态、移动位置、通道目录、级联共享）同步返回，运行态查询走 `RedisService`/`VideoService` 静态门面 + `MediaClient`。移动位置补 `queryHistory`/`queryLatest`，语音对讲三方法从占位替换为真实协议实现。
+- 有意修正（详见 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 6.9）：旧工程 `deleteRelation` 的 type 与 DEL 事件载荷互换，已按 type 对应收集；目录关系解除拆 `failOnEmpty`，目录下只有通道或只有流时「解除全部」不再被空集合异常中断；`selectChannelWithCatalog` 的 WGS84 别名遮蔽改为显式列清单（回归用例锁定）。
+
 ## 门控
 
-`video.enabled` 缺省不配置即关闭：`nla-common-video` 的 `SipConfig` 自动配置、本模块全部 SPI 实现与 `MediaHookController` 都带 `@ConditionalOnProperty(prefix = "video", name = "enabled", havingValue = "true")`，协议组件与 SIP 监听端口在关闭时完全不创建。管理 CRUD 的 Service/Controller 不受门控，始终可用。
+`video.enabled` 缺省不配置即关闭：`nla-common-video` 的 `SipConfig` 自动配置、本模块全部 SPI 实现与 `MediaHookController`、第二轮的 10 个指令控制器 / 10 个服务与 `command/` 5 类都带 `@ConditionalOnProperty(prefix = "video", name = "enabled", havingValue = "true")`，协议组件与 SIP 监听端口在关闭时完全不创建。管理 CRUD 的 Service/Controller 不受门控，始终可用。
 
 ## 接口与权限
 
 12 个管理控制器统一路由 `/video/{device,deviceChannel,deviceAlarm,deviceMobilePosition,mediaServer,gbStream,streamProxy,streamPush,parentPlatform,platformCatalog,platformGbChannel,platformGbStream}`，权限 `video:{business}:{list,query,add,edit,remove}`（报警与移动位置无 add/edit）；写操作带 `@Log`、`@RepeatSubmit` 与 `AddGroup`/`EditGroup` 校验。菜单种子见 [`script/sql/nla_video.sql`](../../script/sql/nla_video.sql) 的 `1761400000000004000` 号段（1 目录 + 12 菜单 + 44 按钮 + 57 条角色授权），前端页面由独立前端任务线补齐。
 
+第二轮 10 个指令控制器路由 `/video/{play,playback,record,ptz,deviceControl,audio,position,channelCatalog,stream,platformShare}`，共 79 端点、10 组 30 个权限点（如 `video:play:{start,stop,convert}`、`video:platformShare:{query,bind,unbind}`）；本轮不生成菜单/按钮 SQL，非超管角色需手工授权。
+
 ## 尚未交付
 
-SIP 实时指令（点播/回放/云台/报警应答/目录订阅）、Excel 导出与语音对讲未实现，语音对讲的 3 个 SPI 方法返回 `RespCode.CODE_2` 占位提示。`queryOnlineList`/`queryEnableList`/`queryByGbId`/`queryByServerGbId` 等协议侧查询已在 Service 暴露但未开放 HTTP 端点，随实时指令批次一并铺设。
+Excel 导出未实现；30 个指令权限点未生成菜单/按钮种子 SQL（需手工授权）；真实 SIP 设备与 ZLMediaKit 联调、`nla-admin` 启动冒烟与前端 `video/**` 页面（含 `video-command` SSE 对账）未验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 6.9 为准。
 
 ## 验证
 
@@ -67,6 +75,6 @@ SIP 实时指令（点播/回放/云台/报警应答/目录订阅）、Excel 导
 .migration\test-video.ps1
 ```
 
-共 57 项测试：`VideoDataContractTest`(47) 加载交付 DDL，解析真实 Mapper XML，对全部 12 个真实 Mapper 执行全字段 CRUD、审计填充和逻辑删除；覆盖生成 Bo→实体→Vo 映射、分组/长度/非负数/端口校验、凭据不回显、字符串主键、特殊 gb_stream_id 主键、两类国标关联、每张参与查询表的删除过滤、参数绑定、空集合、目录归属、全部唯一键和多次删除/重建。`VideoServiceContractTest`(10) 在同一个 H2 库上真实执行管理 Service 与 SPI 契约：业务键查重、编辑排除自身、删除前引用校验、级联共享清理、自定义 XML 查询、子通道计数重算与语音对讲占位；两者均不启动 Spring Boot、不连 SIP/ZLM/Redis，`VideoSpringSupport` 只预装最小容器以满足 MapStruct-Plus 与 JsonUtils 的静态初始化。全量回归入口 `.migration\test-video-all.ps1`。
+共 71 项测试：`VideoDataContractTest`(47) 加载交付 DDL，解析真实 Mapper XML，对全部 12 个真实 Mapper 执行全字段 CRUD、审计填充和逻辑删除；覆盖生成 Bo→实体→Vo 映射、分组/长度/非负数/端口校验、凭据不回显、字符串主键、特殊 gb_stream_id 主键、两类国标关联、每张参与查询表的删除过滤、参数绑定、空集合、目录归属、全部唯一键和多次删除/重建。`VideoServiceContractTest`(14) 在同一个 H2 库上真实执行管理 Service 与 SPI 契约：业务键查重、编辑排除自身、删除前引用校验、级联共享清理、自定义 XML 查询、子通道计数重算、语音 fail-fast、流媒体全链路（`mockStatic(MediaClient)`）与级联绑定两用例。`VideoCommandContractTest`(10) 用 Mockito 桩与 `FixedUserDispatcher`（覆写 `currentUserId()` 绕开 sa-token）锁定指令受理与 SSE 回执契约及 PTZ 指令映射。三者均不启动 Spring Boot、不连 SIP/ZLM/Redis，`VideoSpringSupport` 预装最小容器以满足 MapStruct-Plus 与 JsonUtils 的静态初始化，并以 `mock(Class)` 注册 `RedisService`/`VideoService` 静态门面的 JVM 共享桩。全量回归入口 `.migration\test-video-all.ps1`。
 
 H2 2.4.240 的 MySQL 模式保留列定义和生成列表达式，剥离 MySQL 表级引擎/字符集/排序规则/行格式选项及 STORED 关键字；测试只回放 `create table` 段（菜单与角色授权属于 MySQL 交付脚本），并给索引名加表名前缀以适应 H2 的 schema 级索引命名。固定测试审计填充器不代表生产登录态。真实 MySQL 生成列/排序规则/索引性能、生产审计、权限、菜单执行与协议联调尚未验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 为准。

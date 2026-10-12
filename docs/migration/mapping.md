@@ -1105,9 +1105,53 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **测试（新增 2 个测试文件）**：`VideoSpringSupport` 沿用 `nla-face` 的 `GenericApplicationContext` + `io.github.linpeilie.Converter` **子类桩**方案，解决 `MapstructUtils`/`JsonUtils` 静态 `SpringUtils.getBean` 在纯单测中的类初始化问题；桩实现按 mapstruct-plus 生成类命名规则（`<Bo 包>.<Bo>To<Entity>Mapper`）反射定位 `Mappers.getMapper` + `getMethod("convert", …)`，避免为 12 张表手写桩，生成类缺失时直接报错暴露意外依赖。`VideoServiceContractTest`(10) 在 H2 MySQL 模式上回放交付 DDL（12 表）+ 装载 12 个真实 Mapper 与 8 份真实 XML + 分页拦截器，手工装配 12 个 ServiceImpl 与 `DeviceChannelVoServiceImpl`/`PlatformShareHelper`，覆盖业务键查重、编辑排自身、删除前引用校验（含设备→通道、目录→子目录/级联/共享根目录、流媒体→设备/直播流/拉流代理三级绑定）、级联共享清理、自定义 XML 查询、子通道计数重算、分页 `PageResult` 和语音对讲 `CODE_2` 占位；不启动 Spring Boot、不连 SIP/ZLM/Redis。**仅** `DeviceChannelVoServiceImpl.save()` 与 `MediaServerVoServiceImpl` 部分路径依赖 `VideoService`/`RedisService` 静态入口（属实时指令链路），本轮不做纯单测断言。验证入口 `.migration/test-video.ps1`（单模块）与 `.migration/test-video-all.ps1`（全量）。
 
-**有意偏离**（同步旧工程或后续重做时必须保留）：① 语音对讲 3 方法（`findAudioPushPath`/`findAudioPushStatus`/`stopAudioPushStatus`）返回 `RespCode.CODE_2` + 「语音对讲功能将在后续批次迁移」，不抛异常；② `findMediaServerForMinimumLoad()` 不读 Redis 实时连接数，改为取数据库「启用且在线」节点（单体无跨实例负载统计，已写进类 JavaDoc）；③ **修正旧 `DeviceMobilePositionVoServiceImpl.findLastChannelId` 的判空反转**（旧代码 `if (entity != null) return null;` 导致查到也返回 null）；④ **修正旧 `updateParentPlatformStatus` 缺 `eq(server_gb_id)` 的全表更新**（旧代码会把所有平台状态一起改）；⑤ `findMediaServerForMinimumLoad(DeviceVo)` 补齐旧实现的潜在 NPE 分支；⑥ 旧 `VideoException`（受检）统一换为 `ServiceException`，与本工程异常基线一致；⑦ Service 层查重与 DDL 唯一键不完全对齐（DDL 用 `active_marker` 生成列限定有效行，Service 只查有效行，并发窗口靠前端重试）；⑧ 控制器路由由旧 `/api/**` 改为 `/video/{business}`，权限按 `${module}:${business}:${action}` 重建（旧工程无对应权限点）；⑨ 报警与移动位置不提供新增/修改端点（只读记录表）；⑩ hook 异步回复由旧 `DeferredResult` 改为 `CompletableFuture`（`MediaHookServer` 已返回异步结果）；⑪ `/index/hook/**` 是**全局**写入 `security.excludes` 的匿名路径，不区分 `video.enabled` 开关（协议未启用时根本没有对应 Controller Bean，返回 404）。⑫ **新发现（尚未修）**：`selectChannelWithCatalog` 写了 `ch.longitude_wgs84 as longitude`，但同一列的 `ch.*` 已先产生 `LONGITUDE` 标签，MyBatis 自动映射按列标签去重后**取第一个**，WGS84 覆盖实际不生效；已比对旧 `spring-boot-video` 的同名 XML，确认旧工程同款写法，属忠实迁移而非本轮引入的回归，因此**不改生产 SQL**，测试改为断言设备/通道关系与 `del_flag` 过滤（已验证共享关系或目录任一逻辑删除后查询没有该通道）；若后续要修，应改成 `ch.longitude_wgs84 AS "longitude"` 并控住旧行为差异。
+**有意偏离**（同步旧工程或后续重做时必须保留）：① 语音对讲 3 方法（`findAudioPushPath`/`findAudioPushStatus`/`stopAudioPushStatus`）返回 `RespCode.CODE_2` + 「语音对讲功能将在后续批次迁移」，不抛异常（**已于批次 6.5 第二轮替换为真实协议实现，见 6.9**）；② `findMediaServerForMinimumLoad()` 不读 Redis 实时连接数，改为取数据库「启用且在线」节点（单体无跨实例负载统计，已写进类 JavaDoc）；③ **修正旧 `DeviceMobilePositionVoServiceImpl.findLastChannelId` 的判空反转**（旧代码 `if (entity != null) return null;` 导致查到也返回 null）；④ **修正旧 `updateParentPlatformStatus` 缺 `eq(server_gb_id)` 的全表更新**（旧代码会把所有平台状态一起改）；⑤ `findMediaServerForMinimumLoad(DeviceVo)` 补齐旧实现的潜在 NPE 分支；⑥ 旧 `VideoException`（受检）统一换为 `ServiceException`，与本工程异常基线一致；⑦ Service 层查重与 DDL 唯一键不完全对齐（DDL 用 `active_marker` 生成列限定有效行，Service 只查有效行，并发窗口靠前端重试）；⑧ 控制器路由由旧 `/api/**` 改为 `/video/{business}`，权限按 `${module}:${business}:${action}` 重建（旧工程无对应权限点）；⑨ 报警与移动位置不提供新增/修改端点（只读记录表）；⑩ hook 异步回复由旧 `DeferredResult` 改为 `CompletableFuture`（`MediaHookServer` 已返回异步结果）；⑪ `/index/hook/**` 是**全局**写入 `security.excludes` 的匿名路径，不区分 `video.enabled` 开关（协议未启用时根本没有对应 Controller Bean，返回 404）。⑫ **新发现（尚未修）**：`selectChannelWithCatalog` 写了 `ch.longitude_wgs84 as longitude`，但同一列的 `ch.*` 已先产生 `LONGITUDE` 标签，MyBatis 自动映射按列标签去重后**取第一个**，WGS84 覆盖实际不生效；已比对旧 `spring-boot-video` 的同名 XML，确认旧工程同款写法，属忠实迁移而非本轮引入的回归，因此**不改生产 SQL**，测试改为断言设备/通道关系与 `del_flag` 过滤（已验证共享关系或目录任一逻辑删除后查询没有该通道）；若后续要修，应改成 `ch.longitude_wgs84 AS "longitude"` 并控住旧行为差异。**已于批次 6.5 第二轮修复**：改为显式列清单（排除 `parent_id`/`longitude`/`latitude`/`channel_type` 四个遮蔽列），并以先红后绿的回归用例锁定，见 6.9。
 
 **剩余验收**：SIP 实时指令端点（点播/回放/云台/报警应答/目录订阅）、Excel 导出、`queryOnlineList`/`queryEnableList`/`queryByGbId` 等未开放 HTTP 端点的协议侧查询留下一轮；真实 ZLMediaKit/SIP 设备联调、`nla_video.sql`（含菜单）在真实 MySQL 8 执行、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。
+
+### 6.9 批次 6.5（video 业务层第二轮：SIP 实时指令端点）交付结果（已落地）
+
+按用户决策，本轮把第一轮留下的 **SIP 实时指令端点全量铺设**：旧工程 `spring-boot-video` `controller/api/**` 下 16 个控制器约 80 个端点全部迁入本模块。指令形态按用户决策取 **SSE 推送回执**：HTTP 线程只做受理、立即返回 32 位 `requestId` 凭据，协议侧 ACK / 业务失败 / 超时经统一消息通道（Redis 主题 + SSE）推给发起用户，不再用旧工程的 `DeferredResult` 长连接占住 Web 线程。附带修复 6.8 ⑫ 记录的 `selectChannelWithCatalog` WGS84 别名遮蔽（用户点名）。
+
+全 reactor `mvn -o -B clean test` **BUILD SUCCESS（49/49 模块）**、`MVN_EXIT=0`（6:23）。`nla-video` 71 项测试全绿（`VideoDataContractTest` 47 + `VideoServiceContractTest` 10→14 + 本轮新增 `VideoCommandContractTest` 10），`nla-common-video` 15 项无回归（本轮全量跑未再现 8.2 的 UDP 端口竞争假阳性）。品牌审计 `scanning 1996 files / hits=0`（基线 1953→1996，+43 = 本轮新增 42 个主 Java + 1 个测试类）、编码校验 `failures=0`、`git diff --check` 干净。本轮只更新仓库文件，未对外部数据库执行 SQL，未提交。
+
+**pom 接线**：`nla-modules/nla-video/pom.xml` 唯一变更 = 新增 `nla-common-push`（回执经 `PushHelper` 投递）；登录态 `LoginHelper` 沿用 6.8 已引入的 `nla-common-security` 传递链，根 pom / bom / `nla-modules/pom.xml` 未动。
+
+**指令受理与 SSE 回执（`command/` 5 类，全部挂 `video.enabled` 门控）**：
+- `VideoCommandDispatcher.dispatch(action, key, timeout, timeoutResult, sender)`：在途查重（`DeferredResultHolder.exist`，重复抛「相同指令正在执行中」）→ 生成 32 位 `requestId` → `put(key, requestId, VideoRestResult)` 注册回执路由 → `sender.accept(handle)` 下发 SIP 命令（发送异常本地回填失败）→ 返回 `VideoCommandTicketVo(requestId, action, key, timeoutMillis)`。`VideoRestResult.whenComplete` 挂钩超时/应答回填，统一 `normalize` 成 `VideoCommandResultVo`（兼容 `ProtocolResult`、`{code,msg,data}` Map、裸对象，成功码补「成功」文案）后交 `VideoCommandNotifier` 推送。默认超时 30s 与旧工程一致；超时结果以 `Supplier` 提供，供语音广播等超时后回收已分配事务。无登录上下文（协议侧触发）时 `currentUserId()` 为 null、只受理不推送。
+- `VideoCommandHandle`：业务侧回填句柄，`success(data)` / `fail(message)` / `complete(payload)` → `invokeResult(key, requestId, payload)`，按 `key+requestId` 配对释放，业务侧无需感知配对。
+- `VideoCommandKeys`：14 个回执路由键工厂（play/stop/playback/download/recordInfo/deviceControl/deviceConfig/configDownload/deviceStatus/deviceInfo/alarm/broadcast/presetQuery/mobilePosition），全部基于 `DeferredResultHolder.CALLBACK_CMD_*` 常量拼接，与 `nla-common-video` 协议回调发布方逐一对齐。
+- `VideoCommandNotifier` 接口 + `DefaultVideoCommandNotifier`：`PushPayloadDTO.of("video-command", BACKEND, message, result)` → `PushHelper.publishMessage([userId], payload)`，Redis 主题发布、集群下由持有该用户 SSE 连接的节点送出；推送失败只记日志，不影响指令下发与执行。
+
+**业务层（新增 10 个门控服务 = 10 `IVideo*Service` + 10 `*ServiceImpl`，共 79 个端点；指令组走受理 + SSE，查询组同步返回）**：
+- 指令组 6 个：`VideoPlayServiceImpl`（点播起停/转码）、`VideoPlaybackServiceImpl`（回放起停/拖动/倍速/暂停恢复）、`VideoRecordServiceImpl`（录像查询/下载任务）、`VideoPtzServiceImpl`（云台 21 端点：方向/变倍/光圈/聚焦/预置位/巡航/扫描/辅助开关/看守位）、`VideoDeviceControlServiceImpl`（设备控制 13 端点：参数查询/设防撤防/远程启动/格式化/重启等）、`VideoAudioServiceImpl`（语音广播/对讲）。
+- 查询组 4 个：`VideoStreamServiceImpl`（点播/拉流代理/推流的播放地址与流信息、FFmpeg 模板、代理启停，走 `RedisService`/`VideoService` 静态门面 + `MediaClient`）、`VideoPositionServiceImpl`（历史轨迹/实时位置/订阅状态/坐标转换）、`VideoChannelCatalogServiceImpl`（通道目录树/同步/同步状态）、`VideoPlatformShareServiceImpl`（级联共享 11 端点：通道与流绑定/解绑/绑定键查询/目录树/平台树/SIP 列表，目录事件经 `PlatformCatalogVoService.handleCatalogEvent` 推给上级平台）。
+- 新增 6 个支撑 VO：`VideoCommandTicketVo`（受理凭据）、`VideoCommandResultVo`（SSE 回执体）、`VideoBindKeyVo`（绑定键查询）、`VideoConvertVo`（转码后各协议播放地址）、`VideoDownloadTaskVo`（下载任务与进度）、`VideoSubscribeInfoVo`（订阅状态）；`VideoPlatformShareBo` 承载绑定/解绑参数。
+- 既有类扩展：`IDeviceMobilePositionService` 补 `queryHistory`（起止时间过滤、上报时间倒序）与 `queryLatest` 两个只读方法；`spi/DeviceChannelVoServiceImpl` 语音对讲三方法从 6.8 ① 的 `CODE_2` 占位替换为真实协议实现（查通道/设备后经 ZLM 节点推流，SSE 回执含超时回收）。
+
+**端点与权限（10 门控控制器 / 79 端点 / 10 组 30 个权限点）**：
+
+| 控制器 | 路由 | 端点 | 权限组 |
+|---|---|---|---|
+| VideoPlayController | `/video/play` | 4 | `video:play:{start,stop,convert}` |
+| VideoPlaybackController | `/video/playback` | 6 | `video:playback:{start,stop,seek,speed,suspend,restore}` |
+| VideoRecordController | `/video/record` | 5 | `video:record:{list,download}` |
+| VideoPtzController | `/video/ptz` | 21 | `video:ptz:{control,preset,cruise,scan}` |
+| VideoDeviceControlController | `/video/deviceControl` | 13 | `video:deviceControl:{control,query,edit}` |
+| VideoAudioController | `/video/audio` | 4 | `video:audio:{broadcast,push}` |
+| VideoPositionController | `/video/position` | 5 | `video:position:{query,realtime,subscribe,transform}` |
+| VideoChannelCatalogController | `/video/channelCatalog` | 3 | `video:channelCatalog:{query,sync}` |
+| VideoStreamController | `/video/stream` | 7 | `video:stream:{query,start,stop}` |
+| VideoPlatformShareController | `/video/platformShare` | 11 | `video:platformShare:{query,bind,unbind}` |
+
+控制器、服务与 command 层全部挂 `@ConditionalOnProperty(video.enabled=true)`，与管理 CRUD 解耦；写操作带 `@Log`。**按本轮范围决策不生成菜单/按钮 SQL**（用户口径：不做菜单按钮权限），30 个权限点未铺种子，非超管角色需手工授权 `video:play:*` 等。
+
+**有意偏离**（同步旧工程或后续重做时必须保留）：
+① **指令形态**从旧 `DeferredResult` 同步长连接改为「受理凭据 + SSE 异步回执」，前端须按 `requestId` 对账 `video-command` 类型推送，同一路由键在途时受理直接拒绝；② **修正旧 `deleteRelation` 的 type 与 DEL 事件载荷互换**：旧代码 type=1（删通道）却收集流目录、type=2（删流）却收集通道目录，上级平台收到的目录变更与实际删除内容不符，新实现按 type 对应收集；③ **目录关系解除的空绑定语义**：旧链路目录下只有一类绑定时「解除全部」会被另一类的空集合异常中断，新实现拆 `doUnbindChannel`/`doUnbindStream(failOnEmpty)`，清理路径静默跳过、直接端点仍快速失败；④ 旧 `find_ffmpeg_cmd` 的 `NotNullMap` 包装响应扁平化为 `R<String>`（FFmpeg 命令模板），流媒体节点与配置缺失时抛业务文案；⑤ 查询组对 `findOnLineMediaServerId`/`getZLMServerConfig`/`getInviteInfo`/`getStreamInfo` 的 null 结果与 `code≠CODE_0` 统一抛 `ServiceException` 业务文案；⑥ `isAll=0`（按编号选）时空集合抛「请选择需要操作的数据」，不退化为全量操作；⑦ 路由由旧 `/api/**` 改为 `/video/{camelCase}`，权限点按 `${module}:${business}:${action}` 重建（旧 api 控制器无对应权限点）；⑧ 语音对讲从占位换为真实协议实现（见上），旧 6.8 ① 废弃；⑨ WGS84 别名遮蔽修复见 6.8 ⑫。
+
+**测试（新增 1 个测试文件 + 扩 2 个）**：`VideoSpringSupport` 新增 `mock(Class)` 能力——`RedisService`/`VideoService` 静态门面全走 `SpringUtil.getBean`，以类全限定名为 Bean 名注册 JVM 共享 Mockito 桩即生效（接口/抽象类/具体类均可）；Mockito inline mock maker 自附加已实证，`mockStatic(MediaClient)` 可用。`VideoCommandContractTest`(10) 不启动 Spring，用 `FixedUserDispatcher` 覆写 `currentUserId()` 绕开 sa-token，覆盖查重拒绝、requestId 生成与凭据字段、发送异常回填、超时 Supplier 回收、normalize 三形态、无登录不推送与 PTZ 指令映射。`VideoServiceContractTest` 10→14：语音用例从占位断言改写为 fail-fast 断言；新增 r11 流媒体全链路（`mockStatic(MediaClient)` + 桩验证启停透传）与 r12 通道侧/流侧绑定两用例。**两个 H2 基座教训**：`selectShared*` XML 四表 JOIN 含 `video_parent_platform`，用例必须真实插入平台行，否则查询恒空；MyBatis 一级缓存遇 MP `insertBatch` 走独立 BATCH session 提交，共享 SqlSession 内「先查（空结果入缓存）→ 批插 → 同 SQL 再查」命中脏缓存，关键步骤前须 `session.clearCache()`（生产每请求新 session 无此问题）。验证入口 `.migration/test-video.ps1`（单模块）与 `.migration/test-video-all.ps1`（全量）。
+
+**剩余验收**：真实 SIP 设备/ZLM 节点联调（指令下发、回执到达、SSE 到达与 `video-command` 前端对账）、30 个权限点的菜单/角色授权（本轮不生成 SQL）、Excel 导出、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。
 
 ---
 
@@ -1227,7 +1271,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 1953 files` / `scanned(text)=1945  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.5 第一轮后实测；上一次基线是批次 6.4 后的 `1894 / 1886`，+59 来自本轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
+**`scanning 1996 files` / `scanned(text)=1988  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.5 第二轮后实测；上一次基线是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；更早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是

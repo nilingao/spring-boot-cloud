@@ -11,9 +11,14 @@
         and ch.channel_id = #{channelId}
     </select>
 
-    <!-- 目录级联通道列表：通道坐标取 WGS84，父级目录取共享目录编号 -->
+    <!--
+      目录级联通道列表：通道坐标取 WGS84，父级目录取共享目录编号。
+      这里必须显式列出列名：`ch.*` 会同时带出 parent_id/longitude/latitude/channel_type，
+      与后面的同名别名构成重复列标签，按标签取值只会拿到 ch.* 的原始值，
+      上级平台因此收到 GCJ-02 坐标并把通道挂到通道自身的父级下。
+    -->
     <select id="selectChannelWithCatalog" resultType="cn.com.nla.video.domain.DeviceChannel">
-        select ch.*,
+        select ch.`id`, ch.`channel_id`, ch.`device_id`, ch.`name`, ch.`manufacture`, ch.`model`, ch.`owner`, ch.`civil_code`, ch.`block`, ch.`address`, ch.`parental`, ch.`safety_way`, ch.`register_way`, ch.`cert_num`, ch.`certifiable`, ch.`err_code`, ch.`end_time`, ch.`secrecy`, ch.`ip_address`, ch.`port`, ch.`password`, ch.`ptz_type`, ch.`ptz_type_text`, ch.`status`, ch.`longitude_gcj02`, ch.`latitude_gcj02`, ch.`longitude_wgs84`, ch.`latitude_wgs84`, ch.`sub_count`, ch.`stream_id`, ch.`has_record`, ch.`has_audio`, ch.`business_group_id`, ch.`gps_time`, ch.`create_dept`, ch.`create_by`, ch.`create_time`, ch.`update_by`, ch.`update_time`,
         ch.longitude_wgs84 as longitude,
         ch.latitude_wgs84 as latitude,
         '0' as channelType,

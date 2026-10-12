@@ -31,6 +31,11 @@
             <artifactId>nla-common-redis</artifactId>
         </dependency>
         <dependency>
+            <!-- SIP 异步指令回执经 SSE 推送 -->
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-push</artifactId>
+        </dependency>
+        <dependency>
             <groupId>cn.com.nla</groupId>
             <artifactId>nla-common-security</artifactId>
         </dependency>

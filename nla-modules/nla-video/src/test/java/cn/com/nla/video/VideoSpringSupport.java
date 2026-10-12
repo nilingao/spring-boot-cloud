@@ -3,6 +3,7 @@ package cn.com.nla.video;
 import cn.com.nla.common.core.utils.SpringUtils;
 import io.github.linpeilie.Converter;
 import org.mapstruct.factory.Mappers;
+import org.mockito.Mockito;
 import org.springframework.context.support.GenericApplicationContext;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -32,6 +33,28 @@ final class VideoSpringSupport {
         context.registerBean(JsonMapper.class, () -> JsonMapper.builder().build());
         context.registerBean(Converter.class, VideoTestConverter::new);
         context.refresh();
+    }
+
+    /**
+     * 按类型注册并缓存一个 Mockito 桩，供 VideoService/RedisService 这类静态持有器解析。
+     *
+     * <p>静态上下文全 JVM 只装配一次，桩会被多个测试类共享；需要独立场景时先 {@code Mockito.reset}。
+     * 因为 {@code SpringUtils} 继承了 hutool 的 {@code SpringUtil}，手动注册的单例对静态持有器可见。</p>
+     *
+     * @param type 服务接口或实现类
+     * @param <T>  服务类型
+     * @return 缓存的桩实例
+     */
+    static synchronized <T> T mock(Class<T> type) {
+        ensureInstalled();
+        String name = type.getName();
+        Object existing = context.getBeanFactory().getSingleton(name);
+        if (existing != null) {
+            return type.cast(existing);
+        }
+        T bean = Mockito.mock(type);
+        context.getBeanFactory().registerSingleton(name, bean);
+        return bean;
     }
 
     /** 仅通过编译期生成的 BoToEntity / EntityToVo 映射器转换，缺失生成类时直接失败暴露意外依赖。 */
