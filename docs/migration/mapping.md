@@ -851,7 +851,8 @@ bean 独有表初判 4 张（`bean_user_set`/`bean_mini`/`bean_mini_user`/`sys_a
 
 **DDL** `script/sql/nla_system_ext.sql`（独立新文件，不追加到 91.9KB 基线 `nla_system.sql`，保持基线种子干净、便于上游再同步）：`sys_area` 建表（`area_id` 主键无自增 + 4 索引 `idx_area_code`/`idx_parent_id`/`idx_level`/`idx_area_name`）+ 菜单权限（「行政区划」C 菜单 `1761400000000002100` + 查询 F 按钮 `1761400000000002101`，挂系统管理 `1761400000000000001` 下 `order_num=12`）+ 2 条 `sys_role_menu` 授权（普通角色 `1761300000000000003`）；号段 `2100` 与短信号段 `2000`（`nla_message.sql`）无冲突。
 
-**延后项**：`sys_area` 国标数据批量导入（旧库 67 万余行 / 91MB）延后处理，不随脚本入库；Easy-ES 全文检索（旧 `bean_sys_area` 索引）延后至阶段4（`nla-common-elasticsearch`）再评估。
+**数据导入已补齐**：新增 [`nla_system_area_data.sql`](../../script/sql/nla_system_area_data.sql)，从仓库现有四级 `sql/sys_area.sql` 生成 3,256 行、显式列序的目标表 INSERT；执行顺序为先 `nla_system_ext.sql` 建表，再执行本数据脚本。`.migration/verify-sys-area-data.ps1` 做源数据与交付数据的行数、顺序和首尾 ID 校验。旧 `sql/sys_area_1.sql` 的 679,237 行是字段不同且含五级社区的另一数据集，不直接导入四级 `sys_area`，避免层级和主键语义错配。
+**仍延后**：Easy-ES 全文检索（旧 `bean_sys_area` 索引）延后至阶段 4（`nla-common-elasticsearch`）再评估；真实 MySQL 执行和索引性能仍待环境验收。
 
 **验证**：`nla-modules/nla-system -am` 编译 `MVN_EXIT=0`；`SysAreaMapper` 的 IDE 自动装配告警为 MyBatis `@MapperScan` 运行时注册的静态分析假阳性，与基线全部 mapper（如 `SysPostMapper` 同样无 `@Mapper` 注解）一致。
 
@@ -1682,6 +1683,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-test-log.ps1` | 从 maven 日志里定位失败测试行与首个失败上下文 | ✅ |
 | `probe-mapping-lines.ps1` | 用 `Select-String` 列出本台账指定模式的行号与内容（绕开 Grep 对本文件的假阴性，见 10.1 陷阱） | ✅ |
 | `probe-mapping-enc.ps1` | 校验本台账字节级编码（BOM / UTF-8 有效性），编辑前后自查 | ✅ |
+| `verify-sys-area-data.ps1` | 校验四级 `sys_area` 数据交付脚本与源数据行数、顺序及首尾 ID 一致，防止误把五级旧数据集直接导入 | ✅ |
 | `probe-converter.ps1` | 用 `mvn help:evaluate` 定位真实本地仓库 + `javap` 反编译 mapstruct-plus `Converter` 签名，确认可子类化桩 | ✅ |
 | `fs-contract-test.ps1` | 批次 6.6 单模块测试入口：`mvn -B -pl nla-modules/nla-callcenter "-Dtest=<类列表>" test`（默认 `CallcenterDataContractTest`，当前全模块口径 150 项 = DataContract 121 + FsCommon 4 + FsRuntimeConfigRefresh 2 + AgentSocket 23），日志落 `.migration/fs-contract-test.log` | ✅ |
 | `fs-full-test.ps1` | 批次 6.6 全量回归入口：`mvn -B clean test`（无 `-o`，如需改 goal 直接编辑脚本），日志落 `.migration/fs-full-test.log` | ✅ |
