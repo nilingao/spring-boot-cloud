@@ -32,6 +32,8 @@ public interface IRouteGroupService {
      * @param pageQuery 分页参数
      * @return 路由组分页列表
      */
+    List<RouteGroupVo> queryList(RouteGroupBo bo);
+
     PageResult<RouteGroupVo> queryPageList(RouteGroupBo bo, PageQuery pageQuery);
 
     /**

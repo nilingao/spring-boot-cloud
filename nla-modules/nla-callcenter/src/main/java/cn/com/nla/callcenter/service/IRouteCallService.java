@@ -1,5 +1,6 @@
 package cn.com.nla.callcenter.service;
 
+import java.util.List;
 import cn.com.nla.callcenter.domain.bo.RouteCallBo;
 import cn.com.nla.callcenter.domain.vo.RouteCallVo;
 import cn.com.nla.common.core.domain.PageResult;
@@ -29,6 +30,8 @@ public interface IRouteCallService {
      * @param pageQuery 分页参数
      * @return 外呼路由分页列表
      */
+    List<RouteCallVo> queryList(RouteCallBo bo);
+
     PageResult<RouteCallVo> queryPageList(RouteCallBo bo, PageQuery pageQuery);
 
     /**

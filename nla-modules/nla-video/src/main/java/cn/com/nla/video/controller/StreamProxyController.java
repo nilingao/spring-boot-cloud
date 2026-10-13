@@ -1,6 +1,7 @@
 package cn.com.nla.video.controller;
 
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.video.domain.bo.StreamProxyBo;
 import cn.com.nla.video.domain.vo.StreamProxyVo;
 import cn.com.nla.video.service.IStreamProxyService;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -106,4 +109,13 @@ public class StreamProxyController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(streamProxyService.deleteWithValidByIds(List.of(ids), true));
     }
+    /** ???????? */
+    @SaCheckPermission("video:streamProxy:export")
+    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(StreamProxyBo bo, HttpServletResponse response) {
+        List<StreamProxyVo> list = streamProxyService.queryList(bo);
+        ExcelBuilder.of(list, StreamProxyVo.class).sheetName("????").toResponse(response);
+    }
+
 }

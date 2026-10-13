@@ -1,6 +1,7 @@
 package cn.com.nla.video.controller;
 
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.video.domain.bo.DeviceChannelBo;
 import cn.com.nla.video.domain.vo.DeviceChannelVo;
 import cn.com.nla.video.service.IDeviceChannelService;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -119,4 +122,13 @@ public class DeviceChannelController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(deviceChannelService.deleteWithValidByIds(List.of(ids), true));
     }
+    /** ???????? */
+    @SaCheckPermission("video:deviceChannel:export")
+    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(DeviceChannelBo bo, HttpServletResponse response) {
+        List<DeviceChannelVo> list = deviceChannelService.queryList(bo);
+        ExcelBuilder.of(list, DeviceChannelVo.class).sheetName("????").toResponse(response);
+    }
+
 }

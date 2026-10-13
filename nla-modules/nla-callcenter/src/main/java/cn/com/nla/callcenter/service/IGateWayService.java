@@ -31,6 +31,8 @@ public interface IGateWayService {
      * @param pageQuery 分页参数
      * @return 网关分页列表
      */
+    List<GateWayVo> queryList(GateWayBo bo);
+
     PageResult<GateWayVo> queryPageList(GateWayBo bo, PageQuery pageQuery);
 
     /**

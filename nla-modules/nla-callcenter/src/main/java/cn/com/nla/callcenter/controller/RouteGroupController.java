@@ -6,6 +6,7 @@ import cn.com.nla.callcenter.domain.vo.FsOptionVo;
 import cn.com.nla.callcenter.domain.vo.RouteGroupVo;
 import cn.com.nla.callcenter.service.IRouteGroupService;
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -15,7 +16,9 @@ import cn.com.nla.common.mybatis.core.page.PageQuery;
 import cn.com.nla.common.redis.annotation.RepeatSubmit;
 import cn.com.nla.common.web.core.BaseController;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -149,6 +152,15 @@ public class RouteGroupController extends BaseController {
     public R<List<FsOptionVo>> optionselect(@RequestParam(required = false) String keyword,
                                             @RequestParam(required = false) Integer limit) {
         return R.ok(routeGroupService.queryOptionList(keyword, limit));
+    }
+
+    /** ??????? */
+    @SaCheckPermission("fs:routeGroup:export")
+    @Log(title = "???", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(RouteGroupBo bo, HttpServletResponse response) {
+        List<RouteGroupVo> list = routeGroupService.queryList(bo);
+        ExcelBuilder.of(list, RouteGroupVo.class).sheetName("路由组").toResponse(response);
     }
 
 }

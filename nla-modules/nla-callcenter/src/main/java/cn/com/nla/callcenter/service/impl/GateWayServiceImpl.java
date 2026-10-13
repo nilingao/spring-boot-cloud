@@ -60,6 +60,10 @@ public class GateWayServiceImpl implements IGateWayService {
      * @return 网关分页列表
      */
     @Override
+    public List<GateWayVo> queryList(GateWayBo bo) {
+        return gateWayMapper.selectVoList(buildQueryWrapper(bo));
+    }
+
     public PageResult<GateWayVo> queryPageList(GateWayBo bo, PageQuery pageQuery) {
         Page<GateWayVo> result = gateWayMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
         return PageResult.build(result.getRecords(), result.getTotal());

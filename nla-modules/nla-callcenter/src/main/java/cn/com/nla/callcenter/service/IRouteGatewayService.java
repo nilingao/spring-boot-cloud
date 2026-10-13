@@ -31,6 +31,8 @@ public interface IRouteGatewayService {
      * @param pageQuery 分页参数
      * @return 路由网关分页列表
      */
+    List<RouteGatewayVo> queryList(RouteGatewayBo bo);
+
     PageResult<RouteGatewayVo> queryPageList(RouteGatewayBo bo, PageQuery pageQuery);
 
     /**

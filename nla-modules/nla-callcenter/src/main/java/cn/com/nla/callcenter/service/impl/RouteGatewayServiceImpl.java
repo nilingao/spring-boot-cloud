@@ -70,6 +70,10 @@ public class RouteGatewayServiceImpl implements IRouteGatewayService {
      * @return 路由网关分页列表
      */
     @Override
+    public List<RouteGatewayVo> queryList(RouteGatewayBo bo) {
+        return routeGatewayMapper.selectVoList(buildQueryWrapper(bo));
+    }
+
     public PageResult<RouteGatewayVo> queryPageList(RouteGatewayBo bo, PageQuery pageQuery) {
         Page<RouteGatewayVo> result = routeGatewayMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
         return PageResult.build(result.getRecords(), result.getTotal());

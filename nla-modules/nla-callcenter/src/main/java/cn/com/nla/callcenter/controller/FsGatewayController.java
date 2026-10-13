@@ -5,6 +5,7 @@ import cn.com.nla.callcenter.domain.vo.FsOptionVo;
 import cn.com.nla.callcenter.domain.vo.GateWayVo;
 import cn.com.nla.callcenter.service.IGateWayService;
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -14,7 +15,9 @@ import cn.com.nla.common.mybatis.core.page.PageQuery;
 import cn.com.nla.common.redis.annotation.RepeatSubmit;
 import cn.com.nla.common.web.core.BaseController;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -134,6 +137,15 @@ public class FsGatewayController extends BaseController {
     public R<List<FsOptionVo>> optionselect(@RequestParam(required = false) String keyword,
                                             @RequestParam(required = false) Integer limit) {
         return R.ok(gateWayService.queryOptionList(keyword, limit));
+    }
+
+    /** ??FS?????? */
+    @SaCheckPermission("fs:gateway:export")
+    @Log(title = "FS????", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(GateWayBo bo, HttpServletResponse response) {
+        List<GateWayVo> list = gateWayService.queryList(bo);
+        ExcelBuilder.of(list, GateWayVo.class).sheetName("FS注册网关").toResponse(response);
     }
 
 }

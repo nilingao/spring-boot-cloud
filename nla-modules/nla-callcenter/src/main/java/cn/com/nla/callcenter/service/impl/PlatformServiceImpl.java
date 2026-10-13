@@ -1,5 +1,6 @@
 package cn.com.nla.callcenter.service.impl;
 
+import java.util.List;
 import cn.com.nla.callcenter.domain.Platform;
 import cn.com.nla.callcenter.domain.bo.PlatformBo;
 import cn.com.nla.callcenter.domain.vo.PlatformVo;
@@ -57,6 +58,10 @@ public class PlatformServiceImpl implements IPlatformService {
      * @return 平台分页列表
      */
     @Override
+    public List<PlatformVo> queryList(PlatformBo bo) {
+        return platformMapper.selectVoList(buildQueryWrapper(bo));
+    }
+
     public PageResult<PlatformVo> queryPageList(PlatformBo bo, PageQuery pageQuery) {
         Page<PlatformVo> result = platformMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
         return PageResult.build(result.getRecords(), result.getTotal());

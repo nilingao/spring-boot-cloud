@@ -1,5 +1,6 @@
 package cn.com.nla.callcenter.service;
 
+import java.util.List;
 import cn.com.nla.callcenter.domain.bo.PlatformBo;
 import cn.com.nla.callcenter.domain.vo.PlatformVo;
 import cn.com.nla.common.core.domain.PageResult;
@@ -29,6 +30,8 @@ public interface IPlatformService {
      * @param pageQuery 分页参数
      * @return 平台分页列表
      */
+    List<PlatformVo> queryList(PlatformBo bo);
+
     PageResult<PlatformVo> queryPageList(PlatformBo bo, PageQuery pageQuery);
 
     /**

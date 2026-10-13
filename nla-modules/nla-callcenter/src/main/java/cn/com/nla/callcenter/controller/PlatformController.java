@@ -4,6 +4,7 @@ import cn.com.nla.callcenter.domain.bo.PlatformBo;
 import cn.com.nla.callcenter.domain.vo.PlatformVo;
 import cn.com.nla.callcenter.service.IPlatformService;
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.common.mybatis.core.page.PageQuery;
 import cn.com.nla.common.redis.annotation.RepeatSubmit;
 import cn.com.nla.common.web.core.BaseController;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -118,6 +121,15 @@ public class PlatformController extends BaseController {
     @DeleteMapping("/{ids}")
     public R<Void> remove(@NotEmpty(message = "平台编号不能为空") @PathVariable Long[] ids) {
         return toAjax(platformService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    /** ??FS???? */
+    @SaCheckPermission("fs:platform:export")
+    @Log(title = "FS??", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(PlatformBo bo, HttpServletResponse response) {
+        List<PlatformVo> list = platformService.queryList(bo);
+        ExcelBuilder.of(list, PlatformVo.class).sheetName("FS??").toResponse(response);
     }
 
 }

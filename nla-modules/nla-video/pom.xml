@@ -12,6 +12,10 @@
     <dependencies>
         <dependency>
             <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-excel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
             <artifactId>nla-common-video</artifactId>
         </dependency>
         <dependency>

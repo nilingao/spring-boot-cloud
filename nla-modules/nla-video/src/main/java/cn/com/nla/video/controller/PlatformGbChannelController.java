@@ -1,6 +1,7 @@
 package cn.com.nla.video.controller;
 
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.video.domain.bo.PlatformGbChannelBo;
 import cn.com.nla.video.domain.vo.PlatformGbChannelVo;
 import cn.com.nla.video.service.IPlatformGbChannelService;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -106,4 +109,13 @@ public class PlatformGbChannelController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(platformGbChannelService.deleteWithValidByIds(List.of(ids), true));
     }
+    /** ?????????? */
+    @SaCheckPermission("video:platformGbChannel:export")
+    @Log(title = "??????", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(PlatformGbChannelBo bo, HttpServletResponse response) {
+        List<PlatformGbChannelVo> list = platformGbChannelService.queryList(bo);
+        ExcelBuilder.of(list, PlatformGbChannelVo.class).sheetName("??????").toResponse(response);
+    }
+
 }

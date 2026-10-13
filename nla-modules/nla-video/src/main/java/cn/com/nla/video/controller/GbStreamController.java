@@ -1,6 +1,7 @@
 package cn.com.nla.video.controller;
 
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.video.domain.bo.GbStreamBo;
 import cn.com.nla.video.domain.vo.GbStreamVo;
 import cn.com.nla.video.service.IGbStreamService;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -106,4 +109,13 @@ public class GbStreamController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(gbStreamService.deleteWithValidByIds(List.of(ids), true));
     }
+    /** ??????? */
+    @SaCheckPermission("video:gbStream:export")
+    @Log(title = "???", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(GbStreamBo bo, HttpServletResponse response) {
+        List<GbStreamVo> list = gbStreamService.queryList(bo);
+        ExcelBuilder.of(list, GbStreamVo.class).sheetName("???").toResponse(response);
+    }
+
 }

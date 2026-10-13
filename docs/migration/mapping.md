@@ -1217,16 +1217,16 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 `script/sql/` 下 4 方言共 14 份，全部由 `.migration/regen-sql.ps1` 生成。
 
-| # | 规则 | 替换 | min | 理由 |
-|---|---|---|---|---|
-| 1 | `疯狂的狮子Li` | → `NLA管理员` | 4 | `sys_user` 中 admin 的昵称是上游作者品牌 |
-| 2 | `crazyLionLi@163\.com` | → `admin@nla.com.cn` | 4 | 同上，admin 邮箱 |
-| 3 | `(?m)^.*PLUS官网.*\r?\n` | → 删除整行 | 4 | `sys_menu` 中 `1761400000000000004` 是纯品牌外链菜单，无任何模块依赖 |
-| 4 | `gitee\.com/nla/warm-flow` | → `gitee.com/dromara/warm-flow` | 3 | **还原第三方真实溯源地址**；warm-flow 是第三方项目，改写后 URL 会指向不存在的仓库 |
-| 5 | `postgres_ry_ai\.sql` | → `postgres_nla_ai.sql` | 1 | AI 库自带用法注释引用自己的上游文件名 |
-| 6 | `< ry_ai\.sql` | → `< nla_ai.sql` | 1 | 同上（MySQL 版） |
-| 7 | `若依新版本发布啦` | → `新版本发布啦` | 1 | **修上游自身不一致**：`sqlserver_ry_vue.sql` 的 `sys_notice` 种子行仍带品牌，而 MySQL/Oracle/Postgres 三方言已清理 |
-| 8 | `若依系统凌晨维护` | → `系统凌晨维护` | 1 | 同上 |
+| # | 规则 | 替换 | min | 理由                                                                                         |
+|---|---|---|---|--------------------------------------------------------------------------------------------|
+| 1 | `疯狂的狮子Li` | → `NLA管理员` | 4 | `sys_user` 中 admin 的昵称是上游作者品牌                                                              |
+| 2 | `crazyLionLi@163\.com` | → `admin@nla.com.cn` | 4 | 同上，admin 邮箱                                                                                |
+| 3 | `(?m)^.*PLUS官网.*\r?\n` | → 删除整行 | 4 | `sys_menu` 中 `1761400000000000004` 是纯品牌外链菜单，无任何模块依赖                                        |
+| 4 | `gitee\.com/nla/warm-flow` | → `gitee.com/dromara/warm-flow` | 3 | **还原第三方真实溯源地址**；warm-flow 是第三方项目，改写后 URL 会指向不存在的仓库                                         |
+| 5 | `postgres_ry_ai\.sql` | → `postgres_nla_ai.sql` | 1 | AI 库自带用法注释引用自己的上游文件名                                                                       |
+| 6 | `< ry_ai\.sql` | → `< nla_ai.sql` | 1 | 同上（MySQL 版）                                                                                |
+| 7 | `若依新版本发布啦` | → `新版本发布啦` | 1 | **修复上游自身不一致**：`sqlserver_ry_vue.sql` 的 `sys_notice` 种子行仍带品牌，而 MySQL/Oracle/Postgres 三方言已清理 |
+| 8 | `若依系统凌晨维护` | → `系统凌晨维护` | 1 | 同上                                                                                         |
 
 规则 3 的效果：`nla_system.sql` 相比上游少 1 行（934 vs 935），其余方言同理各少 1 行。
 `nla_job.sql` / `oracle_nla_job.sql` / `postgres_nla_job.sql` / `postgres_nla_workflow.sql` /

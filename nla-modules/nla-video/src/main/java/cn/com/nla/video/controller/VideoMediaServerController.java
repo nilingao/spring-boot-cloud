@@ -1,6 +1,7 @@
 package cn.com.nla.video.controller;
 
 import cn.com.nla.common.core.domain.PageResult;
+import cn.com.nla.common.excel.utils.ExcelBuilder;
 import cn.com.nla.common.core.domain.R;
 import cn.com.nla.common.core.validate.AddGroup;
 import cn.com.nla.common.core.validate.EditGroup;
@@ -13,7 +14,9 @@ import cn.com.nla.video.domain.bo.VideoMediaServerBo;
 import cn.com.nla.video.domain.vo.VideoMediaServerVo;
 import cn.com.nla.video.service.IVideoMediaServerService;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -106,4 +109,13 @@ public class VideoMediaServerController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "流媒体编号不能为空") @PathVariable String[] ids) {
         return toAjax(videoMediaServerService.deleteWithValidByIds(List.of(ids), true));
     }
+    /** ????????? */
+    @SaCheckPermission("video:mediaServer:export")
+    @Log(title = "?????", businessType = BusinessType.EXPORT)
+    @PostMapping("/export")
+    public void export(VideoMediaServerBo bo, HttpServletResponse response) {
+        List<VideoMediaServerVo> list = videoMediaServerService.queryList(bo);
+        ExcelBuilder.of(list, VideoMediaServerVo.class).sheetName("?????").toResponse(response);
+    }
+
 }

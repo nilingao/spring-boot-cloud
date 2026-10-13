@@ -12,6 +12,10 @@
     <dependencies>
         <dependency>
             <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-excel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
             <artifactId>nla-common-freeswitch</artifactId>
         </dependency>
         <!-- 坐席 Socket.IO 事件推送，由 socket-io.enabled 与 freeswitch.enabled 双开时装配 -->

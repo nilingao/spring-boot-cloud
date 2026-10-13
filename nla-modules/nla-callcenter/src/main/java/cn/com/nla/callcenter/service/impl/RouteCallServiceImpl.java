@@ -1,5 +1,6 @@
 package cn.com.nla.callcenter.service.impl;
 
+ import java.util.List;
 import cn.com.nla.callcenter.config.fs.runtime.FsRuntimeConfigRefreshPublisher;
 import cn.com.nla.callcenter.domain.RouteCall;
 import cn.com.nla.callcenter.domain.RouteGroup;
@@ -57,6 +58,10 @@ public class RouteCallServiceImpl implements IRouteCallService {
      * @return 外呼路由分页列表
      */
     @Override
+    public List<RouteCallVo> queryList(RouteCallBo bo) {
+        return routeCallMapper.selectVoList(buildQueryWrapper(bo));
+    }
+
     public PageResult<RouteCallVo> queryPageList(RouteCallBo bo, PageQuery pageQuery) {
         Page<RouteCallVo> result = routeCallMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
         return PageResult.build(result.getRecords(), result.getTotal());

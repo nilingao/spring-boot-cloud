@@ -91,6 +91,10 @@ public class RouteGroupServiceImpl implements IRouteGroupService {
      * @return 路由组分页列表
      */
     @Override
+    public List<RouteGroupVo> queryList(RouteGroupBo bo) {
+        return routeGroupMapper.selectVoList(buildQueryWrapper(bo));
+    }
+
     public PageResult<RouteGroupVo> queryPageList(RouteGroupBo bo, PageQuery pageQuery) {
         Page<RouteGroupVo> result = routeGroupMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
         return PageResult.build(result.getRecords(), result.getTotal());
