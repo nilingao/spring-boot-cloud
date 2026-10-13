@@ -44,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class CallcenterDataContractTest {
     private static final LocalDateTime CREATED = LocalDateTime.of(2026, 10, 10, 8, 0);
     private static final List<String> PRIVATE_FIELDS = List.of("password", "passwd", "sipPwd", "secret", "secretKey", "notifyUrl", "cdrNotifyUrl");
+    /** Vo 查询装配字段(联查/非持久化)，不参与 Vo 与 entity 的同名字段映射契约。 */
+    private static final List<String> VO_ASSEMBLY_FIELDS = List.of("sipPhoneList", "gateways");
     private JdbcDataSource dataSource;
     private SqlSession session;
 
@@ -71,15 +73,18 @@ class CallcenterDataContractTest {
             .replaceAll("(?i)\\) engine=innodb[^;]*;", ");")
             .replaceAll("(?i)\\bstored\\b", "");
         try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            int created = 0;
             for (String sql : ddl.split("(?m);\\s*$")) {
-                if (!sql.isBlank()) {
-                    // MySQL 索引名属于各表，H2 索引名属于 schema；仅在测试中加表名前缀。
-                    var table = java.util.regex.Pattern.compile("create table if not exists (\\w+)").matcher(sql);
-                    assertTrue(table.find());
-                    sql = sql.replaceAll("(?i)\\bkey (\\w+)\\s*\\(", "key " + table.group(1) + "_$1 (");
-                    statement.execute(sql);
-                }
+                // 菜单与角色授权种子属于 MySQL 交付脚本，H2 只回放建表语句。
+                if (sql.isBlank() || !sql.strip().regionMatches(true, 0, "create table", 0, 12)) { continue; }
+                // MySQL 索引名属于各表，H2 索引名属于 schema；仅在测试中加表名前缀。
+                var table = java.util.regex.Pattern.compile("create table if not exists (\\w+)").matcher(sql);
+                assertTrue(table.find());
+                sql = sql.replaceAll("(?i)\\bkey (\\w+)\\s*\\(", "key " + table.group(1) + "_$1 (");
+                statement.execute(sql);
+                created++;
             }
+            assertEquals(entities().count(), created, "交付 DDL 建表数量应与实体数量一致");
         }
         var configuration = new MybatisConfiguration();
         configuration.setMapUnderscoreToCamelCase(true);
@@ -187,7 +192,7 @@ class CallcenterDataContractTest {
         }
         assertEquals(CREATED, view.getClass().getMethod("getCreateTime").invoke(view));
         for (Field field : view.getClass().getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers()) || field.getName().equals("sipPhoneList")) { continue; }
+            if (Modifier.isStatic(field.getModifiers()) || VO_ASSEMBLY_FIELDS.contains(field.getName())) { continue; }
             field.setAccessible(true);
             String getter = "get" + Character.toUpperCase(field.getName().charAt(0)) + field.getName().substring(1);
             assertEquals(type.getMethod(getter).invoke(entity), field.get(view), name + "Vo." + field.getName());

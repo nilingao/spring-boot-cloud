@@ -7,14 +7,12 @@ import cn.com.nla.common.freeswitch.client.sip.properties.VideoProperties;
 import cn.com.nla.common.freeswitch.vo.sip.PlatformRegisterInfo;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
-@Component
 public class PlatformRegisterManager {
 
     @Resource

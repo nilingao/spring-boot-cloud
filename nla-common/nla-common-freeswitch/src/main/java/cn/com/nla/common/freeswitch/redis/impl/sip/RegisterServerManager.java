@@ -6,7 +6,6 @@ import cn.com.nla.common.freeswitch.common.sip.SipConstant;
 import cn.com.nla.common.freeswitch.client.sip.properties.VideoProperties;
 import cn.com.nla.common.freeswitch.vo.sip.Address;
 import cn.com.nla.common.redis.utils.RedisUtils;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
@@ -16,7 +15,6 @@ import java.util.List;
  * 上级 或 设备 注册到服务相关缓存
  * (用于通过注册的上级或设备国标编号去找注册到那个服务)
  */
-@Component
 public class RegisterServerManager {
     @Resource
     private VideoProperties videoProperties;

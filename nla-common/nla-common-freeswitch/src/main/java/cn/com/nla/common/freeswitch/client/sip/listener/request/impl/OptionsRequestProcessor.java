@@ -13,7 +13,6 @@ import cn.com.nla.common.freeswitch.service.SipService;
 import cn.com.nla.common.freeswitch.vo.sip.Address;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import javax.sip.InvalidArgumentException;
@@ -30,7 +29,6 @@ import java.time.LocalDateTime;
  * 每28秒fs会发送一次心跳
  */
 @Slf4j
-@Component
 public class OptionsRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
     @Resource
     private DynamicTask dynamicTask;

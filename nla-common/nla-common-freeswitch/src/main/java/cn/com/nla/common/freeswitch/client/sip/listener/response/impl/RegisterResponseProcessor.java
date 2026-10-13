@@ -9,7 +9,6 @@ import cn.com.nla.common.freeswitch.vo.sip.PlatformRegisterInfo;
 import cn.com.nla.common.freeswitch.vo.sip.SipTransactionInfo;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import javax.sip.InvalidArgumentException;
 import javax.sip.ResponseEvent;
@@ -24,7 +23,6 @@ import java.time.LocalDateTime;
  * @description:Register响应处理器
  */
 @Slf4j
-@Component
 public class RegisterResponseProcessor extends AbstractSipResponseEvent {
 
     @Override

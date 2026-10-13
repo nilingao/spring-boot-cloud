@@ -3,12 +3,10 @@ package cn.com.nla.common.freeswitch.redis.impl.fs;
 import cn.com.nla.common.freeswitch.common.fs.RedisConstant;
 import cn.com.nla.common.freeswitch.model.fs.GroupInfo;
 import cn.com.nla.common.redis.utils.RedisUtils;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
 public class GroupInfoManager {
     private String FS_GROUP_INFO = RedisConstant.FS_GROUP_INFO;
 

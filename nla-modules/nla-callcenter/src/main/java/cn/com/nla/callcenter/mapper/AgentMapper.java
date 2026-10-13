@@ -1,5 +1,6 @@
 package cn.com.nla.callcenter.mapper;
 
+import cn.com.nla.common.freeswitch.model.bean.UserModel;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.callcenter.domain.Agent;
 import cn.com.nla.callcenter.domain.vo.AgentVo;
@@ -16,4 +17,13 @@ public interface AgentMapper extends BaseMapperPlus<Agent, AgentVo> {
 
     /** 按SIP号码查询指定企业的有效座席，不返回密码。 */
     AgentVo selectBySip(@Param("companyId") Long companyId, @Param("sip") String sip);
+
+    /** 按SIP号码全局查询有效座席(协议侧注册/鉴权查找，不分企业)。 */
+    Agent getAgentBySip(@Param("sip") String sip);
+
+    /** 用户绑定的最新座席(协议侧全局查找，不分企业，含密码)。 */
+    Agent findUserId(@Param("userId") Long userId);
+
+    /** 按SIP号码查询 FreeSWITCH XML directory 鉴权模型(协议侧鉴权，不分企业)。 */
+    UserModel findUserModel(@Param("sip") String sip);
 }

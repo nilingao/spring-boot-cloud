@@ -2,13 +2,11 @@ package cn.com.nla.common.freeswitch.client.sip.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * 信令服务参数
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "sip") // 配置文件的前缀
 public class SipConfigProperties {
 	/**

@@ -21,7 +21,6 @@ import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -36,7 +35,6 @@ import java.util.Arrays;
  * 下一步处理类
  */
 @Slf4j
-@Component
 public class EventNextHandler {
 
     @Getter

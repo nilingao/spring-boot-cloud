@@ -19,7 +19,6 @@ import cn.com.nla.common.freeswitch.vo.sip.SipTransactionInfo;
 import cn.com.nla.common.freeswitch.vo.sip.SsrcTransaction;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import javax.sdp.SdpParseException;
@@ -34,7 +33,6 @@ import java.text.ParseException;
  */
 
 @Slf4j
-@Component
 public class SIPCommanderImpl implements SIPCommander {
 
     @Resource

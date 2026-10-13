@@ -7,6 +7,7 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** 网关组视图；凭据不输出，号码按既有响应增强流程脱敏。
  * @author TZY
@@ -20,6 +21,9 @@ public class RouteGroupVo implements Serializable {
     private Long id;
     private String name;
     private Integer status;
+
+    /** 已绑定的网关选项列表, 由 Service 详情查询时联表装配, 非库表字段。 */
+    private List<FsOptionVo> gateways;
 
     private Long createDept;
     private Long createBy;

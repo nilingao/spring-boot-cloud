@@ -4,14 +4,12 @@ import cn.com.nla.common.freeswitch.common.sip.SipConstant;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import cn.com.nla.common.freeswitch.vo.sip.SipTransactionInfo;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 
 /**
  * 注册相关信息
  */
 @Slf4j
-@Component
 public class SipTransactionManager {
     private String SIP_TRANSACTION =  "SIP_TRANSACTION:";
 

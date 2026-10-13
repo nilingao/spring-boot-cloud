@@ -3,12 +3,10 @@ package cn.com.nla.common.freeswitch.redis.impl.fs;
 import cn.com.nla.common.freeswitch.common.fs.RedisConstant;
 import cn.com.nla.common.freeswitch.model.fs.VdnPhoneInfo;
 import cn.com.nla.common.redis.utils.RedisUtils;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
 public class VdnPhoneManager {
 
     private String FS_VDN_PHONE_INFO = RedisConstant.FS_VDN_PHONE_INFO;

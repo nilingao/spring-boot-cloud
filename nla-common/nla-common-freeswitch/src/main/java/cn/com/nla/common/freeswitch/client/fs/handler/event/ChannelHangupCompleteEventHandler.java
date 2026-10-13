@@ -23,7 +23,6 @@ import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.time.Duration;
@@ -38,7 +37,6 @@ import java.util.List;
  *  挂机完成事件
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.CHANNEL_HANGUP_COMPLETE)
 public class ChannelHangupCompleteEventHandler implements EslEventHandler {
 

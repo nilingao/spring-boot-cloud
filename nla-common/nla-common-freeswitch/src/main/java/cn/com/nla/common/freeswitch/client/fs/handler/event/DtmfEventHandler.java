@@ -5,13 +5,11 @@ import cn.com.nla.common.freeswitch.esl.EslEventName;
 import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
  * 按键收号
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.DTMF)
 public class DtmfEventHandler implements EslEventHandler {
     @Override

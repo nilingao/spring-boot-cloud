@@ -5,7 +5,6 @@ import cn.com.nla.common.freeswitch.redis.subscribe.sip.message.SipSubscribeHand
 import cn.com.nla.common.freeswitch.client.sip.listener.timeout.SipTimeoutEvent;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import jakarta.annotation.Resource;
@@ -17,7 +16,6 @@ import javax.sip.TimeoutEvent;
  * 相应超时处理
  */
 @Slf4j
-@Component
 public class SipTimeoutEventImpl implements SipTimeoutEvent {
 
 	@Resource

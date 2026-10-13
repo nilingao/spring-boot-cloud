@@ -8,7 +8,6 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import gov.nist.javax.sip.message.SIPRequest;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.SerializationUtils;
 
@@ -16,7 +15,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
 public class AgentInfoManager {
 
     private String FS_AGENT_INFO = RedisConstant.FS_AGENT_INFO;

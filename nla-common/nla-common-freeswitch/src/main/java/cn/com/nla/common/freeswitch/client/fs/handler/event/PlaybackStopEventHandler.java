@@ -11,7 +11,6 @@ import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 
@@ -19,7 +18,6 @@ import jakarta.annotation.Resource;
  *  放音结束
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.PLAYBACK_STOP)
 public class PlaybackStopEventHandler implements EslEventHandler {
     @Resource

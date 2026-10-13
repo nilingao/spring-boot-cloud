@@ -1153,6 +1153,34 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **剩余验收**：真实 SIP 设备/ZLM 节点联调（指令下发、回执到达、SSE 到达与 `video-command` 前端对账）、30 个权限点的菜单/角色授权（本轮不生成 SQL）、Excel 导出、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。
 
+### 6.10 批次 6.6（fs 呼叫中心业务层第一轮）交付结果（已落地）
+
+> 编号说明：本节记录**批次 6.6（fs）第一轮**的交付；与 6.6 节那个「sms 表驱动短信引擎」小节不是同一回事，不要混淆（同 6.8 的编号错位说明）。
+
+按用户决策拆分两轮：本轮做 **5 管理域 CRUD + 5 个协议 SPI 实现 + 坐席 SIP 服务（AgentServiceImpl）+ FsXml 3 端点 + 运行时缓存装配链 + 菜单 SQL**，Socket.IO 坐席事件推送留下一轮。XML 拉取路径按用户决策取 **`/fs/xml/**`**（`security.excludes` 匿名放行，FS 服务器侧无登录态）；门控同样按用户决策取 **`freeswitch.enabled` 缺省关闭**，并已验证关闭态不致启动失败（见下）。
+
+全 reactor `mvn -B clean test` **BUILD SUCCESS（49/49 模块）**、`MVN_EXIT=0`（06:52）。`nla-callcenter` 127 项测试全绿（阶段 4.7 的 `CallcenterDataContractTest` 121 项 + 本轮新增 `FsCommonContractTest` 4 项 + `FsRuntimeConfigRefreshTest` 2 项），`nla-video` 71 项、`nla-face` 41 项、`nla-admin` 209 项等其余模块无回归，且本轮全量未再现 8.2 的 UDP 端口竞争假阳性。品牌审计 `scanning 2030 files / hits=0`（基线 1996→2030，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`）、编码校验 `files=37 failures=0`（本轮纳入 6 份交付物，见 10 章索引）、`git diff --check` 干净（仅 autocrlf 换行提示）。本轮只更新仓库文件（69 文件 +365/-169，含下方协议栈门控改造），未对外部数据库执行 SQL，未提交。
+
+**协议栈门控改造（`nla-common-freeswitch`，57 文件 +140/-149）**：56 个协议类（ESL 事件处理器/SIP 处理器/Redis 管理器/订阅处理器/Runner 等）移除 `@Component` 注解，由 `FreeswitchAutoConfiguration` 的 `@Import` 显式清单收编并挂 `@ConditionalOnProperty(value = "freeswitch.enabled", havingValue = "true")` **整体门控**（收编模式对齐 `nla-common-video` 的 `SipConfig`）；旧 `config/fs/FreeswitchConfig.java`（35 行）删除，ESL 入站客户端 `InboundClient` 与事件分发器改由自动配置 `@Bean(initMethod=start, destroyMethod=shutdown)` 提供。这样 `nla-admin` 的全包组件扫描在未启用呼叫中心时不会误注册依赖 `InboundClient` 的组件，避免 5.1.1 记录过的启动期 Bean 缺失崩溃。
+
+**pom 接线**：`nla-modules/nla-callcenter/pom.xml` 新增 `nla-common-freeswitch`（SPI 契约与协议模型）、`nla-common-json`、`nla-common-web`（`BaseController`/`R`）、`nla-common-log`（`@Log`）、`nla-common-redis`（`@RepeatSubmit`）、`nla-common-security`（`LoginHelper` 传递链）、`nla-common-sensitive`（`@Sensitive(PHONE)`）；阶段 4.7 的 `nla-common-mybatis`（含 Boot2 AOP 排除）与 test 域 H2 保留。`nla-admin/pom.xml` 引入 `nla-callcenter`；`nla-admin/src/main/resources/application.yml` 的 `security.excludes` 追加 `- /fs/xml/**`。根 pom `dependencyManagement`、`nla-modules/pom.xml` 模块注册与 `nla-common-bom` 的 `nla-common-freeswitch` 条目早在阶段 3.1 / 4.7 已就位，本轮未动。本轮未铺 Excel 导出，因此**不声明** `nla-common-excel`。
+
+**门控安全性**：除上述协议栈整体门控外，`nla-callcenter` 侧的 `FsXmlController`、`FsRuntimeConfigServiceImpl`、`FsRuntimeConfigRefreshListener`、`CompanyRunner`、5 个协议 SPI 实现与 `AgentServiceImpl` 全部挂 `@ConditionalOnProperty(prefix = "freeswitch", name = "enabled", havingValue = "true")`；缺省不配置 `freeswitch.enabled` 时协议栈、XML 端点与运行时装配 Bean 完全不创建，不会出现「SPI 无实现/协议组件缺失」导致的启动失败。管理 CRUD 的 Service/Controller **不受门控**、始终可用；**事件发布器 `FsRuntimeConfigRefreshPublisher` 同样不受门控**——这是本轮核心设计：管理域增删改在事务提交后照常发布 `FsCompanyConfigChangedEvent`，停用协议栈时事件无监听者、发布无害。`nla-admin` 本轮**未新增** `freeswitch:` 配置块。
+
+**业务层（`nla-modules/nla-callcenter`，本轮新增 33 个主 Java + 2 个测试类）**：
+- **管理 CRUD（17 类）**：路由组/路由网关/外呼路由/注册网关/FS平台 5 域各有 `I*Service` + `*ServiceImpl` + Controller（15 类），提供标准 `queryById`/`queryPageList`/`queryList`/`insertByBo`/`updateByBo`/`deleteWithValidByIds` + `optionselect` 下拉与状态切换；路由组另有网关编组编辑 `RouteGroupGatewayEditBo` 与下拉视图 `FsOptionVo`。写路径统一做**业务键查重（编辑排除自身）**与状态/引用校验；增删改后经 `FsRuntimeConfigRefreshPublisher` 发布企业变更事件，事务提交后定向刷新运行时缓存。
+- **协议 SPI（spi/ 8 类 + 枚举 1）**：`AgentVoServiceImpl`/`CallCdrServiceImpl`/`GroupMemoryInfoServiceImpl`/`ParentPlatformServiceImpl`/`SendAgentMessageImpl` 实现 `nla-common-freeswitch` 的座席视图、CDR 落库、话单内存、平台信息与坐席消息契约；`AgentServiceImpl` 实现自有 `AgentService`（坐席 SIP 登录/登出/外呼/挂断，经 `SipService` 静态门面下发 REGISTER/INVITE/BYE，外呼按 `InviteErrorCode` 枚举分类回调）；`FsSpiConvert` 为包内 hutool 转换器（对齐 `nla-video` 的 `VideoSpiConvert` 惯例）。全部只读写本模块表，不再依赖旧微服务的 Feign 与静态 ServiceLocator。`AgentMapper` 扩展 `findUserId`/`findUserModel` 两条只读 XML 查询（按系统用户 ID / SIP 号取座席鉴权数据）。
+- **运行时缓存装配（config/fs 6 类）**：`FsRuntimeConfigServiceImpl`（22 个 Mapper 直注）在启动或企业变更时把 22 张管理表装配进 `RedisService` 静态门面的企业/技能组/溢出策略/坐席策略/VDN/放音/会议各 Info 缓存，溢出策略实例化 3 种排队策略（Default/Vip/Custom Lineup）与 4 种坐席分配策略（LongReady/TotalReadyTimes/LeastAnswer/LeastTalk Assign），企业禁用/不存在时清除缓存；`FsCompanyConfigChangedEvent` + `FsRuntimeConfigRefreshPublisher`（批量发布自动去重与空值过滤）+ `FsRuntimeConfigRefreshListener`（`AFTER_COMMIT` 定向刷新）+ `CompanyRunner`（`@Order(20)` 启动全量装配）构成事件链。
+- **XML 拉取（FsXmlController 3 端点）**：`find_dialplan_xml`/`find_directory_xml`/`find_configuration_xml` 供 FreeSWITCH 回拉拨号计划/用户目录/配置项，Velocity 模板与 9 份 vm 资源早在 `nla-common-freeswitch` 就位；`find_directory_xml` 按 SIP 号查 `UserModel`（未找到返回未授权目录 XML），`find_configuration_xml` 分发 sofia.conf（ICE/STUN）/post_load_switch.conf（RTP 端口段）/conference.conf（放音前缀）。
+
+**DDL 与菜单**：`script/sql/nla_callcenter.sql`（910→980 行）追加「呼叫中心」目录 `1761400000000005000`（父级 0、`order_num` 10）+ 5 个 C 型菜单 `5001~5005`（路由组 tree/路由网关 server/外呼路由 international/注册网关 online/FS平台 monitor）+ 20 个 F 型按钮（`5101~5144`，每域 `query/add/edit/remove`）+ 26 条 `sys_role_menu`（普通角色 `1761300000000000003`，超管自动可见）；perms 与 5 个控制器的 `@SaCheckPermission` 逐一对齐（`optionselect` 复用 `list`、`changeSelected` 复用 `edit`）；`menu_id` 用 `...5000` 独立号段，避开 video 的 `...4000`、face 的 `...3000` 与 sms 的 `...2000`。**菜单插入会打破阶段 4.7 的 H2 契约测试**（与 6.8 记录的同款教训）：`CallcenterDataContractTest.prepareDatabaseAndMappers` 原对每条分句断言 `create table` 匹配，已对齐 `VideoDataContractTest` 先例改为只回放 `create table` 段，并新增「建表数量 == 实体数量」断言（改后 127 项重跑全绿实证）。
+
+**测试（新增 2 个测试文件 + 修 1 个）**：`FsCommonContractTest`(4) 迁移自旧 `manage.system.FsCommonContractTest` 的可迁移部分——事件发布器批量去重/空值过滤、单发空值忽略、事件非空约束（`requireNonNull("companyId")`）与 `FsOptionVo` builder 全字段；旧测试的 `FsLongStatusParam`/`FsStringStatusParam` 两项校验测试**不迁移**（nla 无对应参数类，f3 的 `updateStatus` 用 Bo 内嵌校验已覆盖语义）。`FsRuntimeConfigRefreshTest`(2) 迁移自旧同名测试：`SpringExtension` + 最小 `ContextConfiguration` + 内存 `NoopTransactionManager`（`AbstractPlatformTransactionManager` 空实现），验证 `@TransactionalEventListener(AFTER_COMMIT)` 语义——commit 触发 `refreshCompany`、rollback 不触发；监听器的 `freeswitch.enabled` 门控仅在自动装配时生效，测试手动 `@Bean` 注册绕开条件判断。mockito/spring-test 可用性来自根 pom `<dependencies>` 全局声明的 `spring-boot-starter-test`（scope=test，所有子模块继承）。验证入口 `.migration/fs-contract-test.ps1`（单模块 127 项）与 `.migration/fs-full-test.ps1`（全量）。
+
+**有意偏离**（同步旧工程或后续重做时必须保留）：① 路由由旧 `/api/**` 改为 `/fs/{business}`（XML 拉取为用户决策的 `/fs/xml/**`），权限按 `${module}:${business}:${action}` 重建（旧工程无对应权限点）；② 旧 `FsRuntimeConfigServiceImpl` 注入 22 个 `IService`，nla 版改 22 个 Mapper 直注（行为等价、注入更轻）；③ 旧运行时装配用 17 个手写 MapStruct `*Convert`，nla 版统一用 `MapstructUtils.convert`（隐式同名转换承担 Long↔String 与 BigDecimal→Long，协议模型 `GroupInfo.id` 是 String 的差异由此吸收）；④ 事件链门控解耦：旧工程监听器无条件注册，nla 版「发布器无门控 + 监听器挂 `freeswitch.enabled`」（见「门控安全性」）；⑤ 旧 `FsXmlController` 类注释写「人脸图片识别相关接口」属复制残留，已修正为 XML 拉取语义；⑥ 旧控制器用双括号实例初始化 HashMap（反模式），nla 版换 `Map.of` 不可变映射并补 `key_value` 空值防护；⑦ 契约测试的 Vo 映射断言对 Vo 联查装配字段（`sipPhoneList`/`gateways`）豁免（`VO_ASSEMBLY_FIELDS`，见 4.7）；⑧ 测试 DDL 回放过滤（见「DDL 与菜单」）。
+
+**剩余验收**：Socket.IO 坐席事件推送（批次 6.6 第二轮）、Excel 导出、真实 FreeSWITCH/SIP 联调（XML 拉取、坐席登录、外呼、运行时缓存命中率）、`nla-admin` 启动冒烟、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。
+
 ---
 
 ## 7. 有意偏离上游的清单
@@ -1271,7 +1299,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 1996 files` / `scanned(text)=1988  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.5 第二轮后实测；上一次基线是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；更早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
+**`scanning 2030 files` / `scanned(text)=2022  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.6 第一轮后实测；上一次基线是批次 6.5 第二轮后的 `1996 / 1988`，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`；更早是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；再早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
@@ -1483,12 +1511,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，121 项测试）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第一轮后共 127 项测试，见 6.10）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
-| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 第一轮已落地**（12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.8），余 6.5 第二轮（SIP 实时指令）~6.7 待推进 |
+| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 第一轮已落地**（5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，全 reactor clean test 49/49，见 6.10），第二轮 Socket.IO 坐席事件推送待推进，余 6.7 pay 待推进 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
-| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -o -B clean test` 已在批次 6.4 / 6.5 第一轮跑通（**49/49 BUILD SUCCESS**），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
+| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -B clean test` 已在批次 6.4 / 6.5 / 6.6 四轮跑通（**49/49 BUILD SUCCESS**，6.6 一轮未带 `-o`），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1612,7 +1640,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对 31 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 37 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`，批次 6.6 第一轮再纳入 `nla_callcenter.sql` + `nla-callcenter` README + `AgentMapper.xml` + `FsRuntimeConfigServiceImpl`/`FsXmlController` + `CallcenterDataContractTest`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `verify-tracked.ps1` | 跟踪完整性校验：对比 `git ls-files` 与新目录的磁盘实际文件，分别列出"在盘但未跟踪"与"已跟踪但已从磁盘消失"（后者用于发现误删）。已内置 `core.quotepath=false` 与 `[Console]::OutputEncoding = UTF8` 两个必要修正，否则 CJK 路径会产生假阳性 | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 | `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
@@ -1632,6 +1660,8 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-mapping-lines.ps1` | 用 `Select-String` 列出本台账指定模式的行号与内容（绕开 Grep 对本文件的假阴性，见 10.1 陷阱） | ✅ |
 | `probe-mapping-enc.ps1` | 校验本台账字节级编码（BOM / UTF-8 有效性），编辑前后自查 | ✅ |
 | `probe-converter.ps1` | 用 `mvn help:evaluate` 定位真实本地仓库 + `javap` 反编译 mapstruct-plus `Converter` 签名，确认可子类化桩 | ✅ |
+| `fs-contract-test.ps1` | 批次 6.6 单模块测试入口：`mvn -B -pl nla-modules/nla-callcenter "-Dtest=<类列表>" test`（默认 `CallcenterDataContractTest`，本轮口径 127 项 = DataContract 121 + FsCommon 4 + FsRuntimeConfigRefresh 2），日志落 `.migration/fs-contract-test.log` | ✅ |
+| `fs-full-test.ps1` | 批次 6.6 全量回归入口：`mvn -B clean test`（无 `-o`，如需改 goal 直接编辑脚本），日志落 `.migration/fs-full-test.log` | ✅ |
 
 ### 10.1 脚本编写的五条踩坑教训
 

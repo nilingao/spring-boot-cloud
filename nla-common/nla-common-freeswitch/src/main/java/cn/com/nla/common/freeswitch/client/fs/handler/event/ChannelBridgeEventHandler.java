@@ -25,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -36,7 +35,6 @@ import java.time.format.DateTimeFormatter;
  * 桥接事件
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.CHANNEL_BRIDGE)
 public class ChannelBridgeEventHandler implements EslEventHandler {
 

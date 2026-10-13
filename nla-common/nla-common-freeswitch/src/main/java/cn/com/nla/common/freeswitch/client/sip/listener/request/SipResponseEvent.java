@@ -13,7 +13,6 @@ import gov.nist.javax.sip.message.SIPRequest;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
-import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -30,7 +29,6 @@ import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
-@Component
 public abstract class SipResponseEvent {
 
     @Resource

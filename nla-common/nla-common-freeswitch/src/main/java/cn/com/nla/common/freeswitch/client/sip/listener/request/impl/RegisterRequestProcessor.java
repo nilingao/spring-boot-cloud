@@ -24,7 +24,6 @@ import gov.nist.javax.sip.header.SIPDateHeader;
 import gov.nist.javax.sip.message.SIPRequest;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
 import javax.sip.PeerUnavailableException;
@@ -46,7 +45,6 @@ import java.util.Locale;
  * SIP命令类型： REGISTER 注册请求 一般未其他sip软电话请求我平台进行交互
  */
 @Slf4j
-@Component
 public class RegisterRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
     @Override
     public String getMethod() {

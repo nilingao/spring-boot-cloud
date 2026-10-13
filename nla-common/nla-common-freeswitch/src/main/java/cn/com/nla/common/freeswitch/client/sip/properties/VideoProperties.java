@@ -2,9 +2,7 @@ package cn.com.nla.common.freeswitch.client.sip.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
-@Component
 @ConfigurationProperties(prefix = "video-settings", ignoreInvalidFields = true)
 @Data
 public class VideoProperties {

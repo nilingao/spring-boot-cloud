@@ -8,8 +8,32 @@
         <version>${revision}</version>
     </parent>
     <artifactId>nla-callcenter</artifactId>
-    <description>呼叫中心41表数据层，协议与管理业务待阶段 6.6 接入</description>
+    <description>呼叫中心业务模块：网关/路由/平台等管理域 CRUD、协议 SPI 实现与 FreeSWITCH XML 拉取，算法底座为 nla-common-freeswitch（迁移自旧 spring-boot-fs）</description>
     <dependencies>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-freeswitch</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-log</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-security</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.com.nla</groupId>
             <artifactId>nla-common-mybatis</artifactId>

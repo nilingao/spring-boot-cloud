@@ -9,7 +9,6 @@ import cn.com.nla.common.freeswitch.redis.subscribe.sip.message.SipSubscribeHand
 import cn.com.nla.common.redis.utils.RedisUtils;
 import cn.hutool.core.thread.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import javax.sip.*;
@@ -21,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 @Slf4j
-@Component
 public class SipListenerImpl implements SipListener {
 
     private Map<String, SipRequestEvent> sipRequestEventMap ;

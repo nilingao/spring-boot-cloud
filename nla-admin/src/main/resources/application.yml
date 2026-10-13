@@ -112,6 +112,8 @@ security:
     - /api/snail/chat/**
     # ZLMediaKit 流媒体回调（video.enabled=true 时生效），调用方无登录态
     - /index/hook/**
+    # FreeSWITCH XML 拉取（freeswitch.enabled=true 时生效），FS 服务器侧无登录态
+    - /fs/xml/**
 
 # MyBatisPlus配置
 # https://baomidou.com/config/
@@ -383,3 +385,11 @@ spring.ai.mcp:
             - -y
             - '@modelcontextprotocol/server-filesystem'
             - D:/data
+
+--- # FreeSWITCH 呼叫中心配置
+freeswitch:
+  # 呼叫中心总开关：协议组件(ESL/SIP/XML 拉取/SPI 实现)仅在 true 时注册，
+  # 避免协议环境缺失时启动失败；管理域 CRUD 不受此开关影响。启用时需同步配置：
+  # link.thingscloud.freeswitch.esl.inbound.servers(ESL 入站连接 host/port/password)
+  # sip.*(信令服务参数) 与 fs.record.path/fs.record.file(录音存储)
+  enabled: false

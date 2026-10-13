@@ -7,14 +7,12 @@ import cn.com.nla.common.freeswitch.redis.RedisService;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Slf4j
-@Component
 public class CallInfoManager {
 
     private String FS_CALL_INFO = RedisConstant.FS_CALL_INFO;

@@ -4,7 +4,6 @@ import cn.com.nla.common.freeswitch.utils.DynamicTask;
 import cn.com.nla.common.freeswitch.common.sip.SipConstant;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
@@ -13,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 
 
 @Slf4j
-@Component
 public class AgentLoginSubscribe {
 
     private final static String FS_AGENT_LOGIN_SUBSCRIBE_MANAGER = SipConstant.FS_AGENT_LOGIN_SUBSCRIBE_MANAGER;

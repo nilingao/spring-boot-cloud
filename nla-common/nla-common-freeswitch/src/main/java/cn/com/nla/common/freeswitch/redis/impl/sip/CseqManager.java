@@ -4,12 +4,10 @@ import cn.com.nla.common.freeswitch.common.sip.SipConstant;
 import cn.com.nla.common.freeswitch.client.sip.properties.VideoProperties;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 
 @Slf4j
-@Component
 public class CseqManager {
 
     @Resource

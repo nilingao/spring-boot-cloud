@@ -9,7 +9,6 @@ import cn.com.nla.common.freeswitch.vo.sip.DeviceRawContent;
 import gov.nist.javax.sip.message.SIPRequest;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import javax.sip.InvalidArgumentException;
@@ -27,7 +26,6 @@ import java.text.ParseException;
  * ZLM 推流逻辑已移除。
  */
 @Slf4j
-@Component
 public class InviteResponseProcessor extends AbstractSipResponseEvent {
 
     @Resource

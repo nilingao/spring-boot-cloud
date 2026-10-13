@@ -11,7 +11,6 @@ import cn.com.nla.common.freeswitch.service.FsService;
 import cn.com.nla.common.freeswitch.vo.sip.SsrcTransaction;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import javax.sip.InvalidArgumentException;
 import javax.sip.RequestEvent;
@@ -30,7 +29,6 @@ import java.util.List;
  * 纯 SIP 模式：不再调用 ZLM，仅清理呼叫状态并通知坐席。
  */
 @Slf4j
-@Component
 public class ByeRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
 
     @Override

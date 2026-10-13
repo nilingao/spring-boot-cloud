@@ -14,13 +14,11 @@ import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 
 /**
  * 执行完成时事件
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.CHANNEL_EXECUTE_COMPLETE)
 public class ChannelExecuteCompleteEventHandler implements EslEventHandler {
 

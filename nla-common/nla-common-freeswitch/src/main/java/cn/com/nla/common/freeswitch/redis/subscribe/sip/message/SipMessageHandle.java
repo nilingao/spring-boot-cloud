@@ -18,7 +18,6 @@ import gov.nist.javax.sip.SipProviderImpl;
 import gov.nist.javax.sip.message.SIPRequest;
 import gov.nist.javax.sip.stack.SIPClientTransactionImpl;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import jakarta.annotation.PostConstruct;
@@ -32,7 +31,6 @@ import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
-@Component
 public class SipMessageHandle {
 
     @PostConstruct

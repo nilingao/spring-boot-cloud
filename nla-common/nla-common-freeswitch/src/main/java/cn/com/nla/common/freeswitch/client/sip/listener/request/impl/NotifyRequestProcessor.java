@@ -8,7 +8,6 @@ import cn.com.nla.common.freeswitch.vo.fs.AgentNotifyVo;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 import org.w3c.dom.Element;
 
 import javax.sip.InvalidArgumentException;
@@ -25,7 +24,6 @@ import java.util.Map;
  * SIP命令类型： NOTIFY请求,这是作为上级发送订阅请求后，设备才会响应的
  */
 @Slf4j
-@Component
 public class NotifyRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
 
     @Override

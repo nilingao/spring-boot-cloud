@@ -4,13 +4,11 @@ import cn.com.nla.common.freeswitch.common.fs.RedisConstant;
 import cn.com.nla.common.freeswitch.model.fs.CompanyConferenceInfo;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
-@Component
 public class CompanyConferenceInfoManager {
 
     private String FS_COMPANY_CONFERENCE_INFO = RedisConstant.FS_COMPANY_CONFERENCE_INFO;

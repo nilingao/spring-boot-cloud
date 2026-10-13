@@ -13,7 +13,6 @@ import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.time.LocalDateTime;
@@ -22,7 +21,6 @@ import java.time.LocalDateTime;
  *  用户注册注销事件
  */
 @Slf4j
-@Component
 @Order(30)
 @EslEventName(EventNames.CUSTOM)
 public class ChannelCustomeventHandler implements EslEventHandler {

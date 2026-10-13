@@ -10,4 +10,23 @@
         where rel.del_flag = '0' and g.company_id = #{companyId} and rel.group_id = #{groupId}
         order by rel.level_value, rel.id
     </select>
+    <select id="findGroupOverFlowInfo" resultType="cn.com.nla.common.freeswitch.model.fs.GroupOverFlowInfo">
+        select
+          o.`id` as id,
+          o.`company_id` as companyId,
+          o.`name` as name,
+          o.`handle_type` as handleType,
+          o.`busy_type` as busyType,
+          o.`queue_timeout` as queueTimeout,
+          o.`busy_timeout_type` as busyTimeoutType,
+          o.`overflow_type` as overflowType,
+          o.`overflow_value` as overflowValue,
+          o.`lineup_expression` as lineupExpression,
+          rel.`group_id` as groupId,
+          rel.`overflow_id` as overflowId,
+          rel.`level_value` as levelValue
+        from fs_group_overflow rel
+        join fs_overflow_config o on o.id = rel.overflow_id and o.del_flag = '0'
+        where rel.del_flag = '0'
+    </select>
 </mapper>

@@ -17,4 +17,34 @@
         join fs_company c on c.id = a.company_id and c.del_flag = '0'
         where a.del_flag = '0' and a.company_id = #{companyId} and s.sip = #{sip}
     </select>
+    <select id="getAgentBySip" resultType="cn.com.nla.callcenter.domain.Agent">
+        select a.`id`, a.`company_id`, a.`agent_id`, a.`agent_key`, a.`agent_name`, a.`agent_code`, a.`agent_type`, a.`passwd`, a.`record`, a.`group_id`, a.`after_interval`, a.`ring_time`, a.`host`, a.`state`, a.`status`, a.`register_time`, a.`renew_time`, a.`keepalive_time`, a.`keep_timeout`, a.`expires`, a.`stream_mode`, a.`transport`, a.`charset`, a.`display`, a.`create_dept`, a.`create_by`, a.`create_time`, a.`update_by`, a.`update_time`
+        from fs_agent a
+        join fs_agent_sip s on s.agent_id = a.id and s.del_flag = '0'
+        join fs_company c on c.id = a.company_id and c.del_flag = '0'
+        where a.del_flag = '0' and s.sip = #{sip}
+    </select>
+    <select id="findUserId" resultType="cn.com.nla.callcenter.domain.Agent">
+        select a.`id`, a.`company_id`, a.`agent_id`, a.`agent_key`, a.`agent_name`, a.`agent_code`, a.`agent_type`, a.`passwd`, a.`record`, a.`group_id`, a.`after_interval`, a.`ring_time`, a.`host`, a.`state`, a.`status`, a.`register_time`, a.`renew_time`, a.`keepalive_time`, a.`keep_timeout`, a.`expires`, a.`stream_mode`, a.`transport`, a.`charset`, a.`display`, a.`create_dept`, a.`create_by`, a.`create_time`, a.`update_by`, a.`update_time`
+        from fs_agent a
+        join fs_user_agent ua on ua.agent_id = a.id and ua.del_flag = '0'
+        join fs_company c on c.id = a.company_id and c.del_flag = '0'
+        where a.del_flag = '0' and ua.user_id = #{userId}
+        order by a.create_time desc, a.id desc
+        limit 1
+    </select>
+    <select id="findUserModel" resultType="cn.com.nla.common.freeswitch.model.bean.UserModel">
+        select
+          a.`id` as id,
+          a.`agent_code` as name,
+          s.`sip` as number,
+          s.`sip_pwd` as password,
+          1 as audio,
+          1 as video,
+          1 as level
+        from fs_agent a
+        join fs_agent_sip s on s.agent_id = a.id and s.del_flag = '0'
+        join fs_company c on c.id = a.company_id and c.del_flag = '0'
+        where a.del_flag = '0' and s.sip = #{sip}
+    </select>
 </mapper>

@@ -5,11 +5,9 @@ import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 @Slf4j
 @EslEventName(EslEventHandler.DEFAULT_ESL_EVENT_HANDLER)
-@Component
 public class DefaultEslEventHandler implements EslEventHandler {
 
     /**

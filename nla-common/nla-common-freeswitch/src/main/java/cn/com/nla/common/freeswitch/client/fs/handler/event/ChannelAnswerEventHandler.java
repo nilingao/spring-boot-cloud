@@ -11,7 +11,6 @@ import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import java.time.Instant;
@@ -22,7 +21,6 @@ import java.time.ZoneId;
  * 设备应答处理类
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.CHANNEL_ANSWER)
 public class ChannelAnswerEventHandler implements EslEventHandler {
 

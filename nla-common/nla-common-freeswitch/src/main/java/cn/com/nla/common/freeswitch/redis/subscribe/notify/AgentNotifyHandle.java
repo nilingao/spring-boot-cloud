@@ -15,7 +15,6 @@ import cn.hutool.extra.spring.SpringUtil;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import jakarta.annotation.PostConstruct;
@@ -27,7 +26,6 @@ import javax.sip.header.ToHeader;
 import java.text.ParseException;
 
 @Slf4j
-@Component
 public class AgentNotifyHandle {
 
     @Resource

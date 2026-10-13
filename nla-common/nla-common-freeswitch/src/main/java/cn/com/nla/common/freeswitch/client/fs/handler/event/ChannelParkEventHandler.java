@@ -23,7 +23,6 @@ import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import jakarta.annotation.Resource;
@@ -36,7 +35,6 @@ import java.time.format.DateTimeFormatter;
  *  设备话机振铃
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.CHANNEL_PARK)
 public class ChannelParkEventHandler implements EslEventHandler {
 

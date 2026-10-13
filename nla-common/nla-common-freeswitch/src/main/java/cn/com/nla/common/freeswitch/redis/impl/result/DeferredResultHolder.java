@@ -8,7 +8,6 @@ import cn.com.nla.common.freeswitch.vo.result.FsRestResult;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import java.time.LocalDateTime;
@@ -21,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @param 
  */
 @Slf4j
-@Component
 public class DeferredResultHolder {
     private static final Integer millis = 10;
     private static final String VIDEO_DEFERRED_RESULT_HOLDER = SipConstant.VIDEO_DEFERRED_RESULT_HOLDER;

@@ -7,14 +7,12 @@ import cn.com.nla.common.freeswitch.service.SipService;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import jakarta.annotation.PostConstruct;
 
 
 @Slf4j
-@Component
 public class SipRegisterHandle {
 
     @Autowired

@@ -19,7 +19,6 @@ import cn.com.nla.common.freeswitch.vo.sip.DeviceRawContent;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import jakarta.annotation.Resource;
@@ -37,7 +36,6 @@ import java.text.ParseException;
  * 坐席接听后用最小 SDP 响应 200 OK，媒体由 FS 与坐席 SIP 设备直接协商。
  */
 @Slf4j
-@Component
 public class InviteRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
 
     @Resource

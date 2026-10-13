@@ -5,7 +5,6 @@ import cn.com.nla.common.freeswitch.common.sip.SipConstant;
 import cn.com.nla.common.freeswitch.vo.sip.EventResult;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
 
 import java.time.Instant;
@@ -17,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Component
 public class AgentSubscribeHandle {
 
     private final static String VIDEO_AGENT_EVENT_SUBSCRIBE_MANAGER = SipConstant.VIDEO_AGENT_EVENT_SUBSCRIBE_MANAGER;

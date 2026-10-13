@@ -9,7 +9,6 @@ import cn.com.nla.common.freeswitch.esl.EslEventHandler;
 import link.thingscloud.freeswitch.esl.transport.event.EslEvent;
 import link.thingscloud.freeswitch.esl.util.EslEventUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,7 +18,6 @@ import java.time.ZoneId;
  *  录音开始
  */
 @Slf4j
-@Component
 @EslEventName(EventNames.RECORD_START)
 public class RecordStartEventHandler  implements EslEventHandler {
     @Override

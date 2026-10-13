@@ -18,7 +18,6 @@ import gov.nist.javax.sip.SipProviderImpl;
 import gov.nist.javax.sip.SipStackImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
 import javax.sip.*;
@@ -30,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 信令服务器中心
  */
 @Slf4j
-@Component
 public class SipServer {
     private final SipConfigProperties sipConfigProperties;
     private final VideoProperties videoProperties;

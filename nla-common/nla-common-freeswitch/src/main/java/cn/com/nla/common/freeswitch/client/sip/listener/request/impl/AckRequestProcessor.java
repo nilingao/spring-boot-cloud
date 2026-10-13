@@ -3,7 +3,6 @@ package cn.com.nla.common.freeswitch.client.sip.listener.request.impl;
 import cn.com.nla.common.freeswitch.client.sip.listener.request.AbstractSipRequestEvent;
 import cn.com.nla.common.freeswitch.client.sip.listener.request.SipRequestEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import javax.sip.RequestEvent;
 import javax.sip.message.Request;
@@ -13,7 +12,6 @@ import javax.sip.message.Request;
  * 给上级平台进行推流
  */
 @Slf4j
-@Component
 public class AckRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
 
 

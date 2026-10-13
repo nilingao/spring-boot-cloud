@@ -5,7 +5,6 @@ import cn.com.nla.common.freeswitch.client.sip.listener.request.AbstractSipReque
 import cn.com.nla.common.freeswitch.client.sip.listener.request.SipRequestEvent;
 import gov.nist.javax.sip.message.SIPRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.w3c.dom.Element;
 
 import javax.sip.RequestEvent;
@@ -17,7 +16,6 @@ import javax.sip.message.Response;
  * 订阅请求事件
  */
 @Slf4j
-@Component
 public class SubscribeRequestProcessor extends AbstractSipRequestEvent implements SipRequestEvent {
     @Override
     public String getMethod() {

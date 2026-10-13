@@ -6,7 +6,6 @@ import cn.com.nla.common.freeswitch.vo.sip.SsrcTransaction;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import gov.nist.javax.sip.message.SIPMessage;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
 import java.util.ArrayList;
@@ -15,7 +14,6 @@ import java.util.List;
 /**
  * 视频流session管理器，管理视频预览、预览回放的通信句柄
  */
-@Component
 public class SsrcTransactionManager {
 
     private String MEDIA_TRANSACTION_USED_PREFIX = SipConstant.MEDIA_TRANSACTION_USED_PREFIX;

@@ -8,7 +8,6 @@ import cn.hutool.extra.spring.SpringUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import java.util.Map;
@@ -17,7 +16,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Order(20)
-@Component
 public class SipServerRunner implements CommandLineRunner {
 
     @Resource

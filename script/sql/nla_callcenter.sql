@@ -908,3 +908,73 @@ create table if not exists fs_vdn_dtmf (
     `del_flag` char(1) not null default '0' comment '0存在1删除',
     PRIMARY KEY (id)
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_cs_0900_ai_ci row_format=dynamic comment='路由按键导航表';
+
+-- ----------------------------
+-- 2、菜单权限（阶段 6.6 第一轮）
+-- 依赖：需先执行 nla_system.sql（建 sys_menu / sys_role_menu 表并初始化角色），本脚本在其后运行
+-- 号段：menu_id 采用 1761400000000005000 独立号段（video 用 4000 段，face 用 3000 段，sms 用 2000 段，无冲突）
+-- 授权：超级管理员(role 1761300000000000001)自动可见全部菜单，无需授权；下列授权面向普通角色 1761300000000000003(test1)，与 nla_system.sql 种子约定一致
+-- 前端：component 路径(fs/routeGroup/index 等)为前端页面预留，Vue 页面由独立前端任务线补齐；后端 @SaCheckPermission 鉴权不依赖前端页面是否存在
+-- 门控：菜单与 freeswitch.enabled 无关，管理端 CRUD 始终可用；FS XML 拉取 /fs/xml/** 不占菜单，已在 security.excludes 匿名放行
+-- ----------------------------
+-- 呼叫中心目录
+insert into sys_menu values(1761400000000005000, '呼叫中心', 0, 10, 'fs', null, '', 'N', 'Y', 'M', '0', '0', '', 'phone', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '呼叫中心目录');
+-- 呼叫中心菜单
+insert into sys_menu values(1761400000000005001, '路由组', 1761400000000005000, 1, 'routeGroup', 'fs/routeGroup/index', '', 'N', 'Y', 'C', '0', '0', 'fs:routeGroup:list', 'tree', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '外呼路由组管理菜单');
+insert into sys_menu values(1761400000000005002, '路由网关', 1761400000000005000, 2, 'routeGateway', 'fs/routeGateway/index', '', 'N', 'Y', 'C', '0', '0', 'fs:routeGateway:list', 'server', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '外呼路由网关管理菜单');
+insert into sys_menu values(1761400000000005003, '外呼路由', 1761400000000005000, 3, 'routeCall', 'fs/routeCall/index', '', 'N', 'Y', 'C', '0', '0', 'fs:routeCall:list', 'international', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '外呼路由字冠管理菜单');
+insert into sys_menu values(1761400000000005004, '注册网关', 1761400000000005000, 4, 'gateway', 'fs/gateway/index', '', 'N', 'Y', 'C', '0', '0', 'fs:gateway:list', 'online', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, 'FS注册网关管理菜单');
+insert into sys_menu values(1761400000000005005, 'FS平台', 1761400000000005000, 5, 'platform', 'fs/platform/index', '', 'N', 'Y', 'C', '0', '0', 'fs:platform:list', 'monitor', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, 'FreeSWITCH平台管理菜单');
+-- 路由组按钮
+insert into sys_menu values(1761400000000005101, '路由组查询', 1761400000000005001, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGroup:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005102, '路由组新增', 1761400000000005001, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGroup:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005103, '路由组修改', 1761400000000005001, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGroup:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005104, '路由组删除', 1761400000000005001, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGroup:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 路由网关按钮
+insert into sys_menu values(1761400000000005111, '路由网关查询', 1761400000000005002, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGateway:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005112, '路由网关新增', 1761400000000005002, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGateway:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005113, '路由网关修改', 1761400000000005002, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGateway:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005114, '路由网关删除', 1761400000000005002, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeGateway:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 外呼路由按钮
+insert into sys_menu values(1761400000000005121, '外呼路由查询', 1761400000000005003, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeCall:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005122, '外呼路由新增', 1761400000000005003, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeCall:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005123, '外呼路由修改', 1761400000000005003, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeCall:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005124, '外呼路由删除', 1761400000000005003, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:routeCall:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- 注册网关按钮
+insert into sys_menu values(1761400000000005131, '注册网关查询', 1761400000000005004, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:gateway:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005132, '注册网关新增', 1761400000000005004, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:gateway:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005133, '注册网关修改', 1761400000000005004, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:gateway:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005134, '注册网关删除', 1761400000000005004, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:gateway:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+-- FS平台按钮
+insert into sys_menu values(1761400000000005141, 'FS平台查询', 1761400000000005005, 1, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:platform:query', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005142, 'FS平台新增', 1761400000000005005, 2, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:platform:add', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005143, 'FS平台修改', 1761400000000005005, 3, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:platform:edit', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+insert into sys_menu values(1761400000000005144, 'FS平台删除', 1761400000000005005, 4, '#', '', '', 'N', 'Y', 'F', '0', '0', 'fs:platform:remove', '#', '', '', 1761000000000000103, 1761100000000000001, sysdate(), null, null, '');
+
+-- 角色菜单授权（普通角色 test1；超级管理员自动可见，无需授权）
+insert into sys_role_menu values (1761300000000000003, 1761400000000005000);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005001);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005002);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005003);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005004);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005005);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005101);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005102);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005103);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005104);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005111);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005112);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005113);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005114);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005121);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005122);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005123);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005124);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005131);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005132);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005133);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005134);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005141);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005142);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005143);
+insert into sys_role_menu values (1761300000000000003, 1761400000000005144);

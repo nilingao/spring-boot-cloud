@@ -122,6 +122,12 @@
             <artifactId>nla-video</artifactId>
         </dependency>
 
+        <!--  呼叫中心业务模块  -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-callcenter</artifactId>
+        </dependency>
+
         <!-- Spring Boot Admin 客户端 -->
         <dependency>
             <groupId>de.codecentric</groupId>

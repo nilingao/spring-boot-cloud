@@ -7,7 +7,6 @@ import cn.com.nla.common.freeswitch.model.fs.RouteGroupInfo;
 import cn.com.nla.common.freeswitch.model.fs.VdnCodeInfo;
 import cn.com.nla.common.redis.utils.RedisUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Comparator;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-@Component
 public class CompanyInfoManager {
     private String FS_COMPANY_INFO = RedisConstant.FS_COMPANY_INFO;
 
