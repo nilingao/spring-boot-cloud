@@ -1051,7 +1051,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 - **菜单权限 SQL 已生成**：`script/sql/nla_message.sql` 追加「短信管理」目录 + 3 菜单（渠道配置/短信模板/发送记录）+ 12 按钮 + 16 条 `sys_role_menu` 授权；`menu_id` 用 `1761400000000002000` 独立号段（现有菜单最大 `1761400000000001623`，job/ai/workflow 无 `sys_menu` 插入，无冲突）；perms 与 3 controller 的 `@SaCheckPermission` 逐一对齐（config/template 各 list+query+add+edit+remove+export，record 仅 list+export+remove）；超级管理员自动可见，普通角色 `1761300000000000003` 按种子约定授权。前端 Vue 页面（`sms/{config,template,record}/index`）由独立前端任务线补齐，不影响后端鉴权。
 - **`MobileMessageVo.mobile` 已脱敏**：加 `@Sensitive(strategy = SensitiveStrategy.PHONE, perms = "sms:record:export")`，与 `SysUserVo.phoneNumber` 同构；语义 = 有导出权限者与超级管理员见原文、其余见掩码（Excel 导出经 fesod 读原始字段，与“可导出即可见原文”一致）。`nla-common-sensitive` 早在 pom 声明，无需改依赖。
 
-**发送入口进度**：阶段 5.3 已通过 `CaptchaController` → `SmsLoginCodeService` 内部调用接入登录验证码（见 5.6），沿用 `/resource/sms/code`。注册/重置验证码业务尚未接入；没有新增通用短信发送 REST 接口。
+**发送入口进度**：阶段 5.3 已通过 `CaptchaController` → `SmsLoginCodeService` 内部调用接入登录验证码（见 5.6），沿用 `/resource/sms/code`；本轮补齐统一单体入口 `POST /sms/send`（`SmsSendController`，权限 `sms:send`），覆盖旧 `/api`、`/app`、`/webapi` 三个同构发送入口的表驱动发送能力。**这不代表旧调用链已完全等价**：旧 app/webapi 发送服务会给请求设置默认 tenantId，非注册类型还会按手机号查询账号并注入账号 tenantId；新表驱动引擎不使用旧 tenantId，通用入口也不做账号归属编排。登录验证码仍由 `/resource/sms/code` 单独完成账号校验；注册/重置验证码的公开请求入口、手机号占用/账号状态规则与调用方尚未接入，须先按新单体认证契约明确后再迁，不能直接把旧 tenantId 逻辑搬入新短信引擎。
 
 ### 6.7 批次 6.4（face 业务层）交付结果（已落地）
 
@@ -1179,7 +1179,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **有意偏离**（同步旧工程或后续重做时必须保留）：① 路由由旧 `/api/**` 改为 `/fs/{business}`（XML 拉取为用户决策的 `/fs/xml/**`），权限按 `${module}:${business}:${action}` 重建（旧工程无对应权限点）；② 旧 `FsRuntimeConfigServiceImpl` 注入 22 个 `IService`，nla 版改 22 个 Mapper 直注（行为等价、注入更轻）；③ 旧运行时装配用 17 个手写 MapStruct `*Convert`，nla 版统一用 `MapstructUtils.convert`（隐式同名转换承担 Long↔String 与 BigDecimal→Long，协议模型 `GroupInfo.id` 是 String 的差异由此吸收）；④ 事件链门控解耦：旧工程监听器无条件注册，nla 版「发布器无门控 + 监听器挂 `freeswitch.enabled`」（见「门控安全性」）；⑤ 旧 `FsXmlController` 类注释写「人脸图片识别相关接口」属复制残留，已修正为 XML 拉取语义；⑥ 旧控制器用双括号实例初始化 HashMap（反模式），nla 版换 `Map.of` 不可变映射并补 `key_value` 空值防护；⑦ 契约测试的 Vo 映射断言对 Vo 联查装配字段（`sipPhoneList`/`gateways`）豁免（`VO_ASSEMBLY_FIELDS`，见 4.7）；⑧ 测试 DDL 回放过滤（见「DDL 与菜单」）。
 
-**剩余验收**：Socket.IO 坐席事件推送已在 6.11 交付；Excel 导出、真实 FreeSWITCH/SIP 联调（XML 拉取、坐席登录、外呼、运行时缓存命中率）、`nla-admin` 启动冒烟、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。
+**剩余验收**：Socket.IO 坐席事件推送已在 6.11 交付；真实 FreeSWITCH/SIP 联调（XML 拉取、坐席登录、外呼、运行时缓存命中率）、`nla-admin` 启动冒烟、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。新增 `CallcenterExcelExportContractTest`，在本地用真实 `ExcelBuilder` 验证 5 个管理域导出响应头及 OOXML/XLSX ZIP，有效覆盖不等同于浏览器/真实服务下载验收。
 
 ### 6.11 批次 6.6 第二轮（fs 呼叫中心：Socket.IO 坐席事件推送）交付结果（已落地）
 
@@ -1202,7 +1202,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 本轮补充了入站事件的边界契约：外呼事件在查询坐席前拒绝空消息或空白被叫号码，并对有效号码去除首尾空白；状态事件将 `updateStatus` 限定为协议定义的 0/1，其他值返回参数错误，不再把任意非零值误作切换请求；外呼、挂断、状态和来电通知在 Socket 会话未完成坐席绑定时统一返回认证错误，并不继续访问坐席、SIP 或通知业务。正常登录、查询和状态切换路径保持不变。
 
-**剩余验收**：Excel 导出、真实 FreeSWITCH/SIP/Socket.IO 联调（坐席页面连接、登录、外呼、挂断、状态机、来电通知推送全链路）、`nla-admin` 启动冒烟（双开配置下的 socket-io 端口/监听验证）、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。
+**剩余验收**：真实 FreeSWITCH/SIP/Socket.IO 联调（坐席页面连接、登录、外呼、挂断、状态机、来电通知推送全链路）、`nla-admin` 启动冒烟（双开配置下的 socket-io 端口/监听验证）、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。Excel 导出已由 `CallcenterExcelExportContractTest` 做本地 XLSX 响应契约验证，真实浏览器下载仍待外部验收。
 
 ---
 
