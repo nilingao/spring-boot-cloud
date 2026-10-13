@@ -1,6 +1,6 @@
 # nla-callcenter
 
-呼叫中心业务模块：5 个管理域 CRUD（路由组/路由网关/外呼路由/注册网关/FS平台）、5 个协议 SPI 实现、坐席 SIP 服务、FreeSWITCH XML 拉取与运行时缓存装配，算法底座为 `nla-common-freeswitch`（阶段 3.1 交付的 SIP/ESL 封装，协议栈迁移自旧 spring-boot-fs）。模块已登记 reactor 与根 POM 坐标管理，并已接入 `nla-admin`。阶段 4 的数据层（41 套 Entity/Bo/Vo/Mapper）说明见下文；管理 CRUD 与 XML 链见「业务层（批次 6.6 第一轮）」；Socket.IO 坐席事件推送留批次 6.6 第二轮。
+呼叫中心业务模块：5 个管理域 CRUD（路由组/路由网关/外呼路由/注册网关/FS平台）、5 个协议 SPI 实现、坐席 SIP 服务、FreeSWITCH XML 拉取与运行时缓存装配、坐席 Socket.IO 事件链（AgentNamespace + 4 入站事件 + 房间推送），算法底座为 `nla-common-freeswitch`（阶段 3.1 交付的 SIP/ESL 封装，协议栈迁移自旧 spring-boot-fs），实时通道底座为 `nla-common-socketio`。模块已登记 reactor 与根 POM 坐标管理，并已接入 `nla-admin`。阶段 4 的数据层（41 套 Entity/Bo/Vo/Mapper）说明见下文；管理 CRUD 与 XML 链见「业务层（批次 6.6 第一轮）」；坐席 Socket.IO 事件链见「坐席 Socket.IO（批次 6.6 第二轮）」。
 
 ## 新库初始化
 
@@ -55,9 +55,15 @@ FsMediaServer 的字符串主键自身仍唯一，删除后不能用相同 id �
 - 运行时缓存装配：`config/fs/runtime/FsRuntimeConfigServiceImpl` 启动或企业变更时把 22 张管理表装配进 `RedisService` 静态门面的各 Info 缓存（企业/技能组/溢出策略/坐席策略/VDN/放音/会议），溢出策略实例化 3 种排队策略与 4 种坐席分配策略；管理域 Service 在事务提交后经 `FsRuntimeConfigRefreshPublisher` 发布 `FsCompanyConfigChangedEvent`，监听器定向刷新对应企业（详见 mapping.md 6.10）。
 - XML 拉取：`FsXmlController` 暴露 3 个 FreeSWITCH 回拉端点（拨号计划/用户目录/配置项），渲染走 `nla-common-freeswitch` 的 Velocity 模板；`CompanyRunner` 启动时全量装配缓存。
 
+## 坐席 Socket.IO（批次 6.6 第二轮）
+
+- 事件链：`socket/AgentNamespace` 实现 `nla-common-socketio` 的 NamespaceListener（`/socket_agent` 命名空间）——onConnect 握手鉴权（url 参数 `Authorization` 传 Sa-Token 令牌，兼容 Bearer 前缀，loginId 尾段解析系统用户 ID）→ 加入 `/socket_agent:agentKey` 房间 → 绑定 sessionId↔agentKey → 登录占位锁（`RedisUtils.setObjectIfAbsent` 8 秒，抢到即登录，被占挂 `AgentLoginSubscribe` 延迟登录）；onDisconnect 反向并在登出完成后发布唤醒信号。4 个入站事件（`AGENT:IN:CALL_PHONE` 外呼、`AGENT:IN:HANG_UP_PHONE` 挂断、`AGENT:IN:STATUS` 状态机 LOGIN/BUSY_OTHER↔READY、`AGENT:IN:PHONE_NOTIFICATION` 来电挂断/接听）由 `SocketIoListenerRegistrar` 自动注册；消息体在 `socket/message`（`Message` 基类 + 4 个数据类，字段名对齐旧工程协议）。
+- 出站推送：`spi/SendAgentMessageImpl` 第三方法接通真实推送——按 `namespace:agentKey` 拼 Socket.IO 房间键广播事件（对齐旧工程语义）；`ObjectProvider<SocketIOServer>` 延迟获取，`socket-io.enabled` 未开启时降级为日志，不影响 ESL 协议推送链。
+- 鉴权与锁迁移：旧 JWT 改 Sa-Token（token-name 仍为 `Authorization`，前端 url 参数契约不变）；旧 `getLock/releaseLock` 改 `setObjectIfAbsent/deleteObject`。详见 mapping.md 6.11。
+
 ## 门控
 
-`freeswitch.enabled` 缺省不配置即关闭：`FsXmlController`、运行时装配服务、监听器与 `CompanyRunner`、5 个协议 SPI 实现与 `AgentServiceImpl` 都带 `@ConditionalOnProperty(prefix = "freeswitch", name = "enabled", havingValue = "true")`，协议组件在关闭时完全不创建。管理 CRUD 的 Service/Controller 与事件发布器不受门控，始终可用；停用时事件发布无监听者，管理功能不受影响。`nla-admin` 未新增 `freeswitch:` 配置块，`security.excludes` 已放行 `/fs/xml/**`（FS 服务器侧无登录态）。
+`freeswitch.enabled` 缺省不配置即关闭：`FsXmlController`、运行时装配服务、监听器与 `CompanyRunner`、5 个协议 SPI 实现与 `AgentServiceImpl` 都带 `@ConditionalOnProperty(prefix = "freeswitch", name = "enabled", havingValue = "true")`，协议组件在关闭时完全不创建。管理 CRUD 的 Service/Controller 与事件发布器不受门控，始终可用；停用时事件发布无监听者，管理功能不受影响。坐席 Socket 链挂 `socket-io.enabled` 与 `freeswitch.enabled` 双开条件（Spring 多 name 是 AND 语义）：`AgentNamespace` 与 4 个事件类仅在双开时注册；`SendAgentMessageImpl` 仅挂 freeswitch 门控，freeswitch 单开时 ESL 推送链降级为日志。`nla-admin` 未新增 `freeswitch:` / `socket-io:` 配置块，`security.excludes` 已放行 `/fs/xml/**`（FS 服务器侧无登录态）。
 
 ## 接口与权限
 
@@ -67,7 +73,7 @@ XML 拉取端点 `/fs/xml/{find_dialplan_xml,find_directory_xml,find_configurati
 
 ## 尚未交付
 
-Socket.IO 坐席事件推送留批次 6.6 第二轮；真实 FreeSWITCH/SIP 联调（XML 拉取、坐席登录、外呼、运行时缓存命中率）、`nla-admin` 启动冒烟、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 6.10 为准。
+真实 FreeSWITCH/SIP/Socket.IO 联调（XML 拉取、坐席登录、外呼、挂断、状态机、来电通知推送）、`nla-admin` 启动冒烟、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 6.10/6.11 为准。
 
 ## 验证
 
@@ -76,6 +82,6 @@ Socket.IO 坐席事件推送留批次 6.6 第二轮；真实 FreeSWITCH/SIP 联�
 .migration\fs-full-test.ps1
 ```
 
-共 127 项测试：`CallcenterDataContractTest`(121) 加载交付 DDL（只回放 `create table` 段，菜单与角色授权属于 MySQL 交付脚本，并断言建表数与实体数一致）、解析真实 Mapper XML，对全部 41 个 Mapper 执行全字段 CRUD、审计填充、逻辑删除、生成映射、分组校验、唯一键冲突与三轮删除重建、企业隔离与凭据不回显。`FsCommonContractTest`(4) 锁定事件发布器去重/空值忽略、事件非空约束与下拉选项构造。`FsRuntimeConfigRefreshTest`(2) 用内存事务管理器验证 `@TransactionalEventListener(AFTER_COMMIT)` 语义（提交触发刷新、回滚不触发），不依赖数据库与协议栈。三者均不启动 Spring Boot、不连 SIP/ESL/Redis。全量回归入口 `.migration\fs-full-test.ps1`。
+共 144 项测试：`AgentSocketContractTest`(17) 纯 Mockito 验证坐席 Socket 链契约——房间推送与降级、握手鉴权与占位锁两分支、状态机回执、未登录/空通话回执、入参校验文案与消息序列化（mockStatic 需先垫最小容器使 RedisUtils 类可加载，见 mapping.md 6.11）。`CallcenterDataContractTest`(121) 加载交付 DDL（只回放 `create table` 段，菜单与角色授权属于 MySQL 交付脚本，并断言建表数与实体数一致）、解析真实 Mapper XML，对全部 41 个 Mapper 执行全字段 CRUD、审计填充、逻辑删除、生成映射、分组校验、唯一键冲突与三轮删除重建、企业隔离与凭据不回显。`FsCommonContractTest`(4) 锁定事件发布器去重/空值忽略、事件非空约束与下拉选项构造。`FsRuntimeConfigRefreshTest`(2) 用内存事务管理器验证 `@TransactionalEventListener(AFTER_COMMIT)` 语义（提交触发刷新、回滚不触发），不依赖数据库与协议栈。四者均不启动 Spring Boot、不连 SIP/ESL/Redis。全量回归入口 `.migration\fs-full-test.ps1`。
 
 H2 2.4.240 的 MySQL 模式保留列定义和生成列表达式，剥离 MySQL 表级引擎/字符集/排序规则/行格式选项及 STORED 关键字；测试给索引名加表名前缀以适应 H2 的 schema 级索引命名。固定测试审计填充器不代表生产登录态。真实 MySQL 生成列/排序规则/索引性能、生产审计、权限、菜单执行与协议联调尚未验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 为准。
