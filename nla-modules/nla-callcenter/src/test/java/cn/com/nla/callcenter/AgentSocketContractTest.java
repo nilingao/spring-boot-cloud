@@ -324,6 +324,52 @@ class AgentSocketContractTest {
     }
 
     @Test
+    void statusEventRejectsUnsupportedUpdateFlag() {
+        AgentInStatusEvent event = new AgentInStatusEvent(mock(AgentNamespace.class));
+        SocketIOClient client = mock(SocketIOClient.class);
+        when(client.getSessionId()).thenReturn(UUID.randomUUID());
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+        AgentVoInfo vo = agentVo(AgentStateEnum.READY);
+
+        try (var redis = mockStatic(RedisService.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+            when(infoManager.getAgentKey(anyString())).thenReturn("10001");
+            when(infoManager.get("10001")).thenReturn(vo);
+
+            event.onData(client, AgentInStatusData.builder().updateStatus(2).build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_STATUS), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("客服状态更新参数错误", reply.getValue().getMessage());
+            assertEquals(AgentStateEnum.READY, vo.getAgentState());
+            verify(infoManager, never()).put(any());
+        }
+    }
+
+    @Test
+    void statusEventRejectsClientWithoutBoundAgent() {
+        AgentInStatusEvent event = new AgentInStatusEvent(mock(AgentNamespace.class));
+        SocketIOClient client = mock(SocketIOClient.class);
+        when(client.getSessionId()).thenReturn(UUID.randomUUID());
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+
+        try (var redis = mockStatic(RedisService.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+            when(infoManager.getAgentKey(anyString())).thenReturn(null);
+
+            event.onData(client, AgentInStatusData.builder().updateStatus(1).build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_STATUS), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("坐席连接未完成认证", reply.getValue().getMessage());
+            verify(infoManager, never()).get(anyString());
+            verify(infoManager, never()).put(any());
+        }
+    }
+
+    @Test
     void statusEventRejectsStateOutsideToggleWindow() {
         AgentInStatusEvent event = new AgentInStatusEvent(mock(AgentNamespace.class));
         SocketIOClient client = mock(SocketIOClient.class);
@@ -375,6 +421,55 @@ class AgentSocketContractTest {
     }
 
     @Test
+    void callPhoneEventRejectsBlankCallerBeforeRedisOrSip() {
+        AgentInCallPhoneEvent event = new AgentInCallPhoneEvent(mock(AgentNamespace.class));
+        AgentService agentService = mock(AgentService.class);
+        SipServer sipServer = mock(SipServer.class);
+        ReflectionTestUtils.setField(event, "agentService", agentService);
+        ReflectionTestUtils.setField(event, "sipServer", sipServer);
+        SocketIOClient client = mock(SocketIOClient.class);
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+
+        try (var redis = mockStatic(RedisService.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+
+            event.onData(client, AgentInCallPhoneData.builder().caller("  \t ").build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_CALL_PHONE), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("未获取被叫号码", reply.getValue().getMessage());
+            verify(infoManager, never()).getAgentKey(anyString());
+            verify(sipServer, never()).getLocalIp(anyString());
+            verify(agentService, never()).callPhone(any(), any(), any(), any(), any(), any(), any());
+        }
+    }
+
+    @Test
+    void callPhoneEventRejectsClientWithoutBoundAgent() {
+        AgentInCallPhoneEvent event = new AgentInCallPhoneEvent(mock(AgentNamespace.class));
+        AgentService agentService = mock(AgentService.class);
+        ReflectionTestUtils.setField(event, "agentService", agentService);
+        SocketIOClient client = mock(SocketIOClient.class);
+        when(client.getSessionId()).thenReturn(UUID.randomUUID());
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+
+        try (var redis = mockStatic(RedisService.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+            when(infoManager.getAgentKey(anyString())).thenReturn(" ");
+
+            event.onData(client, AgentInCallPhoneData.builder().caller("10086").build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_CALL_PHONE), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("坐席连接未完成认证", reply.getValue().getMessage());
+            verify(infoManager, never()).get(anyString());
+            verify(agentService, never()).callPhone(any(), any(), any(), any(), any(), any(), any());
+        }
+    }
+
+    @Test
     void hangUpEventReportsNoActiveCall() throws Exception {
         AgentInHangUpPhoneEvent event = new AgentInHangUpPhoneEvent(mock(AgentNamespace.class));
         SipServer sipServer = mock(SipServer.class);
@@ -404,6 +499,32 @@ class AgentSocketContractTest {
         }
     }
 
+    @Test
+    void hangUpEventRejectsClientWithoutBoundAgent() {
+        AgentInHangUpPhoneEvent event = new AgentInHangUpPhoneEvent(mock(AgentNamespace.class));
+        SipServer sipServer = mock(SipServer.class);
+        SIPCommanderForPlatform sipCommander = mock(SIPCommanderForPlatform.class);
+        ReflectionTestUtils.setField(event, "sipServer", sipServer);
+        ReflectionTestUtils.setField(event, "sipCommanderForPlatform", sipCommander);
+        SocketIOClient client = mock(SocketIOClient.class);
+        when(client.getSessionId()).thenReturn(UUID.randomUUID());
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+
+        try (var redis = mockStatic(RedisService.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+
+            event.onData(client, AgentInHangUpPhoneData.builder().build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_HANG_UP_PHONE), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("坐席连接未完成认证", reply.getValue().getMessage());
+            verify(infoManager, never()).get(anyString());
+            redis.verify(() -> RedisService.getSsrcTransactionManager(), never());
+            org.mockito.Mockito.verifyNoInteractions(sipCommander);
+        }
+    }
+
     // ------------------------------------------------------------------
     // AgentInPhoneNotificationEvent：入参校验与挂断信号
     // ------------------------------------------------------------------
@@ -423,6 +544,29 @@ class AgentSocketContractTest {
         assertEquals(List.of("未获取操作类型", "未获取CallId编号", "未获取接听方式"),
             reply.getAllValues().stream().map(RestResultEvent::getMessage).toList());
         assertEquals(RespCode.CODE_2.getValue(), reply.getAllValues().get(0).getCode());
+    }
+
+    @Test
+    void notificationEventRejectsClientWithoutBoundAgent() {
+        AgentInPhoneNotificationEvent event = new AgentInPhoneNotificationEvent(mock(AgentNamespace.class));
+        SocketIOClient client = mock(SocketIOClient.class);
+        when(client.getSessionId()).thenReturn(UUID.randomUUID());
+        AgentInfoManager infoManager = mock(AgentInfoManager.class);
+
+        try (var redis = mockStatic(RedisService.class);
+             var utils = mockStatic(RedisUtils.class)) {
+            redis.when(RedisService::getAgentInfoManager).thenReturn(infoManager);
+
+            event.onData(client, AgentInPhoneNotificationData.builder()
+                .type(1).callId("C1").onVideo(0).build(), null);
+
+            ArgumentCaptor<RestResultEvent> reply = ArgumentCaptor.forClass(RestResultEvent.class);
+            verify(client).sendEvent(eq(AgentCommon.AGENT_OUT_CALL_NOTIFICATION), reply.capture());
+            assertEquals(RespCode.CODE_2.getValue(), reply.getValue().getCode());
+            assertEquals("坐席连接未完成认证", reply.getValue().getMessage());
+            verify(infoManager, never()).get(anyString());
+            utils.verifyNoInteractions();
+        }
     }
 
     @Test

@@ -66,6 +66,11 @@ public class AgentInHangUpPhoneEvent implements EventListener<AgentInHangUpPhone
     @Override
     public void onData(SocketIOClient client, AgentInHangUpPhoneData data, AckRequest request) {
         String agentKey = RedisService.getAgentInfoManager().getAgentKey(client.getSessionId().toString());
+        if (agentKey == null || agentKey.isBlank()) {
+            client.sendEvent(AgentCommon.AGENT_OUT_HANG_UP_PHONE,
+                new RestResultEvent(RespCode.CODE_2.getValue(), "坐席连接未完成认证"));
+            return;
+        }
         AgentVoInfo agentVoInfo = RedisService.getAgentInfoManager().get(agentKey);
         if (agentVoInfo == null) {
             client.sendEvent(AgentCommon.AGENT_OUT_HANG_UP_PHONE,

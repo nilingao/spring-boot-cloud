@@ -56,6 +56,11 @@ public class AgentInStatusEvent implements EventListener<AgentInStatusData> {
     @Override
     public void onData(SocketIOClient client, AgentInStatusData data, AckRequest request) {
         String agentKey = RedisService.getAgentInfoManager().getAgentKey(client.getSessionId().toString());
+        if (agentKey == null || agentKey.isBlank()) {
+            client.sendEvent(AgentCommon.AGENT_OUT_STATUS,
+                new RestResultEvent(RespCode.CODE_2.getValue(), "坐席连接未完成认证"));
+            return;
+        }
         AgentVoInfo agentVoInfo = RedisService.getAgentInfoManager().get(agentKey);
         if (agentVoInfo == null) {
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,
