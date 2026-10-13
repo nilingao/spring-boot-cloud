@@ -61,9 +61,14 @@ public class AgentInStatusEvent implements EventListener<AgentInStatusData> {
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,
                 new RestResultEvent(RespCode.CODE_2.getValue(), String.format("客服 ： %s ,未登录", agentKey)));
             return;
-        } else if (data.getUpdateStatus() == null || data.getUpdateStatus() == ConstEnum.Flag.NO.getValue()) {
+        } else if (data == null || data.getUpdateStatus() == null || data.getUpdateStatus() == ConstEnum.Flag.NO.getValue()) {
             client.sendEvent(AgentCommon.AGENT_OUT_STATUS,
                 new RestResultEvent(RespCode.CODE_0.getValue(), "客服信息获取成功", agentVoInfo));
+            return;
+        }
+        if (data.getUpdateStatus() != ConstEnum.Flag.YES.getValue()) {
+            client.sendEvent(AgentCommon.AGENT_OUT_STATUS,
+                new RestResultEvent(RespCode.CODE_2.getValue(), "客服状态更新参数错误"));
             return;
         }
         if (!Arrays.asList(AgentStateEnum.LOGIN, AgentStateEnum.BUSY_OTHER, AgentStateEnum.READY)

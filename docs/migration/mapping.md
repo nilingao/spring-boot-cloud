@@ -1200,6 +1200,8 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **有意偏离**（同步旧工程或后续重做时必须保留）：① 鉴权由旧 JWT（url 参数 Authorization + JwtUtils 解 user_id）改为 Sa-Token：`StpUtil.getLoginIdByToken` 直查 token 会话，loginId（`userType-userId`）取尾段为系统用户 ID，兼容 Bearer 前缀；token-name 仍为 `Authorization`，前端 url 参数契约无缝延续；② 旧 `RedisUtils.getLock/releaseLock`（旧工程专属 API）替换为 `setObjectIfAbsent(key, v, 8s)/deleteObject`，8 秒占位锁语义保留；③ handleAgentLogout 完成后发布 `SerializationUtils.serialize(agentKey)`（byte[]，对齐 AgentLoginSubscribe 的 `byte[].class` 订阅端；旧版发 String，消息仅作唤醒信号不解析内容）；④ 事件入参校验由旧 ValidatorUtils.validateFast（返回 Set）改为手写判空，回执错误码与文案逐字对齐旧注解；⑤ AgentInCallPhoneEvent 的 SDP 由旧工程透传改为构建最小模板（m=audio 0 延迟协商、本端 SIP IP），与第一轮 AgentServiceImpl 纯 SIP 模式对齐，AgentInPhoneNotificationEvent 接听分支同款；⑥ 双开门控设计（见上）为 nla 新增，旧工程全量注册无门控。
 
+本轮补充了入站事件的边界契约：外呼事件在查询坐席前拒绝空消息或空白被叫号码，并对有效号码去除首尾空白；状态事件将 `updateStatus` 限定为协议定义的 0/1，其他值返回参数错误，不再把任意非零值误作切换请求。正常登录、查询和状态切换路径保持不变。
+
 **剩余验收**：Excel 导出、真实 FreeSWITCH/SIP/Socket.IO 联调（坐席页面连接、登录、外呼、挂断、状态机、来电通知推送全链路）、`nla-admin` 启动冒烟（双开配置下的 socket-io 端口/监听验证）、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。
 
 ---

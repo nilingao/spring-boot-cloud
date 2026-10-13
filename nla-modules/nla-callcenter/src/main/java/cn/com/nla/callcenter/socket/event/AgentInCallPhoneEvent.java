@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+
 /**
  * 坐席外呼入站事件 {@code AGENT:IN:CALL_PHONE}（纯 SIP 模式）。
  *
@@ -61,6 +62,11 @@ public class AgentInCallPhoneEvent implements EventListener<AgentInCallPhoneData
 
     @Override
     public void onData(SocketIOClient client, AgentInCallPhoneData data, AckRequest request) {
+        if (data == null || data.getCaller() == null || data.getCaller().isBlank()) {
+            client.sendEvent(AgentCommon.AGENT_OUT_CALL_PHONE,
+                new RestResultEvent(RespCode.CODE_2.getValue(), "未获取被叫号码"));
+            return;
+        }
         String agentKey = RedisService.getAgentInfoManager().getAgentKey(client.getSessionId().toString());
         AgentVoInfo agentVoInfo = RedisService.getAgentInfoManager().get(agentKey);
         if (agentVoInfo == null) {
@@ -69,7 +75,7 @@ public class AgentInCallPhoneEvent implements EventListener<AgentInCallPhoneData
             return;
         }
 
-        String caller = data.getCaller();
+        String caller = data.getCaller().trim();
         String typeName = data.getType() != null
             ? data.getType()
             : VideoStreamType.CALL_AUDIO_PHONE.getCallName();
