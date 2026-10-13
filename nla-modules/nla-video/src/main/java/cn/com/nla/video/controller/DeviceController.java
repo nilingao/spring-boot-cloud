@@ -109,6 +109,20 @@ public class DeviceController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(deviceService.deleteWithValidByIds(List.of(ids), true));
     }
+
+    /** 查询在线设备，供协议侧状态查询使用。 */
+    @SaCheckPermission("video:device:list")
+    @GetMapping("/online")
+    public R<List<DeviceVo>> online() {
+        return R.ok(deviceService.queryOnlineList());
+    }
+
+    /** 查询在线且开启消息通道的设备，供协议侧广播使用。 */
+    @SaCheckPermission("video:device:list")
+    @GetMapping("/online-message-channel")
+    public R<List<DeviceVo>> onlineMessageChannel() {
+        return R.ok(deviceService.queryOnlineMessageChannelList());
+    }
     /** ???????? */
     @SaCheckPermission("video:device:export")
     @Log(title = "????", businessType = BusinessType.EXPORT)

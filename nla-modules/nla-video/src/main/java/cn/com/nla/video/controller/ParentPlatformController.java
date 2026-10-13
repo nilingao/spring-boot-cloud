@@ -109,6 +109,13 @@ public class ParentPlatformController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(parentPlatformService.deleteWithValidByIds(List.of(ids), true));
     }
+
+    /** 按上级平台国标编号查询平台，供协议侧反查使用。 */
+    @SaCheckPermission("video:parentPlatform:query")
+    @GetMapping("/by-server-gb-id/{serverGbId}")
+    public R<ParentPlatformVo> getByServerGbId(@PathVariable String serverGbId) {
+        return R.ok(parentPlatformService.queryByServerGbId(serverGbId));
+    }
     /** ???????? */
     @SaCheckPermission("video:parentPlatform:export")
     @Log(title = "????", businessType = BusinessType.EXPORT)

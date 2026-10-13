@@ -109,6 +109,20 @@ public class VideoMediaServerController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "流媒体编号不能为空") @PathVariable String[] ids) {
         return toAjax(videoMediaServerService.deleteWithValidByIds(List.of(ids), true));
     }
+
+    /** 查询已启用的流媒体节点，供协议侧选择节点使用。 */
+    @SaCheckPermission("video:mediaServer:list")
+    @GetMapping("/enabled")
+    public R<List<VideoMediaServerVo>> enabled() {
+        return R.ok(videoMediaServerService.queryEnableList());
+    }
+
+    /** 查询已启用且在线的流媒体节点。 */
+    @SaCheckPermission("video:mediaServer:list")
+    @GetMapping("/online")
+    public R<List<VideoMediaServerVo>> online() {
+        return R.ok(videoMediaServerService.queryOnlineList());
+    }
     /** ????????? */
     @SaCheckPermission("video:mediaServer:export")
     @Log(title = "?????", businessType = BusinessType.EXPORT)

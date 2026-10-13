@@ -109,6 +109,13 @@ public class GbStreamController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(gbStreamService.deleteWithValidByIds(List.of(ids), true));
     }
+
+    /** 按国标编号查询直播流，供协议侧反查使用。 */
+    @SaCheckPermission("video:gbStream:query")
+    @GetMapping("/by-gb-id/{gbId}")
+    public R<GbStreamVo> getByGbId(@PathVariable String gbId) {
+        return R.ok(gbStreamService.queryByGbId(gbId));
+    }
     /** ??????? */
     @SaCheckPermission("video:gbStream:export")
     @Log(title = "???", businessType = BusinessType.EXPORT)
