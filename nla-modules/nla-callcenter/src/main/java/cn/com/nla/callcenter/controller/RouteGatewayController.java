@@ -139,9 +139,9 @@ public class RouteGatewayController extends BaseController {
         return R.ok(routeGatewayService.queryOptionList(keyword, limit));
     }
 
-    /** ???????? */
+    /** 导出路由网关列表 */
     @SaCheckPermission("fs:routeGateway:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "路由网关", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(RouteGatewayBo bo, HttpServletResponse response) {
         List<RouteGatewayVo> list = routeGatewayService.queryList(bo);

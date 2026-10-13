@@ -123,13 +123,13 @@ public class PlatformController extends BaseController {
         return toAjax(platformService.deleteWithValidByIds(List.of(ids), true));
     }
 
-    /** ??FS???? */
+    /** 导出 FreeSWITCH 平台列表 */
     @SaCheckPermission("fs:platform:export")
-    @Log(title = "FS??", businessType = BusinessType.EXPORT)
+    @Log(title = "FreeSWITCH 平台", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(PlatformBo bo, HttpServletResponse response) {
         List<PlatformVo> list = platformService.queryList(bo);
-        ExcelBuilder.of(list, PlatformVo.class).sheetName("FS??").toResponse(response);
+        ExcelBuilder.of(list, PlatformVo.class).sheetName("FreeSWITCH 平台").toResponse(response);
     }
 
 }

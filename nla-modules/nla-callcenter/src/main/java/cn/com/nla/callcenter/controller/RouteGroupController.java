@@ -154,9 +154,9 @@ public class RouteGroupController extends BaseController {
         return R.ok(routeGroupService.queryOptionList(keyword, limit));
     }
 
-    /** ??????? */
+    /** 导出路由组列表 */
     @SaCheckPermission("fs:routeGroup:export")
-    @Log(title = "???", businessType = BusinessType.EXPORT)
+    @Log(title = "路由组", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(RouteGroupBo bo, HttpServletResponse response) {
         List<RouteGroupVo> list = routeGroupService.queryList(bo);

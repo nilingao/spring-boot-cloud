@@ -122,13 +122,13 @@ public class DeviceChannelController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(deviceChannelService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ???????? */
+    /** 导出设备通道列表 */
     @SaCheckPermission("video:deviceChannel:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "设备通道", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(DeviceChannelBo bo, HttpServletResponse response) {
         List<DeviceChannelVo> list = deviceChannelService.queryList(bo);
-        ExcelBuilder.of(list, DeviceChannelVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, DeviceChannelVo.class).sheetName("设备通道").toResponse(response);
     }
 
 }

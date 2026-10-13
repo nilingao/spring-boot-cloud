@@ -109,13 +109,13 @@ public class StreamPushController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(streamPushService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ???????? */
+    /** 导出推流配置列表 */
     @SaCheckPermission("video:streamPush:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "推流配置", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(StreamPushBo bo, HttpServletResponse response) {
         List<StreamPushVo> list = streamPushService.queryList(bo);
-        ExcelBuilder.of(list, StreamPushVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, StreamPushVo.class).sheetName("推流配置").toResponse(response);
     }
 
 }

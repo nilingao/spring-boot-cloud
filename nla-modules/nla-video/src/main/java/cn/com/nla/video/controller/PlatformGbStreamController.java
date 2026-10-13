@@ -109,13 +109,13 @@ public class PlatformGbStreamController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(platformGbStreamService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ????????? */
+    /** 导出平台级联流列表 */
     @SaCheckPermission("video:platformGbStream:export")
-    @Log(title = "?????", businessType = BusinessType.EXPORT)
+    @Log(title = "平台级联流", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(PlatformGbStreamBo bo, HttpServletResponse response) {
         List<PlatformGbStreamVo> list = platformGbStreamService.queryList(bo);
-        ExcelBuilder.of(list, PlatformGbStreamVo.class).sheetName("?????").toResponse(response);
+        ExcelBuilder.of(list, PlatformGbStreamVo.class).sheetName("平台级联流").toResponse(response);
     }
 
 }

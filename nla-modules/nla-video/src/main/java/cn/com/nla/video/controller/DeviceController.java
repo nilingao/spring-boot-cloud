@@ -123,13 +123,13 @@ public class DeviceController extends BaseController {
     public R<List<DeviceVo>> onlineMessageChannel() {
         return R.ok(deviceService.queryOnlineMessageChannelList());
     }
-    /** ???????? */
+    /** 导出国标设备列表 */
     @SaCheckPermission("video:device:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "国标设备", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(DeviceBo bo, HttpServletResponse response) {
         List<DeviceVo> list = deviceService.queryList(bo);
-        ExcelBuilder.of(list, DeviceVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, DeviceVo.class).sheetName("国标设备").toResponse(response);
     }
 
 }

@@ -116,13 +116,13 @@ public class GbStreamController extends BaseController {
     public R<GbStreamVo> getByGbId(@PathVariable String gbId) {
         return R.ok(gbStreamService.queryByGbId(gbId));
     }
-    /** ??????? */
+    /** 导出国标流信息列表 */
     @SaCheckPermission("video:gbStream:export")
-    @Log(title = "???", businessType = BusinessType.EXPORT)
+    @Log(title = "国标流信息", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(GbStreamBo bo, HttpServletResponse response) {
         List<GbStreamVo> list = gbStreamService.queryList(bo);
-        ExcelBuilder.of(list, GbStreamVo.class).sheetName("???").toResponse(response);
+        ExcelBuilder.of(list, GbStreamVo.class).sheetName("国标流信息").toResponse(response);
     }
 
 }

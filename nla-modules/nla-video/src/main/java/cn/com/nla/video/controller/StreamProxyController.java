@@ -109,13 +109,13 @@ public class StreamProxyController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(streamProxyService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ???????? */
+    /** 导出拉流代理列表 */
     @SaCheckPermission("video:streamProxy:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "拉流代理", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(StreamProxyBo bo, HttpServletResponse response) {
         List<StreamProxyVo> list = streamProxyService.queryList(bo);
-        ExcelBuilder.of(list, StreamProxyVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, StreamProxyVo.class).sheetName("拉流代理").toResponse(response);
     }
 
 }

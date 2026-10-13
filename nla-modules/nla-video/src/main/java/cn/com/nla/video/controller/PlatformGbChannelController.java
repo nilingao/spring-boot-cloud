@@ -109,13 +109,13 @@ public class PlatformGbChannelController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] ids) {
         return toAjax(platformGbChannelService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ?????????? */
+    /** 导出平台级联通道列表 */
     @SaCheckPermission("video:platformGbChannel:export")
-    @Log(title = "??????", businessType = BusinessType.EXPORT)
+    @Log(title = "平台级联通道", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(PlatformGbChannelBo bo, HttpServletResponse response) {
         List<PlatformGbChannelVo> list = platformGbChannelService.queryList(bo);
-        ExcelBuilder.of(list, PlatformGbChannelVo.class).sheetName("??????").toResponse(response);
+        ExcelBuilder.of(list, PlatformGbChannelVo.class).sheetName("平台级联通道").toResponse(response);
     }
 
 }

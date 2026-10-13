@@ -109,13 +109,13 @@ public class PlatformCatalogController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "目录编号不能为空") @PathVariable String[] ids) {
         return toAjax(platformCatalogService.deleteWithValidByIds(List.of(ids), true));
     }
-    /** ???????? */
+    /** 导出平台目录列表 */
     @SaCheckPermission("video:platformCatalog:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "平台目录", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(PlatformCatalogBo bo, HttpServletResponse response) {
         List<PlatformCatalogVo> list = platformCatalogService.queryList(bo);
-        ExcelBuilder.of(list, PlatformCatalogVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, PlatformCatalogVo.class).sheetName("平台目录").toResponse(response);
     }
 
 }

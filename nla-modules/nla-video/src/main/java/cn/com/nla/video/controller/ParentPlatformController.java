@@ -116,13 +116,13 @@ public class ParentPlatformController extends BaseController {
     public R<ParentPlatformVo> getByServerGbId(@PathVariable String serverGbId) {
         return R.ok(parentPlatformService.queryByServerGbId(serverGbId));
     }
-    /** ???????? */
+    /** 导出上级平台列表 */
     @SaCheckPermission("video:parentPlatform:export")
-    @Log(title = "????", businessType = BusinessType.EXPORT)
+    @Log(title = "上级平台", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(ParentPlatformBo bo, HttpServletResponse response) {
         List<ParentPlatformVo> list = parentPlatformService.queryList(bo);
-        ExcelBuilder.of(list, ParentPlatformVo.class).sheetName("????").toResponse(response);
+        ExcelBuilder.of(list, ParentPlatformVo.class).sheetName("上级平台").toResponse(response);
     }
 
 }

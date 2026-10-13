@@ -123,13 +123,13 @@ public class VideoMediaServerController extends BaseController {
     public R<List<VideoMediaServerVo>> online() {
         return R.ok(videoMediaServerService.queryOnlineList());
     }
-    /** ????????? */
+    /** 导出流媒体服务器列表 */
     @SaCheckPermission("video:mediaServer:export")
-    @Log(title = "?????", businessType = BusinessType.EXPORT)
+    @Log(title = "流媒体服务器", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(VideoMediaServerBo bo, HttpServletResponse response) {
         List<VideoMediaServerVo> list = videoMediaServerService.queryList(bo);
-        ExcelBuilder.of(list, VideoMediaServerVo.class).sheetName("?????").toResponse(response);
+        ExcelBuilder.of(list, VideoMediaServerVo.class).sheetName("流媒体服务器").toResponse(response);
     }
 
 }

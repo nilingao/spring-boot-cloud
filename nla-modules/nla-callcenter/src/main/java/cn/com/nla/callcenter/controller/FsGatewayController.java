@@ -139,9 +139,9 @@ public class FsGatewayController extends BaseController {
         return R.ok(gateWayService.queryOptionList(keyword, limit));
     }
 
-    /** ??FS?????? */
+    /** 导出 FreeSWITCH 网关列表 */
     @SaCheckPermission("fs:gateway:export")
-    @Log(title = "FS????", businessType = BusinessType.EXPORT)
+    @Log(title = "FreeSWITCH 网关", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(GateWayBo bo, HttpServletResponse response) {
         List<GateWayVo> list = gateWayService.queryList(bo);

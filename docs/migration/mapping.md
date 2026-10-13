@@ -1151,7 +1151,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **测试（新增 1 个测试文件 + 扩 2 个）**：`VideoSpringSupport` 新增 `mock(Class)` 能力——`RedisService`/`VideoService` 静态门面全走 `SpringUtil.getBean`，以类全限定名为 Bean 名注册 JVM 共享 Mockito 桩即生效（接口/抽象类/具体类均可）；Mockito inline mock maker 自附加已实证，`mockStatic(MediaClient)` 可用。`VideoCommandContractTest`(10) 不启动 Spring，用 `FixedUserDispatcher` 覆写 `currentUserId()` 绕开 sa-token，覆盖查重拒绝、requestId 生成与凭据字段、发送异常回填、超时 Supplier 回收、normalize 三形态、无登录不推送与 PTZ 指令映射。`VideoServiceContractTest` 10→14：语音用例从占位断言改写为 fail-fast 断言；新增 r11 流媒体全链路（`mockStatic(MediaClient)` + 桩验证启停透传）与 r12 通道侧/流侧绑定两用例。**两个 H2 基座教训**：`selectShared*` XML 四表 JOIN 含 `video_parent_platform`，用例必须真实插入平台行，否则查询恒空；MyBatis 一级缓存遇 MP `insertBatch` 走独立 BATCH session 提交，共享 SqlSession 内「先查（空结果入缓存）→ 批插 → 同 SQL 再查」命中脏缓存，关键步骤前须 `session.clearCache()`（生产每请求新 session 无此问题）。验证入口 `.migration/test-video.ps1`（单模块）与 `.migration/test-video-all.ps1`（全量）。
 
-**剩余验收**：真实 SIP 设备/ZLM 节点联调（指令下发、回执到达、SSE 到达与 `video-command` 前端对账）、30 个权限点的菜单/角色授权（本轮不生成 SQL）、Excel 导出、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。
+**剩余验收**：真实 SIP 设备/ZLM 节点联调（指令下发、回执到达、SSE 到达与 `video-command` 前端对账）、30 个权限点的菜单/角色授权（本轮不生成 SQL）、Excel 文件实际下载校验、`nla-admin` 启动冒烟与前端 `video/**` 页面均未验收。视频与呼叫中心控制器的导出标题占位符已清理，导出实现统一调用 `ExcelBuilder`。
 
 ### 6.10 批次 6.6（fs 呼叫中心业务层第一轮）交付结果（已落地）
 
