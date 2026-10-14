@@ -269,9 +269,9 @@ i18n/messages.properties   i18n/messages_en_US.properties   i18n/messages_zh_CN.
 | 租户字段适配 | 65 | 对齐基线租户机制 | 待阶段 5 |
 | Spring Security → Sa-Token | 51 | 认证重写 | 待阶段 5 |
 | `*Param` → `*Bo` | 57 类 | 重命名 + 校验分组改法 | 待阶段 4 |
-| `@FeignClient` → 本地调用 | 43 | 微服务合并 | 待阶段 8 |
+| `@FeignClient` → 本地调用 | 43 | 微服务合并 | ✅ 阶段 8 决策收口：全部废弃，新代码 0 处 Feign 残留（见 6.14） |
 | MapStruct → MapStruct-Plus | 35 | 改 `@AutoMapper`，删 `*Convert` | 待阶段 4 |
-| Activiti → WarmFlow | 14 | **重写，非迁移** | 待阶段 7 |
+| Activiti → WarmFlow | 14 | **重写，非迁移** | ✅ 阶段 7 决策收口：无承接对象、不重写（见 6.13） |
 | Seata `@GlobalTransactional` | 7 | 废弃，改本地事务 | 待阶段 6 |
 
 类清单：Controller 132 / Service 189 / ServiceImpl 113 / Mapper 84 / Convert 35 / Param 57 / Vo 45。
@@ -498,12 +498,12 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-sms`(22) | `nla-common-sms` | 自建多渠道 → sms4j；阿里/腾讯/容联云 SDK 走 sms4j 适配 | 基座已就位 |
 | `starter-autopoi`(9) | `nla-common-excel` | poi 3.15 + autopoi → fesod | 基座已就位 |
 | `starter-security-oauth`(54) | `nla-common-satoken` + `nla-common-security` | **重写**，见阶段 5 | 基座已就位，策略待迁 |
-| `starter-xxl-job`(2) | `nla-common-job` | XXL-JOB 2.3.1 → SnailJob | 基座已就位 |
+| `starter-xxl-job`(2) | `nla-common-job` | XXL-JOB 2.3.1 → SnailJob | 基座已就位；阶段 7 收口（见 6.13），旧 `@XxlJob` handler 0 个需迁 |
 | `starter-elasticsearch` | `nla-common-elasticsearch` | Easy-ES 1.1.1 → 3.0.2，7 处调用需改造 | 基座已就位 |
 | `starter-cloud`(5) | **废弃** | `ApiController` 全局异常处理 → 基线 `GlobalExceptionHandler`（需保留索引前缀正则解析，见 1.5） | 待阶段 6 |
-| `starter-feign`(2) / `starter-nacos`(2) | **废弃** | 单体化 | 待阶段 8 |
+| `starter-feign`(2) / `starter-nacos`(2) | **废弃** | 单体化 | ✅ 已收口（见 6.14） |
 | `starter-sentinel`(5) | **废弃** | 限流改基线 `@RateLimiter`（Redisson 实现） | 待阶段 6 |
-| `starter-quartz`(12) | **废弃** | 已弃用 | 待阶段 7 |
+| `starter-quartz`(12) | **废弃** | 已弃用 | ✅ 已收口（见 6.13）；`quartz.sql` 清理并入阶段 9（见 9.3） |
 | `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 → 2.0.14；TCP 有效代码迁入，见 5.1.4 | ✅ 已建·编译/协议测试 GREEN |
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | Spring AMQP4 / Jackson3；配置与客户端重写，见 5.1.5 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1.1 | ✅ 已建·编译 GREEN |
@@ -929,10 +929,9 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | 租户 | `tenant_id`（默认公共租户 1L） | **基线全局禁用多租户**（application.yml 无 tenant 配置、`sys_user` 无 `tenant_id`） | 旧实体 `tenantId` 字段一律去掉，不留孤立租户列 |
 | 当前登录人 | `JwtUtils.getUserId()` + Feign（`UserServiceFeign.getInfo` + `findUserConnectDepartment`） | `LoginHelper.getUserId()/getUsername()/getDeptId()/getDeptName()`（从 SaToken 会话直接取） | 用户/部门填充改 `LoginHelper`，**彻底消除这类 Feign 调用** |
 | 校验分组 | `BaseModel` 内部注解 `add/edit/delete`（小写） | `AddGroup/EditGroup`（大写，jakarta.validation） | `@Validated(AddGroup.class)` |
-| 流程类业务 | Activiti + `process_instance_id`/`state` 字段 | WarmFlow + `BusinessStatusEnum`（DRAFT/WAITING/FINISH…） | 走 `nla-workflow` 的 `TestLeave` 模式（归阶段 7） |
+| 流程类业务 | Activiti + `process_instance_id`/`state` 字段 | WarmFlow + `BusinessStatusEnum`（DRAFT/WAITING/FINISH…） | 走 `nla-workflow` 的 `TestLeave` 模式（归阶段 7，已按 6.13 决策收口：旧 Activiti 流程无承接对象） |
 
-**旧 `spring-boot-oa` 处置**：按分级清理策略保留到阶段 6 全部完成后，随其他旧 `spring-boot-*`
-业务模块一并删除（本轮不动老项目一行）。`sql/sys_oa-基类sql.sql` 同理，见 9 节。
+**旧 `spring-boot-oa` 处置**：按分级清理策略保留到**阶段 9 部署验收后统一清理**（口径由阶段 7 收口落定，见 6.13；本轮不动老项目一行）。`sql/sys_oa-基类sql.sql` 同理，见 9 节。
 
 ### 6.5 全量重估：迁移边界重划
 
@@ -1239,6 +1238,66 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 **验收口径**：批次 6.7 剩余验收 = 真实下单/回调验签联调，随未来 pay 业务开发一并进行（商户凭据 + 外网，见 5.3.2）；本轮不新增 `script/sql/nla_pay.sql`（0 表）、不新增菜单、不动 `nla-admin` 配置。旧 27 文件保留在 `spring-boot-system/spring-boot-pay/` 作对照源（分级清理政策，见 9.2）。
 
 **未提交**：批次 6.7 全部改动待用户确认后自行提交。
+
+---
+
+### 6.13 阶段 7（工作流与调度替换）收口决策（已落地；本轮无代码交付）
+
+> 里程碑 7 原注「在途流程需用户确认兜底方式」的唯一开放决策点已由用户确认落定，
+> 本节同时把旧码清理口径统一改到阶段 9（见 9.2/9.3）。侦察实证入口 `.migration/probe-m7-scope.ps1`。
+
+**用户确认的两个决策**：
+
+1. **在途/历史流程数据兜底 = 彻底废弃、不做承接**：新系统不承接任何 `ACT_*` 实例（不迁移、不导出归档），与 6.1（老数据丢弃后仅迁 `sys_area`）、6.2（oa `oa_leave` + Activiti 废弃）先例一致；历史流程查询如需回看，走旧库/旧系统（旧目录保留至阶段 9）。
+2. **旧码物理删除 = 保留到阶段 9 一并清理**：本轮只登记台账（使命完成标记），不在仓库中物理删除任何 `spring-boot-*` 目录与旧 SQL。
+
+**Activiti → WarmFlow（侦察实证，无重写承接对象）**：
+
+- 旧侧规模：`spring-boot-activiti` 43 Java + `spring-boot-feign-activiti` 1 + `spring-boot-oa` 6（后者已于 6.2 废弃）。除此之外全仓无 `RuntimeService`/`TaskService` 调用点（`spring-boot-starter-pay-wxpay` 两处 “activiti” 字符串命中实为 `PayGiftActivity` 微信营销活动 URL，误报）。
+- 新侧基线：`nla-workflow` 129 Java（WarmFlow：`FlwTaskServiceImpl`/`FlwInstanceServiceImpl`/`WorkflowGlobalListener`/liteflow 组件等）完整在位，流程类业务自 6.4 起一律走 `TestLeave` 模式。
+- 结论：里程碑 7 标注的「14 文件重写」实际分布在已废弃/保留对照的旧模块内，新系统无任何 Activiti 流程需要承接 → **不做任何代码交付，阶段 7 以决策收口**；未来真实流程类业务并入口径仍按 6.4 映射表（WarmFlow + `BusinessStatusEnum`）。
+
+**XXL-JOB → SnailJob（侦察实证，0 个 handler 需迁）**：
+
+- 基座早已就位：`nla-common-job`(2)/`nla-job`(11)/`nla-snailjob-server`(3) + docker 编排 + `clientName: nla-cloud`（见 7.2）。
+- 旧侧全仓 `@XxlJob` handler 仅 2 处，均在 `spring-boot-sms/pool/job/`：
+  - `PubLicJob`（`pubLicMessageHandler`，公告定时 Socket.IO 广播）：依赖的 `PublicNotice`/`ReadNoticeUser` 已判废弃免迁（见 6.5.1/废弃清单，PublicNotice→`SysNotice`），该 handler 无业务承载，**不迁**；若未来 `SysNotice` 需要周期公告推送，按基线模式在 `nla-job` 重写 SnailJob 执行器（属新需求，非迁移义务，登记为可选后续）。
+  - `SampleXxlJob`：整个文件连 package 都在注释里，纯官方 demo，**不迁**。
+- `spring-boot-service-xxl-job`(68) 是 XXL-JOB 调度中心服务端本体，由 `nla-snailjob-server` 替代，免迁；旧 `starter-xxl-job`(2) 装配件废弃。
+- `quartz` 线同步收口：`starter-quartz`(12) 废弃确认（6.5.3 废弃/免迁清单早已列明，本节把状态从「待阶段 7」改为已收口）。
+
+**SQL 与旧目录处置**：`sql/sys_activiti.sql`（`ACT_*` 表结构仅作 WarmFlow 流程重设计的参照，不再产生迁移动作）与 `sql/quartz.sql` 的物理删除**并入阶段 9 统一清理**（原「可随阶段 7 一并删」口径作废，见 9.3）；旧 `spring-boot-*` 全部目录同样保留到阶段 9（见 9.2）。
+
+**未提交**：本节及关联行/里程碑/9 节口径的全部台账改动待用户确认后自行提交。
+
+---
+
+### 6.14 阶段 8（client 聚合层扁平化）收口决策（已落地；本轮无代码交付）
+
+> 侦察实证入口 `.migration/probe-m8-scope.ps1`；里程碑表预授权口径就是「43 个 `@FeignClient` 全废弃」，
+> 本节把 9.2 要求的「逐个确认废弃」落到清单级实证。
+
+**实测规模**：`spring-boot-app` 52 Java / 25 个转发 Controller；`spring-boot-web-api` 84 Java / 38 个；`spring-boot-feign` 7 子模块共 **43 个 `@FeignClient` 声明**（bean 15 / video 18 / sms 5 / sso 2 / activiti 1 / face 1 / oa 1），与台账预估 43 吻合。
+
+**43 个 Feign 接口的承接对照（按目标服务归组，逐个清单已实证）**：
+
+| 旧目标服务 | 接口数 | 新系统承接位 |
+|---|---|---|
+| `bean-server`（user/dept/role/menu/post/mini/upload + area/config/dict×2/logs/oauthClient/table/tenant） | 15 | `nla-system` `sys_*` 覆盖免迁（6.1.1 判定 14 项覆盖 + Tenant×2 废弃）；`sys_area` 已迁；上传→`nla-common-oss`；table→`nla-gen`；logs→`nla-common-log` |
+| `sms-server`（mobile_message/template/config/send/public_notice） | 5 | 批次 6.3 `nla-message`（统一入口 `POST /sms/send` 已覆盖旧 `/api`、`/app`、`/webapi` 三个同构发送入口，见 6.6.1）；PublicNotice→`SysNotice` 废弃 |
+| `video-server`（device/channel/play/ptz/stream/platform 等） | 18 | 批次 6.5 `nla-video` 两轮业务层（CRUD + SIP 实时指令 79 端点，见 6.8/6.9） |
+| `face-server`（detector） | 1 | 批次 6.4 `nla-face` `FaceDetectorController`（见 6.7） |
+| `sso-server`（mini/OAuthUser） | 2 | 阶段 5 认证域（Sa-Token `/auth/*` + `sys_social`，见 5.4~5.10） |
+| `oa-server`（leave） | 1 | 废弃（6.2/6.4，WarmFlow `TestLeave` 覆盖） |
+| `activiti-server` | 1 | 废弃（6.13） |
+
+**client 63 个转发 Controller：不迁**。它们是按 Feign 薄委托组织的旧对外 API 面（`/app/**`、`/webapi/**`），能力已全部由 nla-* 模块 Controller 按新契约（Sa-Token 权限 + 新 URL）重交付；旧路径/旧 JWT/旧 tenantId 语义**不保留兼容层**，前端与外部调用方走新任务线（与 7.2 「前端另立任务线」口径一致）；如部署时确有旧调用方需过渡，由 nginx 反向映射在阶段 9 评估，不阻塞本阶段。
+
+**新侧零残留实证**：全部 `nla-*` 源码（排除 target）扫 `FeignClient|springbootclient|springbootfeign|cn\.com\.tzy` 命中 = 1，且为 `nla-common-freeswitch/utils/DynamicTask.java` JavaDoc 中的迁移溯源注释（非依赖）；跨模块本地调用契约由基线 `nla-api`（`system.api`/`workflow.api`）承担，即「@FeignClient → 本地调用」的唯一形态。
+
+**旧目录处置**：`spring-boot-client/`（使命 = 阶段 8 迁移源，结论为不迁）与 `spring-boot-feign/`（逐个废弃确认已完成）保留到阶段 9 统一清理（见 9.2）；`spring-boot-gateway` 同属微服务合并牺牲品，随 `spring-boot-system/` 对照源一并保留至阶段 9。
+
+**未提交**：本节及关联行/里程碑/9 节口径的全部台账改动待用户确认后自行提交。
 
 ---
 
@@ -1573,9 +1632,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
-| **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
-| **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
-| **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -B clean test` 已在批次 6.4 / 6.5 / 6.6 五轮跑通（**49/49 BUILD SUCCESS**，6.6 两轮均未带 `-o`），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
+| **7** | 工作流与调度替换 | ✅ 完成·决策收口 | 用户已确认兜底方式（见 6.13）：旧 Activiti 在途/历史流程实例数据**彻底废弃、不做承接**（与 6.1/6.2 老数据丢弃先例一致，`ACT_*` 不迁移不归档）；Activiti「重写」无承接对象——旧调用仅存于 `spring-boot-activiti`(43)+`feign-activiti`(1)+已废弃 oa(6)，基线 `nla-workflow`(129) WarmFlow 完整在位；XXL-JOB→SnailJob 基座在位（`nla-common-job`/`nla-job`/`nla-snailjob-server`），旧 `@XxlJob` handler 实测 0 个需迁；`starter-quartz`/`quartz.sql`/`sys_activiti.sql` 清理并入阶段 9（见 9.2/9.3）**本轮无代码交付、决策收口** |
+| **8** | client 聚合层扁平化 | ✅ 完成·决策收口 | **43 个 `@FeignClient` 实测全部废弃**（7 个目标服务的承接位逐个对照见 6.14：sys_* 覆盖/nla-message/nla-video/nla-face/阶段 5 认证域，oa+activiti 已废弃）；client 63 个转发 Controller 不迁（旧 `/app`、`/webapi` 外部路径废弃，能力已由 nla-* 新契约重交付）；新代码 0 处 Feign 残留（唯一命中为 JavaDoc 溯源注释）；**本轮无代码交付、决策收口** |
+| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**剩余均为环境阻塞项**：`nla-admin` 启动冒烟、真实 MySQL/Redis 联调、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1610,7 +1669,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 1. **`nla-admin` 启动冒烟未做** —— 需要可用的 MySQL 8（库名 `nla-cloud`）与 Redis，
    并先执行 `script/sql/nla_system.sql` + `nla_job.sql` + `nla_workflow.sql` + `nla_ai.sql`。
 2. **旧 `spring-boot-*` 目录仍在仓库中** —— 用户已确认采用分级清理，
-   保留到阶段 6 完成后删除，清单与理由见 9.2；已删的 4 份部署产物见 9.1。
+   保留到**阶段 9 部署验收后统一清理**（阶段 7 收口时落定口径，见 6.13；本轮不物理删除），清单与理由见 9.2；已删的 4 份部署产物见 9.1。
 3. **`probe-newmod-res.ps1` 有个已知 bug** —— 测试路径未把 `cn\com\nla` 反映射回 `org\dromara`，
    导致 5 个 `src/test/java/**` 文件误报 `NO-UPSTREAM`。已人工 Read 上游 `SocialUtilsTest.java`
    确认这些测试确实来自上游，结论不受影响，脚本未修。
@@ -1644,15 +1703,18 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 
 新工程的编排已由 `script/docker/docker-compose.yml` 接管（见 7.3.1）。
 
-### 9.2 保留到阶段 6 完成
+### 9.2 保留到阶段 9 统一清理
+
+阶段 7 收口时落定的口径（见 6.13）：迁移/对照使命已完成的旧目录**本轮均不物理删除**，
+保留到阶段 9 部署验收后一并清理；旧代码在 `5.0.0-dev` 分支完整保留，删除可恢复。
 
 | 路径 | 类型 | 规模 | 保留理由 |
 |---|---|---|---|
 | `spring-boot-business/` | 目录 | 7 子模块，586 Java | 阶段 6.2~6.7 的迁移源 |
-| `spring-boot-client/` | 目录 | 2 子模块，136 Java | 阶段 8 的迁移源 |
+| `spring-boot-client/` | 目录 | 2 子模块，136 Java | 阶段 8 的迁移源（已收口于 6.14：不迁；保留至阶段 9） |
 | `spring-boot-common/` | 目录 | 2 子模块，218 Java | 阶段 4.1 实体迁移的源 |
-| `spring-boot-feign/` | 目录 | 7 子模块，43 Java | 阶段 8 需逐个确认废弃 |
-| `spring-boot-service/` | 目录 | 4 子模块，72 Java | 阶段 7.2 XXL-JOB → SnailJob 的对照源 |
+| `spring-boot-feign/` | 目录 | 7 子模块，43 Java | 阶段 8 逐个废弃确认已完成（清单见 6.14；保留至阶段 9） |
+| `spring-boot-service/` | 目录 | 4 子模块，72 Java | 阶段 7 XXL-JOB → SnailJob 的对照源（已收口，见 6.13；保留至阶段 9） |
 | `spring-boot-starter/` | 目录 | 21 子模块，744 Java | 阶段 3 自建封装的源（见第 5 节） |
 | `spring-boot-system/` | 目录 | 3 子模块，48 Java | 阶段 5 认证重写的对照源 |
 | `sql/` | 目录 | 10 份 | **阶段 4.3 DDL 重写的输入源**，详见 9.3 |
@@ -1671,8 +1733,8 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `sys_face.sql` | 6.4 |
 | `sys_video.sql` | 6.5 |
 | `freeswitch.sql` | 6.6（fs 呼叫中心 41 表） |
-| `sys_activiti.sql` | 7.1；其中 `ACT_*` 表废弃，但旧表结构是重新设计 WarmFlow 流程的参照 |
-| `quartz.sql`（219 行） | 7.2；已确认废弃，**可随阶段 7 一并删** |
+| `sys_activiti.sql` | 7.1；其中 `ACT_*` 表废弃，旧表结构仅作 WarmFlow 流程重设计的参照；6.13 收口：在途/历史数据不做承接，物理删除并入阶段 9 |
+| `quartz.sql`（219 行） | 7.2；已确认废弃（6.13 收口），**物理删除并入阶段 9**（原「可随阶段 7 一并删」口径作废） |
 
 `sys_area_1.sql`（679273 行）需单独评估是入库还是改为运行时导入 ——
 注意它当前**已在仓库里**（`sql/` 目录 `tracked=10`），阶段 4 处理时需一并决定去留。
@@ -1724,6 +1786,10 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `fs-full-test.ps1` | 批次 6.6 全量回归入口：`mvn -B clean test`（无 `-o`，如需改 goal 直接编辑脚本），批次 6.7 亦复用，日志落 `.migration/fs-full-test.log` | ✅ |
 | `probe-ijpay.ps1` | 批次 6.7 依赖可拉性探测：`dependency:3.7.0:get` 逐个试官方 IJPay 2.9.11 各渠道 artifact（实测 Core/Wx/Union/XPay/AliPay 可拉，**QQPay 中央仓不存在**，决定移植路径；需钉插件版本，`com` 前缀会被 Bash 工具吞所以必须走脚本） | ✅ |
 | `migrate-pay.ps1` | 批次 6.7 移植唯一事实来源（幂等，先删后写）：fork alipay/qqpay/jdpay/paypal + BaseModel → `nla-common-pay`（54 文件），包名/jakarta 重写，严格 UTF-8，末尾 `tzy|javax\.servlet` 残留审计 exit 1（坑：单元素嵌套数组必须逗号运算符保形，见 10.1） | ✅ |
+| `probe-m7-scope.ps1` | 阶段 7 收口侦察（见 6.13）：旧 activiti/oa/xxl-job 模块 Java 计数、全仓 `@XxlJob` handler 定位、旧模块外 activiti 字符串命中（捕获 `PayGiftActivity` 误报）、基线 WarmFlow/SnailJob 计数 | ✅ |
+| `probe-m7-ledger.ps1` | 用 `Select-String` 列本台账阶段 7 相关行号与内容（纯 ASCII 正则，与 `probe-mapping-lines.ps1` 同目的） | ✅ |
+| `probe-m8-scope.ps1` | 阶段 8 收口侦察（见 6.14）：旧 client/feign 模块 Java 计数、43 个 `@FeignClient` 声明逐个清点（含 path/configuration）、client 转发 Controller 数与 URL 前缀、新侧 `FeignClient/cn.com.tzy` 残留扫描（命中 1 = JavaDoc 溯源注释） | ✅ |
+| `probe-m9-junit.ps1` | 阶段 9 尾巴项实证：新侧 `nla-*`（排除 target）JUnit4 import/`@RunWith`/pom junit 直接依赖全量扫描（均 0）+ 旧侧对照计数（9 处，属阶段 9 待删目录不动） | ✅ |
 
 ### 10.1 脚本编写的五条踩坑教训
 
