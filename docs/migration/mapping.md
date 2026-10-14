@@ -2293,6 +2293,101 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 `script/sql/nla_system_area_data.sql` + 删除 2,315 个旧文件；不入库的 `.migration/` 新增 10 份探针/入口脚本，
 并改了 `verify-sys-area-data.ps1`。
 
+### 8.12 阶段 9 第九轮：D 方向遗留盘点（只观测、不改代码，2026-10-14）
+
+> 第八轮用户勾选的 D「推其它遗留」= 前端任务线 / compose 外部机验收 / `.lib-service` / face 真机与
+> Linux ARM、GPU。本轮**只做取证与判定**，不动 Java、不动配置、不动 SQL；取证脚本
+> `probe-m15-leftover-d.ps1`（输出 `out-m15-left.ps1.txt` 共 61 行）+ 若干 `git grep` / `Grep` 复核。
+
+**1. `.lib-service/`（gitignored，`tracked=0`，仓库零成本 —— 判定：保留）**
+
+实测三个子目录（`Get-ChildItem -Recurse -File -Force` 逐字节求和）：
+
+| 子目录 | 文件 | 字节 | 最大件 | 判定依据 |
+|---|---|---|---|---|
+| `allatori/` | 4 | 897,174 | `lib/allatori.jar` 884,539 | 新侧**零引用**（无任何构建调用混淆工具）→ 留作历史参照 |
+| `rabbitmq-plugins/` | 2 | 36,533 | `rabbitmq_delayed_message_exchange-3.9.0.ez` 36,358 | **必须保留**：这是 `nla-common-mq` `sendDelay` 所需插件的**唯一交付物**，仓库内无副本 |
+| `skywalking-agent/` | 199 | 44,397,822 | `skywalking-agent.jar` 28,817,515 | 链路追踪整体停用（见下） |
+
+tracked 引用面 `git grep -n -I -E '(allatori|skywalking|rabbitmq-plugins|\.lib-service)'`（排除本台账）**20 处**，逐条定性：
+- `nla-admin/Dockerfile:10` 预留挂载路径 `/nla/skywalking/agent`，`:27-28` 的 `-Dskywalking.agent.service_name` 与
+  `-javaagent` **两行都是注释**；
+- `nla-admin/pom.xml:137-144` skywalking-logback 两个依赖**整段注释**；`logback-nla.xml:100-111` TraceId appender
+  与日志推送 appender **同样全注释**；
+- `.gitignore:80` 是忽略规则本身，`README.md:374` 是第八轮改写的说明段；
+- `.build/jenkins/startcloud.sh:7/28/29` —— 又一处**死配置**（`-javaagent:${JAR_BATH}/lib/skywalking-agent/...`，同行变量名还拼错）。
+
+→ **没有任何生效的代码或配置真正加载 agent**，链路追踪处于「挂载点已备好、开关全注释」状态；仓库侧成本 0，本轮不动。
+
+**2. `script/docker/` 编排完整性与边界（判定：静态一致，剩外部机验收）**
+
+- 目录实际只有 5 份文件：`docker-compose.yml` 5,281B、`database.yml` 1,508B、`nginx/conf/nginx.conf` 7,212B、
+  `redis/conf/redis.conf` 688B、`redis/data/README.md` 100B。
+- 9 个服务名与行号：`mysql`(L2) / `nginx-web`(L28) / `redis`(L49) / `minio`(L66) / `nla-server1`(L100) /
+  `nla-server2`(L117) / `nla-monitor-admin`(L134) / `nla-snailjob-server`(L146) / `nla-snailai-server`(L160)，与 7.3.1 一致。
+- 镜像实测：`mysql:8.4.9`、`nginx:1.31.1`、`redis:8.6.3`、`pgsty/minio:RELEASE.2026-04-17T00-00-00Z`、
+  `nla/nla-server:1.0.0`（两个实例复用同一镜像）、`nla/nla-monitor-admin:1.0.0`、`nla/nla-snailjob-server:1.0.0`、
+  `nla/nla-snailai-server:1.0.0`；`.run/` 4 份 Docker 配置的首个 `value=` 与其中 4 个 app 镜像 tag **逐一对应**。
+- **`build:`/`context:` 段 0 个**、**仓库相对 bind 路径（`./xxx`）0 个** → 编排不依赖仓库内构建上下文，但镜像必须
+  预先构建；挂载点（nginx conf / redis conf / mysql init）在宿主机的真实路径**本机无法验证** —— 这正是
+  「compose 外部机验收」这条待办的边界所在。
+- 端口发布实测（用小写 `Grep` 才拿到，原因见本节末尾）：`3306`、`80`/`443`、`6379`、`9000`/`9001`、
+  `8800`/`17888`（snailjob）、`8900`/`18888`（snailai）；`nla-server1/2` 与 `nla-monitor-admin` **不发布宿主端口**，
+  由 nginx 反代。`database.yml` 另发 `1521`/`1433`/`5432`/`5433`/`18080`（非 MySQL 部署用）。
+- ⚠️ **新发现一处 compose 结构冗余（本轮只登记不修改）**：9 个服务**全部** `network_mode: "host"`，而其中
+  6 个（mysql / nginx-web / redis / minio / snailjob / snailai）**同时写了 `ports:`**。host 网络下 Docker 不做出
+  宿主端口映射（官方语义为丢弃并告警）——服务能不能对外可达，取决于**进程直接绑定的宿主机端口**，
+  而不是 `ports:` 那 11 行。功能上目前恰好等价（见下条链路一致），但这些 `ports:` 属**误导性死配置**，
+  外部机验收时应按「宿主机端口是否被直接监听」为准，不要以 compose 里的 `ports:` 当事实。
+- ✅ **端口链路逐一对得上（三份文件交叉实测）**：`nginx.conf` 的 upstream 与模块实际 `server.port` / RPC 端口全一致 ——
+  `upstream server` → `127.0.0.1:8080`/`8081` ↔ compose `SERVER_PORT: 8080`（server1）/`8081`（server2）；
+  `upstream snailjob-server` → `8800` ↔ `nla-snailjob-server/application.yml:2 port: 8800`（RPC `17888` 见 dev/prod
+  `server-port: 17888`）；`upstream snailai-server` → `8900` ↔ `nla-snailai-server/application.yml:2 port: 8900`
+  （gRPC `18888` = L24 `grpc-port`）；`upstream monitor-admin` → `9090` ↔ `nla-monitor-admin/application.yml:2 port: 9090`。
+  proxy_pass 路径前缀（`/admin/`、`/snail-job/`、`/snail-ai/`）与各 `server.servlet.context-path` 也对得上。
+- 宿主目录约定：所有挂载都是**绝对路径 `/docker/*`**（mysql data/conf/init、redis conf/data、nginx cert/conf/html/log、
+  minio data/config、各服务 logs），即仓库里的 `script/docker/nginx/conf/nginx.conf` 与 `redis/conf/redis.conf`
+  只是**需拷到宿主机 `/docker/…` 的模板**，compose 并不直接读仓库路径（实测 `./` 绑定 0 个）——
+  与 README 「把 `nla_databases.sql` 放进宿主机的 `/docker/mysql/init/`」口径一致。
+- 基础设施边界：两份 yml 对 `rabbit|amqp|elastic|9200|5672|freeswitch|zlm|kibana|logstash` **0 命中**。
+  与新侧默认门控自洽（逐条实测）：`application.yml:318` `easy-es.enable: false`、`application.yml:406`
+  `freeswitch.enabled: false`、`video.enabled` 在 `nla-admin` 各 profile **根本不配置**
+  （`nla-modules/nla-video/README.md:62` 明确「缺省不配置即关闭」，协议组件与 SIP 端口在关闭时完全不创建）、
+  `nla.mq.enabled` 由 `MqAutoConfiguration` 的 `@ConditionalOnProperty(prefix="nla.mq", name="enabled", havingValue="true")`
+  控制，且**无任何模块依赖 `nla-common-mq`**（`nla-common-bom:220` 只做 `dependencyManagement`，`nla-demo:119` 引的是
+  `nla-common-mqtt`）。→ 已把这句实测结论写进 README「Docker 部署」节（本轮唯一入库文案改动）。
+- 另两条只登记不修改的观察：① 9 个服务均 `privileged: true`（上游同款写法，本轮不动）；
+  ② mysql 启动参数 `--collation-server=utf8mb4_cs_0900_ai_ci`（compose L22）与台账已确认的建库口径一致，
+  顺带验证了编排与 SQL 侧未出现口径漂移。
+
+**3. `script/sql/` 交付面（本轮只清点，无新待办）**：共 21 份 —— MySQL 11 份（`nla_ai` 32,234 /
+`nla_callcenter` 67,633 / `nla_databases` 2,534 / `nla_face` 4,951 / `nla_job` 37,810 / `nla_message` 12,615 /
+`nla_system` 94,091 / `nla_system_area_data` 234,829 / `nla_system_ext` 3,393 / `nla_video` 47,590 /
+`nla_workflow` 35,268）+ oracle 3 份 + postgres 4 份 + sqlserver 3 份。与阶段 9 删除后的交付口径一致。
+
+**4. 前端 / face 真机 / Linux ARM / GPU**：不属于本仓库可推进项 —— 前端已判定「另立改造任务线」（README「前端」节），
+face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为环境联调项）。本轮**不产生代码改动**，仅记为外部依赖。
+
+**需用户定夺的四条（本轮不擅自动手）**
+
+| # | 决策项 | 实测依据 | 建议 |
+|---|---|---|---|
+| 1 | `.build/` 5 份脚本整删还是留档 | 见 8.11：全部只服务已删除的微服务，删后必然失效；`.gitignore` 明写「CI 脚本目录，切勿忽略」 | 倾向整目录删（历史在 `5.0.0-dev` 分支可查） |
+| 2 | 是否在 `script/docker/` 补 RabbitMQ（含插件挂载）与 ES | 两侧能力均默认关闭，MQ 更无消费者；`.ez` 插件只存在于本机未入库目录 | 倾向**不补**，改为在各模块 README 写明「需自备 broker 并手工装插件」 |
+| 3 | 本机 3.5 GB 旧目录残留何时腾空 | 见 8.11：14,942 文件仍在盘且全是忽略项，`git status` 干净 | 确认无需回滚后由你手工 `Remove-Item`（工具约束禁止我批量删盘） |
+| 4 | 是否删掉 compose 里 6 处失效的 `ports:` 段 | 本轮实测：9 个服务全 `network_mode: "host"`，`ports:` 在 host 网络下不生效（见上） | 建议**不动**（删与不删行为一致；保留与上游同款写法便于对照，仅在验收时别把它当事实） |
+
+**本轮改动量**：入库侧只有两个文件 —— `README.md`（Docker 部署节新增一段引用块 + 阶段 9 进度行一句）
+与本台账（`git diff --numstat` 无其它条目）；无 Java / 配置 / SQL 变更 →
+按口径**不重跑全量回归**，只重跑文档相关验收（`verify-doc-enc`、`audit-brand`、`verify-encoding`、`git diff --check`）。
+另：⚠️ 第八轮新增的 5 组 springdoc 分组**仍未做运行期实测**（需应用起来后逐个拉 `/v3/api-docs/{group}`），
+该待办不属本轮 D 范围，仍挂在 8.11 B 段。
+
+**附带一条新取证坑（10.1「0 命中必须复核」的又一实例）**：`probe-m15-leftover-d.ps1` 输出的
+`published ports` 为空，实为脚本正则 `^\s*-\s*(\d+:\d+)` **不容忍 compose 里的引号包裹条目**（`- "3306:3306"`）；
+而在 Bash 工具里内联跑同一条 `Select-String` 时，模式串中的 `"` 还会被 shell 剥掉 → 连正确写法也返 0 命中。
+两条均属「0 命中 ≠ 不存在」，改用 `Grep` 工具配 `Grep` 友好的模式才拿到真实清单。
+
 ---
 
 ## 9. 旧代码清理
@@ -2326,7 +2421,7 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `spring-boot-starter/` | 目录 | 21 子模块，744 Java | 阶段 3 自建封装的源（见第 5 节） |
 | `spring-boot-system/` | 目录 | 3 子模块，48 Java | 阶段 5 认证重写的对照源 |
 | `sql/` | 目录 | 10 份 | **阶段 4.3 DDL 重写的输入源**，详见 9.3 |
-| `.lib-service/` | 目录 | — | `allatori` / `rabbitmq-plugins` / `skywalking-agent`；已 gitignore（`tracked=0`），不占仓库体积，阶段 3/9 评估 native 与 agent 兼容性时可能还要用 |
+| `.lib-service/` | 目录 | — | `allatori` / `rabbitmq-plugins` / `skywalking-agent`；已 gitignore（`tracked=0`），不占仓库体积，阶段 3/9 评估 native 与 agent 兼容性时可能还要用（✅ 阶段 9 第九轮已逐子目录盘点并判定保留，取证与「只有 `.ez` 插件不可丢」这一发现见 8.12）|
 
 #### 9.2.1 阶段 9 第六轮：物理清理影响清单（只列不动，2026-10-14）
 
@@ -2437,6 +2532,8 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 > 阶段 9 第七轮追加 `probe-m15-doc.ps1` / `probe-m15-doc2.ps1` 后重跑：**已登记 103 / 在盘 124**（同样只缺 `probe-sql-brand.ps1`）。
 > 阶段 9 第八轮追加 10 份 `probe-m15-*` / `m15-*`（见 8.11）后重跑：**已登记 113 / 在盘 134**，
 > 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」22 份（均为历史一次性 dump/build 入口）。
+> 阶段 9 第九轮登记 `probe-m15-leftover-d.ps1`（见 8.12）后重跑：**已登记 114 / 在盘 135**，
+> 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2534,7 +2631,8 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `probe-m15-leftover.ps1` | 删除后磁盘残留盘点：按目录统计剩余文件数/字节，拆分「`target/` 下」与「非 `target/` 忽略项」清单，并验证 `git status` 未跟踪条目为 0 | ✅ |
 | `probe-m15-readme.ps1` | 定位 README 里全部仍把旧目录说成「存在」的句子（只报行号与原文，供人工改写），并列出 `docs`/`nla-*`/`script` 下的旧目录文字提及 | ✅ |
 | `probe-m15-eol.ps1` | 字节级行尾盘点：逐文件统计 `lf`/`cr`/`crlf`/`bare-lf`/BOM，并回显 `.gitattributes` 与 `core.autocrlf`，用于判断「LF will be replaced by CRLF」告警是否造成整体改写 | ✅ |
-| `probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1` | 假阴性定位两件套：对照聚合 glob vs 逐目录 negative pathspec（结论：两者等价），并定位到真因是**原生命令参数里嵌双引号**（见 10.1 附带陷阱） | ✅ |
+| `probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1` | 假阴性定位两件套：对照聚合 glob vs 逐目录 negative pathspec（结论：两者等价），并定位到真因是**原生命令参数里嵌双引号**（见 10.1 附带陷阱）| ✅ |
+| `probe-m15-leftover-d.ps1` | 阶段 9 第九轮 D 方向盘点（见 8.12）：`.lib-service` 逐子目录文件数/字节/top-3 + tracked 引用面计数，compose 镜像/`context:`/`./` 绑定清单与 `.run` tag 对比，`script/sql` 全量清单（注：其 `published ports` 正则不容忍引号条目，端口清单由 `Grep` 补测）| ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
@@ -2617,6 +2715,9 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   而 git 静默接受。推论：**任何「测出 0 命中」的安全判定都必须换一个写法复核一次**
   （本轮靠 `probe-m15-c2refs2.ps1` 才揭穿，否则会把 README/.build 的连带引用当成不存在就删）；
   能用目录前缀、字符类或拆 `-e` 表达的，就不要把引号塞进单个参数（定位脚本：`probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1`）。
+  ⚠️ 同一坑的两个变体（阶段 9 第九轮，见 8.12）：**自己写的正则也不容忍带引号的条目**（`^-\s*(\d+:\d+)` 匹不到
+  `- "3306:3306"` → `published ports` 错报为空）；而在 Bash 工具里内联跑含 `"` 的 `Select-String` 时，引号会被 shell
+  剥掉 → 连正确写法也返 0 命中（又一次复现了第 1 条教训）。
 - **验证 YAML 前先洗掉 Maven 过滤占位** —— `@xxx@`（如 `@monitor.username@`）不是合法 YAML token，
   snakeyaml 直接报错；先 `[regex]::Replace($raw,'@[A-Za-z0-9_.\-]+@','mvnPlaceholder')` 落临时副本再解析
   （`probe-m15-yamlcheck.ps1`），否则会把「占位符」误判成配置损坏。

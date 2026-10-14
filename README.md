@@ -303,6 +303,14 @@ docker compose up -d
 注意主服务镜像名是 `nla-server`（而非 `nla-admin`）—— 它由 `nla-admin` 模块打包产出。
 镜像 tag `1.0.0` 与工程 `revision` 保持一致，改版本号时需同步改 compose 与 `.run/`。
 
+> 编排**只有上述 9 个服务**：不含 RabbitMQ / Elasticsearch / FreeSWITCH / ZLMediaKit
+> （实测 `script/docker/` 的两份 yml 对这些关键词 0 命中）。这几项能力默认就是关闭的，
+> 与「编排不提供」自洽：`nla.mq.enabled` 缺省不启用（且当前无业务模块依赖 `nla-common-mq`）、
+> `easy-es.enable: false`、`freeswitch.enabled: false`、`video.enabled` 缺省不配置。
+> 要启用需自备对应基础设施并按各模块文档打开开关；其中延迟消息还额外要求 RabbitMQ 装
+> `rabbitmq_delayed_message_exchange` 插件（插件文件 `.lib-service/rabbitmq-plugins/*.ez`
+> 属本机外置目录，未入库）。
+
 > 容器化部署的建库：compose 里的 `mysql` 服务只靠 `MYSQL_DATABASE` 建 primary 库 `nla_system`，
 > 其余 7 个分库由挂载进去的 `script/sql/nla_databases.sql` 创建——把该文件放进宿主机的
 > `/docker/mysql/init/` 即可，官方镜像会在数据目录首次初始化时自动执行（已有数据卷不会重跑）。
@@ -389,7 +397,7 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | 6 | 业务模块迁移（7 批次全部收口） | ✅ |
 | 7 | 工作流与调度替换（Activiti → WarmFlow） | ✅ 决策收口 |
 | 8 | client 聚合层扁平化（废弃 43 个 Feign） | ✅ 决策收口 |
-| 9 | 部署与全量验证（DB 层验收 + 分库 `@DS` 路由已落地；真启冒烟已通过；旧微服务目录与 `sql/` 已物理清理） | 🟡 剩余：前端适配、compose 外部机验收 |
+| 9 | 部署与全量验证（DB 层验收 + 分库 `@DS` 路由已落地；真启冒烟已通过；旧微服务目录与 `sql/` 已物理清理；compose 静态一致性已复核） | 🟡 剩余：前端适配、compose 外部机验收 |
 
 详见 [mapping.md 第 8 节](docs/migration/mapping.md#8-阶段进度台账)。
 
