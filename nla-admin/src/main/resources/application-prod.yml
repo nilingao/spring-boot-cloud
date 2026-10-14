@@ -105,6 +105,32 @@ spring:
           url: jdbc:mysql://localhost:3306/nla_system?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
           username: root
           password: root
+        # 业务分库：与 master 同一 MySQL 实例、独立库名，由各自 Mapper 上的 @DS("库名") 路由
+        # 短信 3 表 -> nla_message；人脸 1 表 -> nla_face；视频 12 表 -> nla_video；呼叫中心 41 表 -> nla_callcenter
+        nla_message:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://localhost:3306/nla_message?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: root
+          password: root
+        nla_face:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://localhost:3306/nla_face?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: root
+          password: root
+        nla_video:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://localhost:3306/nla_video?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: root
+          password: root
+        nla_callcenter:
+          type: ${spring.datasource.type}
+          driverClassName: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://localhost:3306/nla_callcenter?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: root
+          password: root
 #        # 从库数据源
 #        slave:
 #          lazy: true

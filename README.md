@@ -137,7 +137,7 @@ nla-cloud/
 |---|---|---|
 | JDK | **21** | 必须。根 POM `java.version=21` + `maven.compiler.release=21`，用了虚拟线程等 21 特性 |
 | Maven | 3.9+ | 实测于 3.9.9；`flatten-maven-plugin` 需 Maven 3.x。工程自带 `mvnw` / `mvnw.cmd` 兜底 |
-| MySQL | 8.0+ | 库名默认 `nla-cloud`；也支持 Oracle / PostgreSQL / SQLServer |
+| MySQL | 8.0+ | **分库部署**：`nla_system`（主库）+ `nla_message` / `nla_face` / `nla_video` / `nla_callcenter` + `nla_workflow` / `nla_job` / `nla_ai`；也支持 Oracle / PostgreSQL / SQLServer（仅基线四库） |
 | Redis | 见下 | 缓存、分布式锁、限流均依赖；compose 中用的是 `redis:8.6.3` |
 
 > 工程没有 `maven-enforcer-plugin`，不会在构建时校验上述版本，版本不对只会在运行期报错。
@@ -146,9 +146,30 @@ nla-cloud/
 
 ### 1. 建库
 
+本工程按**分库**部署，8 个库同一个实例即可：
+
 ```sql
-CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+-- 库名必须与 nla-admin/src/main/resources/application-{dev,prod}.yml 里的数据源 URL 一致
+CREATE DATABASE `nla_system`     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_message`    DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_face`       DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_video`      DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_callcenter` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_workflow`   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_job`        DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
+CREATE DATABASE `nla_ai`         DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;
 ```
+
+路由方式（谁访问哪个库）：
+
+| 库 | 访问方式 |
+|---|---|
+| `nla_system` | 默认数据源 `master`（`spring.datasource.dynamic.primary: master`），所有未标 `@DS` 的 Mapper |
+| `nla_message` / `nla_face` / `nla_video` / `nla_callcenter` | 同名数据源 + Mapper 接口上的 `@DS("库名")`（`strict: true`，键名写错直接报错）|
+| `nla_workflow` | 仍走 `master` 连接，由 `nla.workflow.schema` + 动态表名拦截器把 12 张 `flow_*`/`test_leave` 限定到该库 |
+| `nla_job` / `nla_ai` | 由独立进程 `nla-snailjob-server` / `nla-snailai-server` 自带数据源访问，`nla-admin` 不直连 |
+
+菜单/字典等 `sys_*` 种子全部落 `nla_system`（各业务脚本的菜单部分也一样）。
 
 > **全库排序规则必须统一为 `utf8mb4_cs_0900_ai_ci`。**
 > `nla_system.sql` / `nla_job.sql` / `nla_workflow.sql` 建表时**不写** `COLLATE`，直接继承库默认值；
@@ -163,17 +184,24 @@ CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_090
 > ⚠️ 重生 SQL（`.migration/regen-sql.ps1`）会把这 22 处改回 `utf8mb4_unicode_ci`，
 > 重生后必须重跑 `.migration/fix-ai-collation.ps1 -Apply`。
 
-按顺序导入 `script/sql/`（MySQL 方言）：
+按顺序导入 `script/sql/`（MySQL 方言，注意**每份脚本落到哪个库**）：
 
-| 脚本 | 内容 |
-|---|---|
-| `nla_system.sql` | 系统管理全部表 + 初始化数据（用户 / 角色 / 菜单 / 字典 / 租户） |
-| `nla_job.sql` | SnailJob 调度相关表 |
-| `nla_workflow.sql` | WarmFlow 工作流表 |
-| `nla_ai.sql` | AI 会话与知识库表 |
-| `nla_message.sql` | 短信模块三张表与菜单初始化 |
+| 脚本 | 目标库 | 内容 |
+|---|---|---|
+| `nla_system.sql` | `nla_system` | 系统管理全部表 + 初始化数据（用户 / 角色 / 菜单 / 字典 / 租户） |
+| `nla_system_ext.sql` | `nla_system` | `sys_area` 只读参照表 DDL |
+| `nla_system_area_data.sql` | `nla_system` | `sys_area` 参考数据 3,256 行 |
+| `nla_message.sql` | 表→`nla_message`，菜单→`nla_system` | 短信三张表与菜单初始化 |
+| `nla_face.sql` | 表→`nla_face`，菜单→`nla_system` | 人脸 1 表与菜单初始化 |
+| `nla_video.sql` | 表→`nla_video`，菜单→`nla_system` | 视频 12 表与菜单初始化 |
+| `nla_callcenter.sql` | 表→`nla_callcenter`，菜单→`nla_system` | 呼叫中心 41 表与菜单初始化 |
+| `nla_workflow.sql` | `nla_workflow` | WarmFlow 工作流表 |
+| `nla_job.sql` | `nla_job` | SnailJob 调度相关表 |
+| `nla_ai.sql` | `nla_ai` | AI 会话与知识库表 |
 
-`nla_face.sql` / `nla_video.sql` / `nla_callcenter.sql` 为已交付数据层的新库初始化脚本，模块尚未接入 admin；按后续业务启用计划建表。脚本分别见 [face 模块说明](nla-modules/nla-face/README.md)、[video 模块说明](nla-modules/nla-video/README.md) 和 [callcenter 模块说明](nla-modules/nla-callcenter/README.md)。
+四个业务模块（message / face / video / callcenter）**已接入 `nla-admin`**，运行期由 Mapper 接口上的
+`@DS("库名")` 路由到各自分库。模块说明分别见
+[face 模块说明](nla-modules/nla-face/README.md)、[video 模块说明](nla-modules/nla-video/README.md) 和 [callcenter 模块说明](nla-modules/nla-callcenter/README.md)。
 
 基线四个脚本另有 Oracle / PostgreSQL / SQLServer 子目录版本；新增 message / face / video / callcenter 脚本目前仅交付 MySQL 方言。
 
@@ -181,8 +209,10 @@ CREATE DATABASE `nla-cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_090
 
 编辑 `nla-admin/src/main/resources/application-dev.yml`：
 
-- 数据源 `url` / `username` / `password`
+- 数据源 `master` + `nla_message` / `nla_face` / `nla_video` / `nla_callcenter` 的 `url` / `username` / `password`
+  （真实口令建议走环境变量 `NLA_DB_PASSWORD`，不要把密码写进仓库）
 - Redis 连接信息
+- 工作流分库 `nla.workflow.schema`（留空表示与主库同库）
 - OSS、短信、AI 等按需开启（默认注释或留空）
 
 `application-prod.yml` 为生产环境同结构配置。默认激活 `dev`（根 POM `profiles.active`）。
@@ -257,6 +287,9 @@ docker compose up -d
 注意主服务镜像名是 `nla-server`（而非 `nla-admin`）—— 它由 `nla-admin` 模块打包产出。
 镜像 tag `1.0.0` 与工程 `revision` 保持一致，改版本号时需同步改 compose 与 `.run/`。
 
+> ⚠️ compose 里的 `mysql` 服务只靠 `MYSQL_DATABASE` 自动建**一个**库，与上面的分库口径不一致；
+> 容器化部署需自行建 8 个库并导入对应脚本（或把 4 个业务数据源的 URL 改到同一个库）。
+
 `nginx.conf` 已配好 `/snail-ai/` 的 SSE 与 WebSocket 代理
 （`proxy_read_timeout 86400s`、`proxy_buffering off`、`Upgrade` / `Connection` 头透传）。
 
@@ -321,13 +354,13 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | 0 | 前置环境（JDK 21 / Maven / 依赖可拉取） | ✅ |
 | 1 | 工程骨架（根 POM / 全部模块 POM / 启动类 / 配置 / script） | ✅ |
 | 2 | 通用基座 25 个 `nla-common-*` | ✅ |
-| 3 | 自建技术封装 6 个（freeswitch / gb28181 / pay / facesdk / socketio / mq） | ⬜ |
-| 4 | 数据层重写（face / sms / video / callcenter 已落地；参考数据导入/搜索评估与 MySQL 验收待推进） | 🟡 |
+| 3 | 自建技术封装 6 个（freeswitch / gb28181 / pay / facesdk / socketio / mq） | ✅ |
+| 4 | 数据层重写（face / sms / video / callcenter 已落地；真实 MySQL 139 表已验收） | 🟡 |
 | 5 | 认证鉴权与租户（OAuth2 → Sa-Token；[5.1 客户端契约](docs/migration/authentication.md)、[5.2 登录策略验证与映射](docs/migration/login-strategies.md)、[5.3 表驱动短信登录](docs/migration/sms-login.md)、[5.4 小程序登录与绑定](docs/migration/xcx-login.md)、[5.5 扫码网页登录](docs/migration/qr-login.md)已交付） | 🟡 进行中 |
-| 6 | 业务模块迁移（7 批次） | ⬜ |
-| 7 | 工作流与调度替换（Activiti → WarmFlow） | ⬜ |
-| 8 | client 聚合层扁平化（废弃 43 个 Feign） | ⬜ |
-| 9 | 部署与全量验证 | 🟡 部分完成 |
+| 6 | 业务模块迁移（7 批次全部收口） | ✅ |
+| 7 | 工作流与调度替换（Activiti → WarmFlow） | ✅ 决策收口 |
+| 8 | client 聚合层扁平化（废弃 43 个 Feign） | ✅ 决策收口 |
+| 9 | 部署与全量验证（DB 层验收 + 分库 `@DS` 路由已落地；启动冒烟进行中） | 🟡 进行中 |
 
 详见 [mapping.md 第 8 节](docs/migration/mapping.md#8-阶段进度台账)。
 

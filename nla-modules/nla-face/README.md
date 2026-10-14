@@ -14,6 +14,7 @@
 - `/face/person`：list/export/getInfo/add/edit/remove，权限 `face:person:*`，add/edit 走 `AddGroup`/`EditGroup` 校验 + 防重 + 操作日志；`img_id` 在有效人员范围内查重拒绝。
 - `/face/detector`：analyze/comparison/search 三个上传端点，定位为基础能力接口，仅 `@SaCheckLogin`，不做按钮级权限。
 - 菜单种子见 [`script/sql/nla_face.sql`](../../script/sql/nla_face.sql)（`1761400000000003000` 号段），前端 `face/person/index` 页面由独立前端任务线补齐。
+- `face_person` 落在**分库 `nla_face`**，`PersonMapper` 接口标注 `@DS("nla_face")`（数据源配在 `nla-admin` 的 `spring.datasource.dynamic.datasource`，见 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 7.9）；菜单种子仍落 `nla_system`。
 
 ## 验证
 

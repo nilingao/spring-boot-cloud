@@ -57,7 +57,8 @@ class SmsDataContractTest {
             assertNotNull(input);
             ddl = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
-        var tables = Pattern.compile("(?is)create table sms_[a-z_]+\\s*\\(.*?\\) engine=innodb[^;]*;").matcher(ddl);
+        // 交付脚本已改为幂等 DDL（create table if not exists），此处兼容两种写法。
+        var tables = Pattern.compile("(?is)create table (?:if not exists )?sms_[a-z_]+\\s*\\(.*?\\) engine=innodb[^;]*;").matcher(ddl);
         int count = 0;
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             while (tables.find()) {

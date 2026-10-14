@@ -14,7 +14,10 @@
 
 [`script/sql/nla_message.sql`](../../script/sql/nla_message.sql) 的三张表显式使用 `utf8mb4` / `utf8mb4_cs_0900_ai_ci`。渠道配置和模板采用 char(1) 删除标志；发送记录无删除标志。菜单和角色授权种子沿用原脚本。
 
-该文件为初始化脚本，包含 drop table 和菜单种子。已有数据库升级应单独检查 schema，再修改列，不能以重新初始化代替升级。本轮只更新仓库文件，未对外部数据库执行 SQL。
+三张表落在**分库 `nla_message`**，三个 Mapper 接口统一标注 `@DS("nla_message")` 路由（数据源配在 `nla-admin` 的
+`spring.datasource.dynamic.datasource`，见 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 7.9）；菜单种子仍落 `nla_system`。
+
+该文件为初始化脚本，采用幂等 `create table if not exists`、**无 drop 语句**，并含菜单种子。已有数据库升级应单独检查 schema，再修改列，不能以重新初始化代替升级。本轮只更新仓库文件，未对外部数据库执行 SQL。
 
 对已有旧版短信表，先确认删除标志仅含 0/1、无 null，并确认当前字符集/排序规则：
 
@@ -47,6 +50,6 @@ mvn -o -B -pl nla-modules/nla-message -am '-Dtest=SmsDataContractTest' '-Dsurefi
 
 `SmsDataContractTest` 8 项测试实际加载交付 DDL 的三张表，并执行真实 Mapper 及服务查询：String/char(1) 默认值与列定义、供应商读取排除删除渠道、最新模板回退、可用渠道排除删除模板/渠道及停用渠道、删除前引用校验和定向注销、批量删除与分页计数、禁止更新恢复删除项、发送记录物理删除。
 
-测试使用 H2 2.4.240 MySQL 模式，剥离表级引擎/字符集/排序规则选项；不执行脚本中的 drop 和菜单种子。不启动完整 Spring 应用、不连接 Redis、不创建供应商客户端或真实发送短信。渠道注销回调用 mock 验证，实际逻辑删除及业务 SQL 使用真实 Mapper。
+测试使用 H2 2.4.240 MySQL 模式，剥离表级引擎/字符集/排序规则选项；只执行脚本中的 `create table if not exists` 三表，不执行菜单种子。不启动完整 Spring 应用、不连接 Redis、不创建供应商客户端或真实发送短信。渠道注销回调用 mock 验证，实际逻辑删除及业务 SQL 使用真实 Mapper。
 
 真实 MySQL 列转换/排序规则、完整应用启动与短信供应商联调仍需对应环境验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 为准。

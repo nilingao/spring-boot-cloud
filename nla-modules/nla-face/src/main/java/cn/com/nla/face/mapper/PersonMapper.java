@@ -3,6 +3,7 @@ package cn.com.nla.face.mapper;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.face.domain.Person;
 import cn.com.nla.face.domain.vo.PersonVo;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
  *
  * @author TZY
  */
+@DS("nla_face")
 public interface PersonMapper extends BaseMapperPlus<Person, PersonVo> {
     /** 按图片编号查询有效人员，不加载特征；null 或空集合返回空结果。 */
     List<Person> selectImgIdList(@Param("imgIdList") List<String> imgIdList);

@@ -3,11 +3,13 @@ package cn.com.nla.video.mapper;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.video.domain.GbStream;
 import cn.com.nla.video.domain.vo.GbStreamVo;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import org.apache.ibatis.annotations.Param;
 
 /** 直播流关联国标上级平台 Mapper。
  * @author TZY
  */
+@DS("nla_video")
 public interface GbStreamMapper extends BaseMapperPlus<GbStream, GbStreamVo> {
 
     /** 查询已共享给指定上级平台的国标流。 */

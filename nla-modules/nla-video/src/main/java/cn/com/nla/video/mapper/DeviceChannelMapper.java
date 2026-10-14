@@ -3,6 +3,7 @@ package cn.com.nla.video.mapper;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.video.domain.DeviceChannel;
 import cn.com.nla.video.domain.vo.DeviceChannelVo;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 /** 通道信息 Mapper。
  * @author TZY
  */
+@DS("nla_video")
 public interface DeviceChannelMapper extends BaseMapperPlus<DeviceChannel, DeviceChannelVo> {
 
     /** 按上级平台国标编号与其共享的通道编号反查设备通道。 */

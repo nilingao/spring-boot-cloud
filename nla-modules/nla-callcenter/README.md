@@ -6,6 +6,8 @@
 
 [`nla_callcenter.sql`](../../script/sql/nla_callcenter.sql) 用于 MySQL 8 新库初始化，表结构部分只有 `create table if not exists`；41 张表显式采用 utf8mb4 / utf8mb4_cs_0900_ai_ci。没有旧测试数据、节点凭据或 FreeSWITCH 自身的 cdr/sip/registrations 等运行表；文件末尾附「呼叫中心」菜单与角色授权种子。已有同名表不会自动升级；此次未执行外部数据库脚本。
 
+41 张表落在**分库 `nla_callcenter`**，本模块 41 个 Mapper 接口统一标注 `@DS("nla_callcenter")`（数据源配在 `nla-admin` 的 `spring.datasource.dynamic.datasource`，见 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 7.9）；菜单种子仍落 `nla_system`。本模块 SQL 不 join `sys_*` 表，因此单一事务只碰一个库。
+
 | 分组 | 实体（表名保留旧 fs_*） |
 |---|---|
 | 媒体、平台和网关（7） | FsMediaServer、Platform、GateWay、RouteGroup、RouteGatewayGroup、RouteGateway、RouteCall |

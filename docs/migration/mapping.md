@@ -35,7 +35,7 @@
 | Java 根包 | `org.dromara` | **`cn.com.nla`** |
 | Git 分支 | — | **`6.0.0-nla`** |
 | JavaDoc `@author` | `Lion Li` / `Michelle.Chung` | **`TZY`** |
-| 数据库名 | `ry-vue` | **`nla-cloud`** |
+| 数据库名 | `ry-vue` | **分库 8 个**（早期品牌替换曾统一为 `nla-cloud`，阶段 9 已改为分库，见 7.9）|
 | 镜像仓库前缀 | `ruoyi/ruoyi-*:6.0.0` | **`nla/nla-*:1.0.0`** |
 
 `revision` 取 `1.0.0` 而非跟随上游 `6.0.0`：新工程是独立版本线，延续旧根 POM 的 `1.0.0`。
@@ -404,6 +404,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 - 短信三张表的初始化 DDL 补齐显式 **utf8mb4 / utf8mb4_cs_0900_ai_ci**，符合阶段 4 约定。菜单/角色授权种子、其他列定义及业务发送路径未改。
 - `MobileMessage` 仍是追加型发送记录，不新增 delFlag，保留物理删除。渠道/模板逻辑删除后保留物理行，删除前有效模板引用校验继续生效。
 - 初始化脚本原有 drop 和种子语句保留，本轮未向外部数据库执行脚本。已有表须先核对 0/1/null 值和 schema，再以独立列升级方式处理；重新初始化不能代替数据库升级。
+  ⚠️ **2026-10-14 更正**：提交 `a60bd65` 已把 `nla_message.sql` 三表改为幂等 DDL（`create table if not exists`，同时删除 3 处 `drop table if exists`），本条「drop 语句保留」的描述自此作废；该改动曾使 `SmsDataContractTest` 的 DDL 提取正则失配（8 项全红），修法见 7.9 末段。
 
 **验证（2026-10-10，Windows / JDK21）**：
 
@@ -1345,13 +1346,13 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | `email: crazylionli@163.com` | **整行删除** | 上游作者私人邮箱 |
 | `url: https://gitee.com/ruoyi/RuoYi-Vue-Plus` | **整行删除** | SpringDoc contact 的上游项目主页 |
 
-`application-dev.yml` / `application-prod.yml`（两文件对称，各 5 类偏离）：
+`application-dev.yml` / `application-prod.yml`（两文件对称，各 5 类品牌偏离；另有 2 处功能偏离：工作流分库 7.8、业务分库 4 数据源 7.9）：
 
 | 上游 | 本工程 | 理由 |
 |---|---|---|
 | `script/sql/ry_job.sql`（2 处注释） | `script/sql/nla_job.sql` | 命名基线 |
 | `# jdbc 所有参数配置参考 https://lionli.blog.csdn.net/article/details/122018562` | `# jdbc 参数说明：` | 上游作者个人博客外链 |
-| `url: jdbc:mysql://localhost:3306/ry-vue?...`（生效 + 注释各 1 处） | `.../nla-cloud?...` | 数据库改名 |
+| `url: jdbc:mysql://localhost:3306/ry-vue?...`（生效 + 注释各 1 处） | 注释行 `.../nla-cloud?...`；**生效的 master 已指向 `.../nla_system`**，并新增 4 个业务分库数据源 | 数据库改名 → 阶段 9 改为分库（见 7.9）|
 | `clientName: RuoYi-Vue-Plus` | `clientName: nla-cloud` | SnailJob 客户端名 |
 | `# 前端改动 https://gitee.com/JavaLionLi/plus-ui/pulls/204` | `# 前端需自行实现 gitea 授权回调页` | 上游前端仓库 PR 外链，本工程前端另立任务线 |
 
@@ -1617,6 +1618,52 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 
 证据：两模块 `src` 下无任何 `@TableName`/`BaseMapperPlus`/`@DS`/`Mapper<`；`nla-snailjob-server` 的 `application-{dev,prod}.yml` 数据源为 `jdbc:mysql://localhost:3306/nla_job`，`nla-snailai-server` 为 `.../nla_ai`。**故动态表名拦截器只需覆盖 `flow_*`/`test_leave` 共 12 张，无需扩展到 `sj_*`/`sai_*`。**
 
+### 7.9 业务分库的数据源路由（dynamic-datasource `@DS`）
+
+> 用户需求（原文）：**不要仿照工作流那个，按照框架架构的 dynamic 支持的**。
+> 即 `nla_message / nla_face / nla_video / nla_callcenter` 四个业务分库一律用
+> `dynamic-datasource` 原生多数据源 + Mapper 上的 `@DS("库名")`，
+> **不扩展 `WarmFlowConfig` 的 `DynamicTableNameInnerInterceptor` 表白名单机制**（7.8 的方案仅留给工作流）。
+
+**为什么工作流和业务用两种机制**（不是不一致，是约束不同）：
+
+| | 工作流 `flow_*` | 业务 4 模块 |
+|---|---|---|
+| 实体在哪 | WarmFlow 引擎 jar，`@TableName` 固定、无法加注解 | 本仓自有 Entity，Mapper 可自由加注解 |
+| 同一方法内是否混访主库 | 混访 `sys_user`/`sys_dept`（审批人、部门）| 实测不混访（见下表）|
+| 选定机制 | 表名改写 `nla_workflow.<表>` | `@DS("库名")` 切数据源 |
+
+**落地内容**：
+
+- `application-{dev,prod}.yml` 的 `spring.datasource.dynamic.datasource` 下新增 4 个数据源，**键名与库名同名**：
+  `nla_message`（3 表）/ `nla_face`（1 表）/ `nla_video`（12 表）/ `nla_callcenter`（41 表）；
+  `primary: master` 不变、`strict: true`（**键名写错直接报错，不会静默落主库**）、连接参数与 master 同构。
+- 57 个 Mapper 接口各加 `@DS("<库名>")`：message 3 / face 1 / video 12 / callcenter 41。
+  落盘走脚本 `.migration/add-ds-annotation.ps1`（默认 dry-run、`-Apply` 才写盘、每模块计数断言、保留 BOM 与原换行风格），不手工逐文件编辑。
+  框架侧先例：`GenTableMapper` 已有接口级 `@DS("")`，证明 Mapper 级 `@DS` 在本仓可用。
+- 覆盖范围只这 4 个模块：`nla_ai`/`nla_job` 在 admin 侧 **0 个 Mapper**（表由各独立 server 进程自带数据源访问，见 7.8.5），`nla-workflow` 走 7.8 的表名改写。
+
+**为什么能安全用 `@DS`（「`@Transactional` 内切数据源不生效」这个坑为什么踩不到）** —— 均为脚本实测，非推断：
+
+| 风险项 | 探测脚本 | 命中 |
+|---|---|---|
+| 4 模块 `@DataPermission` / `sys_user` / `sys_dept` / `sys_role` / `MPJLambdaWrapper` 跳库联表 | `probe-m9-ds-risk.ps1` | **0** |
+| `Db.` 静态调用绕过 Mapper | `probe-m9-ds.ps1` | **0** |
+| `mapper/*.xml` 里引用 `sys_` / `nla_*` 表 | `probe-m9-ds.ps1` | **0** |
+| `nla-common-*` 里的 `fs_`/`video_`/`face_`/`sms_` 实体 | `probe-m9-ds-common.ps1` | **0** |
+| `@Transactional` | `probe-m9-ds-risk.ps1` | video 4 + callcenter 7，**方法内只碰本模块表** → 单事务单库 |
+
+唯一跳库混访点是登录短信链路 `nla-admin` 的 `SmsAuthStrategy` / `SmsLoginCodeService`：同一方法内既读 master 的
+`sys_user`，又读写分库的 `sms_*`。**两处均无 `@Transactional`**（已 Read 确认），Mapper 每次调用独立取连接、
+`@DS` 逐次生效，因此不存在串库；代价是该链路本身就不是事务性的（与改造前一致）。
+`DefaultVideoCommandNotifier` 只走 `PushHelper` 的 Redis 发布，不写 master，同理不受影响。
+
+**验证**：全 reactor `mvn -B clean test` → **BUILD SUCCESS、`MVN_EXIT=0`**（日志 `.migration/m9-ds-test.log`，
+Tests-run 汇总 127 行、失败行 0）。其中 `SmsDataContractTest` 8/8 通过——首轮曾 8 项全红，根因**与 `@DS` 无关**：
+提交 `a60bd65` 把 `nla_message.sql` 改成幂等 DDL（`create table if not exists`），而该测试的 DDL 提取正则只认
+`create table sms_`，导致 H2 里建出 0 张表。已把正则改为 `create table (?:if not exists )?sms_…`；
+callcenter / video 的数据契约测试本来就用 `create table if not exists` 正则，不受影响。
+
 ---
 
 ## 8. 阶段进度台账
@@ -1629,12 +1676,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | ✅ 完成·6/6 | **freeswitch + video + facesdk + socketio + mq + pay 全部建成**（见 5.1.1~5.1.6）；pay 为官方 IJPay 2.9.11 + fork 移植混合（54 文件），8 项契约测试 GREEN，依赖树 0 fastjson/0 jdk15on；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点、mq 真实 broker/delay/confirm、pay 真实下单/回调联调均待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭） |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭）；分库 DDL 的运行期路由已按 dynamic-datasource `@DS` 落地（见 7.9）|
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
 | **7** | 工作流与调度替换 | ✅ 完成·决策收口 | 用户已确认兜底方式（见 6.13）：旧 Activiti 在途/历史流程实例数据**彻底废弃、不做承接**（与 6.1/6.2 老数据丢弃先例一致，`ACT_*` 不迁移不归档）；Activiti「重写」无承接对象——旧调用仅存于 `spring-boot-activiti`(43)+`feign-activiti`(1)+已废弃 oa(6)，基线 `nla-workflow`(129) WarmFlow 完整在位；XXL-JOB→SnailJob 基座在位（`nla-common-job`/`nla-job`/`nla-snailjob-server`），旧 `@XxlJob` handler 实测 0 个需迁；`starter-quartz`/`quartz.sql`/`sys_activiti.sql` 清理并入阶段 9（见 9.2/9.3）**本轮无代码交付、决策收口** |
 | **8** | client 聚合层扁平化 | ✅ 完成·决策收口 | **43 个 `@FeignClient` 实测全部废弃**（7 个目标服务的承接位逐个对照见 6.14：sys_* 覆盖/nla-message/nla-video/nla-face/阶段 5 认证域，oa+activiti 已废弃）；client 63 个转发 Controller 不迁（旧 `/app`、`/webapi` 外部路径废弃，能力已由 nla-* 新契约重交付）；新代码 0 处 Feign 残留（唯一命中为 JavaDoc 溯源注释）；**本轮无代码交付、决策收口** |
-| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；剩余环境项：`nla-admin` 启动冒烟（MySQL 8 库表 + Redis 均已就位）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
+| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；**业务分库运行期路由已落地**（4 数据源 + 57 Mapper `@DS`，见 7.9，全 reactor `clean test` BUILD SUCCESS）；剩余环境项：`nla-admin` 真实启动冒烟（MySQL 8 库表 + Redis 均已就位，凭据口径见 8.4）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1666,8 +1713,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 
 ### 8.2 已知遗留问题
 
-1. **`nla-admin` 启动冒烟未做** —— 需要可用的 MySQL 8（库名 `nla-cloud`）与 Redis，
-   并先执行 `script/sql/nla_system.sql` + `nla_job.sql` + `nla_workflow.sql` + `nla_ai.sql`。
+1. **`nla-admin` 真实启动冒烟未完成** —— MySQL 8 库表（8 分库 139 表，见 8.3）与 Redis 均已就位；dev/prod 的
+   `spring.datasource.dynamic.datasource` 现为 `master`(nla_system) + 4 个业务分库（见 7.9），
+   **不再需要、也不应再建单库 `nla-cloud`**；`script/sql/` 全部 10 份按库名归位执行。
+   我这边的一次真启停在 `Access denied for user 'root'@'112.46.102.3' (using password: YES)`
+   （口令为 dev 默认值、与真实库不符），随后用户定口径「你启动，我来观测」——详见 8.4。
+   ⚠️ 连带项：`script/docker/docker-compose.yml` 仍是 `MYSQL_DATABASE: nla-cloud` 单库，与分库口径不一致（见 7.3 规则），留阶段 9 部署确认时一并处理。
 2. **旧 `spring-boot-*` 目录仍在仓库中** —— 用户已确认采用分级清理，
    保留到**阶段 9 部署验收后统一清理**（阶段 7 收口时落定口径，见 6.13；本轮不物理删除），清单与理由见 9.2；已删的 4 份部署产物见 9.1。
 3. **`probe-newmod-res.ps1` 有个已知 bug** —— 测试路径未把 `cn\com\nla` 反映射回 `org\dromara`，
@@ -1713,6 +1764,22 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 - 其 `...2000` 段菜单/授权 32 行首轮已在 `nla_system` 就位，故本轮未重跑菜单部分。
 
 **结论：真实 MySQL 的 DB 层验收已无缺口**（本轮仍全程只读，未对外部库写入）。
+
+### 8.4 阶段 9 第一轮：分库路由改造 + 构建/启动实测（2026-10-14）
+
+- **构建 GREEN**：`mvn -B -DskipTests package -pl nla-admin -am` → **43/43 BUILD SUCCESS**，
+  产物 `nla-admin.jar` 282,313,632 字节（脚本 `.migration/m9-smoke-package.ps1`）；本机端口 8080 空闲。
+- **真启实测（我这边的一次）**：`java -jar --spring.profiles.active=dev` 能走到 Spring Boot 4.1.1 / Java 21.0.12.1 启动、
+  profile dev 与配置解析无异常，但在 dynamic-datasource 创建 master 连接时失败：
+  `Access denied for user 'root'@'112.46.102.3' (using password: YES)`，`JAVA_EXIT=1`
+  （脚本 `.migration/m9-smoke-run.ps1`）——网络与 MySQL 握手均通，失败在口令（dev 默认值与真实库不符）。
+- **凭据口径（用户决策）**：「**你启动，我来观测**」——真实口令不由我持有，后续启动冒烟由用户在 IDEA 侧执行，
+  我读日志 + 用 dbx 只读观测。**真实启动冒烟结果尚未登记**。
+- **分库路由改造**：见 7.9。DB 层之外唯一的运行期阻塞点（业务表在分库、应用单连接 `nla_system`）已按用户口径解决。
+- **收口三验收**：`audit-brand.ps1` → `scanned(text)=2095 hits=0`；`verify-encoding.ps1` → `files=44 failures=0`；
+  `git diff --check` → 无空白错误（仅 git autocrlf 的 `LF will be replaced by CRLF` 提示，
+  仓库本来就 LF/CRLF 混用（例：未改动的 `DeviceServiceImpl.java` 也是 LF），非本次引入）。
+  本次工作区改动：`application-{dev,prod}.yml` 各 +26 行、57 个 Mapper +114 行（0 删除）、`SmsDataContractTest` +2/-1。
 
 ---
 
@@ -1819,7 +1886,16 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-m7-ledger.ps1` | 用 `Select-String` 列本台账阶段 7 相关行号与内容（纯 ASCII 正则，与 `probe-mapping-lines.ps1` 同目的） | ✅ |
 | `probe-m8-scope.ps1` | 阶段 8 收口侦察（见 6.14）：旧 client/feign 模块 Java 计数、43 个 `@FeignClient` 声明逐个清点（含 path/configuration）、client 转发 Controller 数与 URL 前缀、新侧 `FeignClient/cn.com.tzy` 残留扫描（命中 1 = JavaDoc 溯源注释） | ✅ |
 | `probe-m9-junit.ps1` | 阶段 9 尾巴项实证：新侧 `nla-*`（排除 target）JUnit4 import/`@RunWith`/pom junit 直接依赖全量扫描（均 0）+ 旧侧对照计数（9 处，属阶段 9 待删目录不动） | ✅ |
-| `probe-m9-sql.ps1` | 盘点 `script/sql/` 交付脚本清单并定位 sys_area DDL/数据文件（真实库验收 8.3 的仓库侧对照入口） | ✅ |
+| `probe-m9-sql.ps1` | 盘点 `script/sql/` 交付脚本清单并定位 sys_area DDL/数据文件（真实库验收 8.3 的仓库侧对照入口）| ✅ |
+| `probe-m9-ds.ps1` | 分库改造前置实证（见 7.9）：message/face/video/callcenter 的 Mapper 计数（3/1/12/41）、ai/job 在 admin 侧 Mapper 计数、`Db.` 静态调用、`mapper/*.xml` 里的 `sys_`/`nla_*` 引用 | ✅ |
+| `probe-m9-ds-risk.ps1` | 风险点清点：4 模块 `DataPermission`/`sys_user`/`sys_dept`/`sys_role`/`MPJLambdaWrapper` 命中（全 0）+ `@Transactional` 定位（video 4 / callcenter 7）| ✅ |
+| `probe-m9-ds-cross.ps1` | 跳模块引用 `cn.com.nla.message` 的 12 处逐个定位，区分编译期与运行期（admin 侧仅 `SmsAuthStrategy`/`SmsLoginCodeService`）| ✅ |
+| `probe-m9-ds-common.ps1` | `nla-common` 无 `fs_`/`video_`/`face_`/`sms_` 实体；4 模块 pom 均含 `nla-common-mybatis`；根 pom `dynamic-ds.version=4.5.0` + boot4 starter；`GenTableMapper` 的 `@DS` 先例 | ✅ |
+| `add-ds-annotation.ps1` | **57 个 Mapper 批量加 `@DS` 的唯一事实来源**：默认 dry-run 只出计数，`-Apply` 才写盘；每模块计数断言（3/1/12/41）、幂等（已有 `@DS` 则跳过）、保留 BOM 与原换行风格 | ✅ |
+| `m9-smoke-package.ps1` | 阶段 9 启动冒烟第一步：`mvn -B -DskipTests package -pl nla-admin -am`，日志落 `.migration/m9-smoke-package.log` | ✅ |
+| `m9-smoke-run.ps1` | 真启冒烟：`java -jar nla-admin.jar --spring.profiles.active=dev`，日志落 `.migration/m9-smoke-run.log`，回显启动/异常/退出码行（口令错误的实测见 8.4）| ✅ |
+| `m9-ds-test.ps1` | `@DS` 改造后的全 reactor 回归入口：`mvn -B clean test`，只汇总失败行与 BUILD SUCCESS/FAILURE 计数（当前 GREEN，见 7.9）| ✅ |
+| `verify-doc-enc.ps1` | 文档编码守卫：对 README + 本台账 + 4 份分库模块 README 做严格 UTF-8 解码与字节级往返比对，并报告 BOM/LF/CRLF 计数（区别于 `verify-encoding.ps1` 的 44 份代码类交付物）| ✅ |
 
 ### 10.1 脚本编写的五条踩坑教训
 

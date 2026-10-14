@@ -6,6 +6,8 @@
 
 [`script/sql/nla_video.sql`](../../script/sql/nla_video.sql) 用于 MySQL 8 新库初始化，表结构部分只包含 `create table if not exists`，显式采用 utf8mb4 / utf8mb4_cs_0900_ai_ci，不包含旧测试数据与媒体节点凭据；文件末尾附「视频监控」菜单与角色授权种子。已有同名表不会自动升级；此次未执行外部数据库脚本。
 
+12 张表落在**分库 `nla_video`**，本模块 12 个 Mapper 接口统一标注 `@DS("nla_video")`（数据源配在 `nla-admin` 的 `spring.datasource.dynamic.datasource`，见 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 7.9）；菜单种子仍落 `nla_system`。
+
 | 实体 | 表 / 主键 | 关键约束 |
 |---|---|---|
 | Device | video_device / Long id | device_id 有效记录唯一，保留旧 online 默认值 2 |

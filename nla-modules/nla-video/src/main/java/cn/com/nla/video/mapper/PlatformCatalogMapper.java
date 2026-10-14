@@ -3,6 +3,7 @@ package cn.com.nla.video.mapper;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.video.domain.PlatformCatalog;
 import cn.com.nla.video.domain.vo.PlatformCatalogVo;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 /** 国标级联-目录 Mapper。
  * @author TZY
  */
+@DS("nla_video")
 public interface PlatformCatalogMapper extends BaseMapperPlus<PlatformCatalog, PlatformCatalogVo> {
 
     /** 查询目录详情，附带子目录数量。 */

@@ -3,11 +3,13 @@ package cn.com.nla.video.mapper;
 import cn.com.nla.common.mybatis.core.mapper.BaseMapperPlus;
 import cn.com.nla.video.domain.Device;
 import cn.com.nla.video.domain.vo.DeviceVo;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import org.apache.ibatis.annotations.Param;
 
 /** 设备信息 Mapper。
  * @author TZY
  */
+@DS("nla_video")
 public interface DeviceMapper extends BaseMapperPlus<Device, DeviceVo> {
 
     /** 按上级平台国标编号与其共享的通道编号反查设备。 */
