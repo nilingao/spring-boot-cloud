@@ -169,6 +169,18 @@
 
     <build>
         <finalName>${project.artifactId}</finalName>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!-- 交付建库脚本随测试资源进入 test-classes，供 SplitDatabaseRoutingContractTest 校验库名清单（见 mapping.md 7.9.1） -->
+            <testResource>
+                <directory>${project.basedir}/../script/sql</directory>
+                <includes>
+                    <include>nla_databases.sql</include>
+                </includes>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

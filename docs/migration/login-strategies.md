@@ -1,6 +1,6 @@
 # 阶段 5.2：密码、验证码与账号状态契约
 
-本批执行现有密码、短信和邮箱登录策略的实际逻辑，补齐图形验证码生成、BCrypt 校验、失败计数、账号状态和 JWT 会话测试，并核对旧短信、小程序与二维码登录的功能映射。5.2 批次唯一生产改动是 `LoginHelper` 对缺失 User-Agent 的空值处理；`AllUrlHandler.getUrls()` 的鉴权路径匹配沿用基线。本文的缺口记录对应 5.2 当时的状态：短信发送接入、统一缓存 key 与原子消费已在 [阶段 5.3](sms-login.md) 交付；小程序配置、账号绑定与完整权限登录已在 [阶段 5.4](xcx-login.md) 交付。
+本批执行现有密码、短信和邮箱登录策略的实际逻辑，补齐图形验证码生成、BCrypt 校验、失败计数、账号状态和 JWT 会话测试，并核对旧短信、小程序与二维码登录的功能映射。5.2 批次唯一生产改动是 `LoginHelper` 对缺失 User-Agent 的空值处理；`AllUrlHandler.getUrls()` 的鉴权路径匹配沿用基线。本文的缺口记录对应 5.2 当时的状态：短信发送接入、统一缓存 key 与原子消费已在 [阶段 5.3](sms-login.md) 交付；小程序配置、账号绑定与完整权限登录已在 [阶段 5.4](xcx-login.md) 交付；扫码网页登录已在 [阶段 5.5](qr-login.md) 交付；[手机号授权](phone-auth.md)与[资料授权/自动注册](profile-auth.md)分别已在阶段 5.6、5.7 交付。下文表格或末尾若仍出现「待迁 / 未贯通」，以本句与磁盘代码为准（本批已于阶段 9 第五轮按实测重写，见台账 8.8）。
 
 ## 当前可验证的登录行为
 
@@ -9,7 +9,7 @@
 | grantType | 业务字段 | 本批验证范围 |
 |---|---|---|
 | password | username、password；图形验证码启用时还需 code、uuid | 真实 BCrypt 成功/错误密码、账号缺失/停用、输入约束、图形验证码生成及校验、锁定与会话生成 |
-| sms | phoneNumber、smsCode | 缓存已有验证码时的成功、错误、缺失/过期、账号缺失/停用和跨策略锁定；不代表短信发送链路已经接入 |
+| sms | phoneNumber、smsCode | 缓存已有验证码时的成功、错误、缺失/过期、账号缺失/停用和跨策略锁定；本批测试使用 Redis 替身，不代表真实供应商发送已验收（表驱动发送链路已于阶段 5.3 接通） |
 | email | email、emailCode | 同上，执行真实邮箱登录策略；邮件发送与 SMTP 未验收 |
 | xcx | appid、xcxCode | 5.2 时为占位模板；5.4 已实现服务端配置、appid/openid 绑定和完整权限登录，实际微信联调待验收 |
 | social | source、socialCode、socialState | 已有授权/绑定登录策略，真实第三方授权留后续验收 |
@@ -39,14 +39,14 @@ Redis 操作使用每测隔离的内存替身，测试检查写入的 Duration�
 | 旧功能/关键源类 | 新工程对应 | 当前结论与后续工作 |
 |---|---|---|
 | `CodeTokenGranter`，grant `code`，key/verificationCode/username/password | `PasswordAuthStrategy`，grant `password`，uuid/code/username/password | 图形验证码加密码能力由基线覆盖；采用新 JSON 契约，不增加旧 OAuth2 表单入口 |
-| `SmsCodeTokenGranter`，grant `sms`，phone/SmsCodeCode | `SmsAuthStrategy`，phoneNumber/smsCode | 登录策略已验证；旧策略校验成功会删除短信码，新基线策略目前只读取并比较，消费语义需在短信接入批次处理 |
-| 旧 `SmsSendManager` 和发送类型缓存 | `nla-message/sms/core/SmsSendManager` | 表驱动渠道/模板引擎已迁；它写 `redis:verificationCode:{type}_{mobile}`，登录类型为 1；基线策略读 `GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber`，两种 key 未贯通 |
-| 新基线 `/resource/sms/code` | `CaptchaController.smsCode` | 仍调用固定 `SmsFactory.getSmsBlend("config1")`、空模板号和 4 位码，未使用表驱动发送引擎；不能把登录策略测试当作发送可用证明 |
-| `WxMiniGranter` / `WxMiniAuthenticationProvider` / `WxMiniUserServiceImpl`，grant `wx_mini` | `XcxAuthStrategy`，grant `xcx`；`sys_social` + `sys_user` | 5.4 已补服务端配置、appid/openid 绑定查询、账号状态/锁定和完整权限会话；旧用户资料/手机号授权与场景联动仍待迁 |
+| `SmsCodeTokenGranter`，grant `sms`，phone/SmsCodeCode | `SmsAuthStrategy`，phoneNumber/smsCode | 登录策略已验证；旧策略校验成功会删除短信码，5.3 已按同一语义实现**原子消费**：`validateSmsCode` 先比对值再执行 `RedisUtils.getClient().getBucket(key).compareAndSet(code, null)`，失败时 CAS 返回 false 并重抛过期异常（不签发会话） |
+| 旧 `SmsSendManager` 和发送类型缓存 | `nla-message/sms/core/SmsSendManager` | 表驱动渠道/模板引擎已迁；发送侧 `cacheCode` 与登录侧 `SmsAuthStrategy` **共用同一个 key 生成方法** `SmsConstant.verificationCodeKey(type, mobile)`（即 `redis:verificationCode:{type}_{mobile}`，登录类型 `TYPE_LOGIN=1`），该 key 同时用于防重发判定；原登记的「基线读 `GlobalConstants.CAPTCHA_CODE_KEY + phoneNumber`、两种 key 未贯通」自阶段 5.3 起作废 |
+| 新基线 `/resource/sms/code` | `CaptchaController.smsCode` | **已接表驱动发送引擎**：现调用 `SmsLoginCodeService.send(phoneNumber)`（先校验账号存在且未停用，`type=TYPE_LOGIN`）→ `SmsSendManager.smsSend` 按渠道/模板 failover；模板验证码值缺失时由 `SecureRandom` 生成 **6 位**码（不再固定 4 位），并按模板声明的缓存分钟数写入 Redis（默认 5 分钟）；旧登记的固定 `SmsFactory.getSmsBlend("config1")` + 空模板号写法已不存在。真实供应商发送仍留外部环境验收 |
+| `WxMiniGranter` / `WxMiniAuthenticationProvider` / `WxMiniUserServiceImpl`，grant `wx_mini` | `XcxAuthStrategy`，grant `xcx`；`sys_social` + `sys_user` | 5.4 已补服务端配置、appid/openid 绑定查询、账号状态/锁定和完整权限会话；旧用户资料授权与自动注册已在 **5.7** 交付、手机号授权已在 **5.6** 交付（入口 `/auth/xcx/profile`、`/auth/xcx/phone`）；真实微信联调与前端适配另批验收 |
 | `WxMiniWebGranter` / `WxMiniUserOpenIdServiceImpl`，grant `wx_mini_web` | 5.5 `QrAuthStrategy`，grant `qr` | 按服务端已确认场景及有效绑定签发网页 JWT；需要独立网页凭证，领取时重查账号/客户端/权限 |
 | `MiniController.getQRCode` / `WxMiniQrEvent` / `WxMiniLoginEvent` / `QRDataListener` | 5.5 `WechatQrClient`、`QrSceneStore`、`QrLoginService` 与 REST 入口 | 已接通微信码、3 分钟原子状态、小程序显式确认及一次性领取；网页状态通知改为 REST 轮询，旧 MQ/Socket.IO 事件接口没有迁入 |
 
-旧 `bean_mini` / `bean_mini_user` 的数据模型覆盖仍按台账使用 `sys_social` 与 `sys_user`，不新增旧表、不迁旧测试账号、token 或租户数据。5.4 已交付小程序绑定和登录，5.5 已交付扫码网页登录后端；资料/手机号授权、自动注册及前端/真实供应商联调另批推进。
+旧 `bean_mini` / `bean_mini_user` 的数据模型覆盖仍按台账使用 `sys_social` 与 `sys_user`，不新增旧表、不迁旧测试账号、token 或租户数据。5.4 已交付小程序绑定和登录，5.5 已交付扫码网页登录后端，5.6 已交付手机号授权、5.7 已交付资料授权与自动注册（均为后端）；前端改造与真实微信/供应商联调仍留对应环境验收。
 
 ## 验证与下一批
 
@@ -58,4 +58,4 @@ mvn -o -B -pl nla-admin -am '-Dtest=LoginStrategyContractTest,AuthSecurityContra
 
 本批 JDK 21 / Maven 3.9.9 验证结果：新增 **41 项**，与阶段 5.1 的 50 项共同运行，**91 项全部通过，无失败、错误或跳过**；根工程 `mvn -o -B -DskipTests compile` **49/49 模块成功**。日志 `.migration/test-login-strategy-contract.log`、`.migration/build-login-strategy-reactor.log`；编码、变更范围和报告核对脚本 `.migration/audit-login-strategies.py`。
 
-阶段 5.3 已接通表驱动短信发送与登录验证，详见 [sms-login.md](sms-login.md)；阶段 5.4 已实现小程序账号绑定与登录，详见 [xcx-login.md](xcx-login.md)；阶段 5.5 已交付二维码状态、显式确认与网页一次性领取，通知改为轮询，详见 [qr-login.md](qr-login.md)。小程序资料/手机号授权仍待迁；真实 MySQL/Redis/供应商、二维码前端、微信/第三方授权和完整应用启动留对应环境验收。阶段 5 保持进行中，pay 继续暂缓。
+阶段 5.3 已接通表驱动短信发送与登录验证，详见 [sms-login.md](sms-login.md)；阶段 5.4 已实现小程序账号绑定与登录，详见 [xcx-login.md](xcx-login.md)；阶段 5.5 已交付二维码状态、显式确认与网页一次性领取，通知改为轮询，详见 [qr-login.md](qr-login.md)；阶段 5.6 已交付小程序手机号授权，详见 [phone-auth.md](phone-auth.md)；阶段 5.7 已交付资料授权与自动注册，详见 [profile-auth.md](profile-auth.md)。真实 MySQL/Redis/供应商、二维码前端、微信/第三方授权和完整应用启动留对应环境验收。**阶段 5 后端编码已收口**（批次 5.1~5.7 对应台账章节 §5.4~5.10，双轨编号）；支付侧已交付封装层 `nla-common-pay`，业务模块有意不建（见台账 6.12）。

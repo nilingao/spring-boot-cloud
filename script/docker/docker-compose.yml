@@ -8,7 +8,7 @@ services:
       # root 密码
       MYSQL_ROOT_PASSWORD: root
       # 初始化数据库(后续的初始化sql会在这个库执行)
-      MYSQL_DATABASE: nla-cloud
+      MYSQL_DATABASE: nla_system
     ports:
       - "3306:3306"
     volumes:
@@ -16,9 +16,10 @@ services:
       - /docker/mysql/data/:/var/lib/mysql/
       # 配置挂载
       - /docker/mysql/conf/:/etc/mysql/conf.d/
+      - /docker/mysql/init/:/docker-entrypoint-initdb.d/
     command:
       --character-set-server=utf8mb4
-      --collation-server=utf8mb4_general_ci
+      --collation-server=utf8mb4_cs_0900_ai_ci
       --explicit_defaults_for_timestamp=true
       --lower_case_table_names=1
     privileged: true

@@ -32,7 +32,8 @@ import java.util.Set;
  * {@code DynamicTableNameInnerInterceptor} 内部用 {@code TableNameParser} 先定位出
  * 真正的表名 token 再逐个回调，不会误伤列名与别名。
  * <p>
- * 配置项 {@code nla.workflow.schema} 留空即回到上游的单库部署，本类什么都不做。
+ * 配置项 {@code nla.workflow.schema} 留空即回到上游的单库部署，本类什么都不做；
+ * 表名白名单 {@code nla.workflow.tables} 必须显式配置，本类不内置默认清单。
  *
  * @author TZY
  */
@@ -75,6 +76,12 @@ public class WarmFlowConfig implements InitializingBean {
             return;
         }
         Set<String> tables = resolveTables();
+        if (tables.isEmpty()) {
+            // 白名单为空时不会命中任何表，挂上拦截器只会让每条 SQL 多一次无意义的表名解析，故直接不装
+            log.warn("工作流已配置独立库 [{}] 但表名白名单 nla.workflow.tables 为空，表名不会被限定，"
+                + "工作流表仍会在主库解析；请显式列出需要限定到该库的表名", schema);
+            return;
+        }
 
         // 无参构造已标 @Deprecated，表名处理器必须走构造函数传入
         DynamicTableNameInnerInterceptor dynamicTableName = new DynamicTableNameInnerInterceptor(
@@ -96,11 +103,11 @@ public class WarmFlowConfig implements InitializingBean {
     }
 
     /**
-     * 解析生效的表白名单：yml 显式配置了 {@code nla.workflow.tables} 就用配置值（覆盖默认），
-     * 否则回退到内置默认清单。配置值统一 {@code trim} 并转小写，以匹配
-     * {@code TableNameParser} 解析出的表名 token。
+     * 解析生效的表白名单：yml 显式配置了 {@code nla.workflow.tables} 就用配置值，
+     * 未配置或全为空白时返回空集，即不做任何表名改写。配置值统一 {@code trim} 并转小写，
+     * 以匹配 {@code TableNameParser} 解析出的表名 token。
      *
-     * @return 生效的表名白名单（均为小写）
+     * @return 生效的表名白名单（均为小写），未配置时为空集
      */
     private Set<String> resolveTables() {
         List<String> configured = properties.getTables();

@@ -255,26 +255,37 @@ i18n/messages.properties   i18n/messages_en_US.properties   i18n/messages_zh_CN.
 
 ### 4.1 全工程级批量替换（量化改造面）
 
-| 改造项 | 影响文件数 | 动作 | 状态 |
-|---|---|---|---|
-| `javax.*` → `jakarta.*` | 414 | 批量替换 | 待阶段 4/6 |
-| `RestResult` → `R<T>` | 390 | 响应封装替换 + code 语义变更 | 待阶段 6 |
-| `@Log4j2` → `@Slf4j` | 285 | 注解替换 | 待阶段 6 |
-| Swagger2 注解 → JavaDoc | 200 | 删注解，改 SpringDoc | 待阶段 4 |
-| `PageResult` 换包 + 构造方式 | 197 | 分页封装替换 | 待阶段 6 |
-| `@Autowired` → 构造器注入 | 125 | 改 `@RequiredArgsConstructor` | 待阶段 6 |
-| `extends ApiController` → `BaseController` | 115 | 基类替换 | 待阶段 6 |
-| `java.util.Date` → `LocalDateTime` | 98 | 时间类型 + 去双注解 | 待阶段 4 |
-| `extends ServiceImpl` → 纯接口实现 | 82 | Service 层重构 | 待阶段 6 |
-| 租户字段适配 | 65 | 对齐基线租户机制 | 待阶段 5 |
-| Spring Security → Sa-Token | 51 | 认证重写 | 待阶段 5 |
-| `*Param` → `*Bo` | 57 类 | 重命名 + 校验分组改法 | 待阶段 4 |
-| `@FeignClient` → 本地调用 | 43 | 微服务合并 | ✅ 阶段 8 决策收口：全部废弃，新代码 0 处 Feign 残留（见 6.14） |
-| MapStruct → MapStruct-Plus | 35 | 改 `@AutoMapper`，删 `*Convert` | 待阶段 4 |
-| Activiti → WarmFlow | 14 | **重写，非迁移** | ✅ 阶段 7 决策收口：无承接对象、不重写（见 6.13） |
-| Seata `@GlobalTransactional` | 7 | 废弃，改本地事务 | 待阶段 6 |
+> ⚠️ **本表原本是阶段 0 的计划快照，已于阶段 9 第五轮（2026-10-14）按实测重新定性**（取证与
+> 改判口径见 8.8）。两点必读：
+> ① 旧「影响文件数」是**旧工程侧**的规模估计（414/390/285/200/197/125/115/98/82/65/51/57/43/35/14/7），
+> **不能当作新侧待办规模** —— 阶段 4~8 的实际做法是按模块**重写**
+> entity/bo/vo/mapper/service/controller（见第 6 节各批次），从未对这些旧文件执行批量替换，
+> 因此「批量替换」型待办条目天然不会被执行；
+> ② 现「旧侧实测 / 新侧实测」均为**文件数**，由 `.migration/probe-m13-stale.ps1` 产出
+> （`git grep -l -I -E <模式>`；新侧范围 `nla-admin` / `nla-api` / `nla-common` / `nla-extend` /
+> `nla-modules`，旧侧范围 7 个 `spring-boot-*` 目录 + `sql/`），新侧命中已逐个用
+> `git grep -w` / `-n` 复核性质（JavaDoc 提及 ≠ 真实使用）。
 
-类清单：Controller 132 / Service 189 / ServiceImpl 113 / Mapper 84 / Convert 35 / Param 57 / Vo 45。
+| 改造项 | 旧侧实测 | 新侧实测 | 状态（2026-10-14 按实测改判） |
+|---|---|---|---|
+| `javax.*` → `jakarta.*` | 335 | 1 | ✅ 无残留：唯一命中是 `PaySdkContractTest` 对 `javax.servlet` **缺席**的 `Class.forName` 断言 |
+| `RestResult` → `R<T>` | 362 | 4 | ✅ 无残留：4 处全是 JavaDoc 迁移说明（`PushUtils` + callcenter `AgentService`/`AgentServiceImpl`/`SendAgentMessageImpl`）；同前缀的真实类型是新写的 `freeswitch.vo.result.RestResultEvent` |
+| `@Log4j2` → `@Slf4j` | 285 | 1 | ✅ 无残留：唯一命中是 `DynamicTask.java` 的 JavaDoc |
+| Swagger2 注解 → JavaDoc | 201 | 0 | ✅ 已收口：新侧 0（`@ApiModelProperty` 亦 0） |
+| `PageResult` 换包 + 构造方式 | 184 | 0 | ✅ 已收口：旧全限定名 `springbootcomm.common.vo.PageResult` 新侧 0；基线同名类的处置见 4.2.1 |
+| `@Autowired` → 构造器注入 | 125 | 50 | ⚠️ **不构成待办**：`nla-common-video` 42（GB28181 协议层原样带入）+ `nla-demo` 3（基线示例）+ `common-{encrypt,redis,sensitive,freeswitch}` 各 1（配置类）+ `nla-callcenter` 1（测试类）；**业务主源码 0** |
+| `extends ApiController` → `BaseController` | 127 | 0 | ✅ 已收口：controller 直接用基线 `BaseController` |
+| `java.util.Date` → `LocalDateTime` | 125 | 27 | ⚠️ **不构成待办**：`java.util.Date` 字面 import 全在 `nla-common`（core/json/mybatis/pay 基线基础设施 + video 10 / freeswitch 2 移植代码）；`nla-modules` 只有 `new Date(` 4 处（gen、workflow 的基线代码 + `fm/*.ftl` 前端模板串），`nla-admin` 1 处（`AuthController` 登录欢迎语）。**旧业务 DTO 的 Date 字段没有进新侧业务模块**（阶段 4 已按 `LocalDateTime` 重写，见 4.4~4.7） |
+| `extends ServiceImpl` → 纯接口实现 | 82 | 0 | ✅ 已收口 |
+| 租户字段适配 | 69 | 2 | ✅ 已收口：多租户保持禁用（规则见 6.4）；2 处命中是 `nla-common-social` 自有配置字段，与旧 `tenant_id` 无关 |
+| Spring Security → Sa-Token | 53 | 1 | ✅ 已收口：唯一命中 `nla-monitor-admin` 的 `SecurityConfig.java`（Spring Boot Admin 自带登录，非旧 OAuth2 残留） |
+| `*Param` → `*Bo` | 56 | 0 | ✅ 已收口：新写的一律是 `*Bo` |
+| `@FeignClient` → 本地调用 | 43 | 0 | ✅ 阶段 8 决策收口：全部废弃，新代码 0 处 Feign 残留（见 6.14） |
+| MapStruct → MapStruct-Plus | 35 | 0 | ✅ 已收口：新侧统一 `@AutoMapper`，无 `*Convert` 接口 |
+| Activiti → WarmFlow | 15 | 0 | ✅ 阶段 7 决策收口：无承接对象、不重写（见 6.13） |
+| Seata `@GlobalTransactional` | 7 | 0 | ✅ 已收口：单体化后改本地事务 |
+
+类清单（旧侧规模）：Controller 132 / Service 189 / ServiceImpl 113 / Mapper 84 / Convert 35 / Param 57 / Vo 45。
 
 ### 4.2 基线实测校正（计划与实际不符之处）
 
@@ -392,6 +403,10 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 **范围与剩余验收**：H2 测试只剥离 MySQL 表级引擎/字符集/排序规则/行格式选项，不代表真实 MySQL 排序规则和索引性能验收；固定测试审计填充器不代表生产登录态/权限验收。阶段 4 已开始但未整体完成，后续 video 12 表 / fs 41 表仍待重写；阶段 6.4 的识别、特征缓存、图片输入、业务鉴权和管理接口仍待迁移。
 
+> ⚠️ **本句已被后续批次推翻（阶段 9 第五轮登记，见 8.8）**：上面两个「仍待」是 4.4 当时（2026-10-10）的快照 ——
+> video 12 表与 fs 41 表已分别在 **4.6 / 4.7** 落地，face 的识别、特征缓存、图片输入、业务鉴权与管理接口已在
+> **批次 6.4** 交付（见 6.7），三个模块均已作为 `nla-admin` 依赖接入。批次记录正文不改写，只加此更正指针（先例 4.5）。
+
 ---
 
 ### 4.5 短信数据层删除标志校正（已落地）
@@ -413,6 +428,10 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 - H2 仅 test 依赖；测试资源引用交付 DDL，不另维护一份建表定义。7 份交付文本严格 UTF-8 往返通过，两个删除字段与 DDL 类型对齐，菜单/角色种子保持一致，`git diff --check` 通过。
 
 **剩余验收**：H2 剥离 MySQL 表级引擎/字符集/排序规则选项，不执行 drop 或菜单种子。真实 MySQL 列转换与排序规则、完整应用启动、Redis 与供应商发送联调未执行；短信发送入口仍按 §6.6.1 待定。阶段 4 后续 video 12 表 / fs 41 表待重写。
+
+> ⚠️ **本段两句已被后续批次推翻（见 8.8）**：发送入口已由 **批次 6.3** 交付（表驱动适配 + 4 SPI，见 6.6.1），
+> 阶段 5.3 又接通了登录侧验证码发送与原子消费（见 5.6）；video 12 表 / fs 41 表已在 4.6 / 4.7 落地。
+> 仍然成立的部分只有「真实供应商发送与完整应用启动未验收」。
 
 ---
 
@@ -455,6 +474,9 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 **剩余验收**：H2 剥离 MySQL 表级选项及 STORED 关键字，保留生成列表达式；只在测试中给索引名加表名前缀，适配 H2 的 schema 级索引命名。真实 MySQL 生成列/排序规则/索引性能、生产登录态审计/权限、完整应用启动和 GB28181/ZLM/ONVIF 业务联调未执行。阶段 4 后续 fs 41 表待重写；pay 持续暂缓。
 
+> ⚠️ **本句已被后续批次推翻（见 8.8）**：fs 41 表已在 **4.7** 落地；video 业务层两轮已在 **批次 6.5** 交付（见 6.8/6.9）；
+> 「pay 持续暂缓」自批次 6.7 起改为**封装层 `nla-common-pay` 已交付、业务模块有意不建**（见 5.1.6 / 6.12）。
+
 ---
 
 ### 4.7 呼叫中心数据层：41 张表（已落地）
@@ -489,21 +511,25 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 旧 `spring-boot-starter` 21 个子模块共 744 Java 文件。
 
+> ⚠️ 本表「处理」列原本写的**旧 starter 调用点改造**已完成定性（阶段 9 第五轮，见 8.8）：
+> 阶段 3 的自建能力 + 阶段 4~6 的按模块重写就是实际路径，旧 starter 本身属阶段 9 待删目录
+> （见 9.2），**不对它做调用点批量替换**；下表的旧符号新侧命中数为实测。
+
 | 当前 starter | 目标 | 处理 | 状态 |
 |---|---|---|---|
-| `starter-redis`(6) | `nla-common-redis` | 采用基线 Redisson 实现；`RedisUtils` API 对齐，138 处调用点改造 | 基座已就位，调用点待改 |
-| `starter-mybatis`(15) | `nla-common-mybatis` | 采用基线实现；`MyBatisUtils.selectPage` → `PageQuery.build()`；`LambdaQueryWrapperX`/`QueryWrapperX` 评估是否保留 | 基座已就位 |
-| `starter-swagger`(5) | `nla-common-doc` | springfox 2.9.2 → SpringDoc + therapi JavaDoc | 基座已就位 |
-| `starter-logs`(7) | `nla-common-log` | `@ApiLog`+`LogsAspect` → `@Log`+基线日志切面；`sys_logs` → `sys_oper_log` | 基座已就位 |
-| `starter-minio`(3) | `nla-common-oss` | MinIO 8.0.3 直连 → AWS S3 协议，`MinioUtils` 调用点改造 | 基座已就位 |
+| `starter-redis`(6) | `nla-common-redis` | 采用基线 Redisson 实现；新侧统一用 `cn.com.nla.common.redis.utils.RedisUtils`（实测 **87** 份文件在用，含 video 29 / freeswitch 26 移植模块），旧 starter 的 `RedisUtils.redisTemplate` 静态写法不迁 | ✅ 收口（基座即目标） |
+| `starter-mybatis`(15) | `nla-common-mybatis` | 采用基线实现；旧 `MyBatisUtils`(13)/`LambdaQueryWrapperX`(2)/`QueryWrapperX`(3) 新侧实测 **0**，分页一律 `PageQuery.build()` + MP/MPJ | ✅ 收口 |
+| `starter-swagger`(5) | `nla-common-doc` | springfox 2.9.2 → SpringDoc + therapi JavaDoc；旧 `@ApiModelProperty`(135) / Swagger2 符号(201) 新侧 **0** | ✅ 收口 |
+| `starter-logs`(7) | `nla-common-log` | `@ApiLog`+`LogsAspect` → `@Log`+基线日志切面；`sys_logs` → `sys_oper_log`；旧 `@ApiLog` 新侧 **0** | ✅ 收口 |
+| `starter-minio`(3) | `nla-common-oss` | MinIO 8.0.3 直连 → AWS S3 协议；旧 `MinioUtils`(4) 新侧 **0**，上传/配置走 `OssClient`/`OssFactory`（`nla-system` 实测 3 处 import） | ✅ 收口 |
 | `starter-sms`(22) | `nla-common-sms` | 自建多渠道 → sms4j；阿里/腾讯/容联云 SDK 走 sms4j 适配 | 基座已就位 |
 | `starter-autopoi`(9) | `nla-common-excel` | poi 3.15 + autopoi → fesod | 基座已就位 |
-| `starter-security-oauth`(54) | `nla-common-satoken` + `nla-common-security` | **重写**，见阶段 5 | 基座已就位，策略待迁 |
+| `starter-security-oauth`(54) | `nla-common-satoken` + `nla-common-security` | **重写**，已按阶段 5.1~5.7 交付（台账 5.4~5.10）；`org.springframework.security` 新侧唯一 1 处是 `nla-monitor-admin` 自带登录配置 | ✅ 后端策略已交付（外部联调见各批边界） |
 | `starter-xxl-job`(2) | `nla-common-job` | XXL-JOB 2.3.1 → SnailJob | 基座已就位；阶段 7 收口（见 6.13），旧 `@XxlJob` handler 0 个需迁 |
-| `starter-elasticsearch` | `nla-common-elasticsearch` | Easy-ES 1.1.1 → 3.0.2，7 处调用需改造 | 基座已就位 |
-| `starter-cloud`(5) | **废弃** | `ApiController` 全局异常处理 → 基线 `GlobalExceptionHandler`（需保留索引前缀正则解析，见 1.5） | 待阶段 6 |
+| `starter-elasticsearch`(0 Java) | `nla-common-elasticsearch` | Easy-ES 1.1.1 → 3.0.2。旧 starter 本身**0 个 Java**（只是依赖聚合）；旧侧真实 ES 使用实测 **3 份文件**，全在 `spring-boot-bean`（应用类 + `AreaEsMapper` + `AreaElasticsearchServiceImpl`）。⚠️ 原登记的「7 处调用需改造」本轮**测不出依据**，已按实测改判 | ✅ 基座就位·旧 starter 不迁；⚠️ `sys_area` 全文检索未承接（见 6.1.1） |
+| `starter-cloud`(5) | **废弃** | `ApiController` 全局异常处理 → 基线 `GlobalExceptionHandler`（需保留索引前缀正则解析，见 1.5）；`ApiController` 新侧 **0** | ✅ 收口 |
 | `starter-feign`(2) / `starter-nacos`(2) | **废弃** | 单体化 | ✅ 已收口（见 6.14） |
-| `starter-sentinel`(5) | **废弃** | 限流改基线 `@RateLimiter`（Redisson 实现） | 待阶段 6 |
+| `starter-sentinel`(5) | **废弃** | 限流改基线 `@RateLimiter`（Redisson 实现，声明在 `nla-common-redis`）；新侧实测 10 处使用（`nla-admin` 5 = `CaptchaController` 3 + `QrLoginController` 2；`nla-demo` 4；`nla-common-redis` 测试 1），旧侧 0 | ✅ 收口 |
 | `starter-quartz`(12) | **废弃** | 已弃用 | ✅ 已收口（见 6.13）；`quartz.sql` 清理并入阶段 9（见 9.3） |
 | `starter-netty`(19) / `starter-socket-io`(11) | 自建 `nla-common-socketio` | netty-socketio 1.7.19 → 2.0.14；TCP 有效代码迁入，见 5.1.4 | ✅ 已建·编译/协议测试 GREEN |
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | Spring AMQP4 / Jackson3；配置与客户端重写，见 5.1.5 | ✅ 已建·编译/契约测试 GREEN |
@@ -587,6 +613,10 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - 文件/编码审计：29 SDK 文件 **missing=0**，135 native 签名一致；全部交付文本 UTF-8 往返通过，新模块无旧包/未门控组件/尾随空白/二进制资产，`git diff --check` 通过。
 
 **剩余验收**：Linux ARM/GPU、真实人脸识别准确率/活体识别效果、生产负载未测；当前仓库 Linux 原生包仅 ARM 平台，Linux amd64 需另备匹配库。阶段 6.4 的 Person 表、业务流程/鉴权/Controller 仍待迁移。
+
+> ⚠️ **本句已被后续批次推翻（阶段 9 第五轮登记，见 8.8）**：Person 表 DDL 已在 **4.4** 落地（`script/sql/nla_face.sql` 表结构见该节）；
+> 人脸识别业务流程、`PersonController`（`/face/person`）+ `FaceDetectorController` 与 `face:person:*` 权限菜单已在**批次 6.4** 交付并接入
+> `nla-admin`（见 6.7）。本段仍然成立的部分只有 Linux ARM/GPU、真实识别准确率/活体与生产负载未测。批次原文不改写，只加此更正指针（先例 4.5）。
 
 #### 5.1.4 `nla-common-socketio` 交付结果（阶段 3.4，已落地）
 
@@ -756,9 +786,9 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - JDK21 根工程 `mvn -o -B -DskipTests compile` → **49/49 模块成功**，日志 `.migration/build-login-strategy-reactor.log`。
 - Mapper、权限/部门/角色/岗位数据源和 Redis 操作使用替身，Sa-Token DAO 为内存实现；测试核对缓存 Duration 并移除条目模拟过期，未验收真实 Redis TTL/多实例并发、生产日志落库、MySQL 或供应商。
 
-**功能映射结论**：旧 `code` 登录由新 `password` + 图形验证码覆盖；旧短信参数 phone/SmsCodeCode 改为 phoneNumber/smsCode。5.2 时发现表驱动发送与基线短信登录使用不同 key，且 `/resource/sms/code` 使用固定 config1/空模板号；这些短信缺口已在 5.3 接通（见 5.6）。5.2 时 `XcxAuthStrategy` 为密钥/用户查询占位模板，5.4 已补小程序配置、账号绑定和登录（见 5.7）；旧用户资料/手机号处理和 wx_mini_web 网页登录尚未等价实现。二维码旧链路还依赖微信码生成、Redis 场景、MQ 通知和 Socket.IO 房间推送，不能以技术封装就绪认定业务完成。
+**功能映射结论**：旧 `code` 登录由新 `password` + 图形验证码覆盖；旧短信参数 phone/SmsCodeCode 改为 phoneNumber/smsCode。5.2 时发现表驱动发送与基线短信登录使用不同 key，且 `/resource/sms/code` 使用固定 config1/空模板号；这些短信缺口已在 5.3 接通（见 5.6）。5.2 时 `XcxAuthStrategy` 为密钥/用户查询占位模板，5.4 已补小程序配置、账号绑定和登录（见 5.7）；旧用户资料/手机号处理和 wx_mini_web 网页登录当时尚未等价实现（⚠️ **本句已被后续批次推翻**：网页扫码登录＝阶段 5.5（见 5.8）、手机号授权＝阶段 5.6（见 5.9）、资料授权与自动注册＝阶段 5.7（见 5.10），均已交付）。二维码旧链路还依赖微信码生成、Redis 场景、MQ 通知和 Socket.IO 房间推送，不能以技术封装就绪认定业务完成。
 
-**后续**：阶段 5.3/5.4 已交付，见下；二维码状态/通知链路、小程序资料及手机号授权另批实施。旧账号/token/租户数据不迁，原 mini 表不重建，阶段 5 保持进行中，pay 继续暂缓。
+**后续**：阶段 5.3/5.4 已交付，见下；二维码状态/通知链路、小程序资料及手机号授权当时另批实施（现均已交付，见 5.8~5.10）。旧账号/token/租户数据不迁，原 mini 表不重建，阶段 5 保持进行中，pay 继续暂缓。
 
 ### 5.6 阶段 5.3：表驱动短信发送与登录验证码契约（已交付）
 
@@ -1309,9 +1339,13 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 替换链顺序不可变：`protect（占位符）→ own（org.dromara→cn.com.nla）→ brand（RuoYi/dromara→NLA/nla）→ restore（还原占位符）`。
 
-### 7.1 SQL（14 份，8 条偏离规则）
+### 7.1 SQL（14 份，9 条偏离规则）
 
 `script/sql/` 下 4 方言共 14 份，全部由 `.migration/regen-sql.ps1` 生成。
+下表是规则 1~8（品牌类）；**规则 9 是排序规则统一**（`utf8mb4_unicode_ci` → `utf8mb4_cs_0900_ai_ci`，
+`min=22`，背景与验收见 7.7 / 7.7.2）。自阶段 9 第四轮起该脚本已是**纯 ASCII**（无 BOM），并支持
+`-Ref` / `-Dst` 参数：先把整批产物写到临时目录，用 `probe-m12-sql-parity.ps1` 与仓库逐字节比对确认
+`diffs=0`，再往真实目录重生。
 
 | # | 规则 | 替换 | min | 理由                                                                                         |
 |---|---|---|---|--------------------------------------------------------------------------------------------|
@@ -1361,7 +1395,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 `banner.txt`：ASCII art 整体重绘为 NLA Cloud 字样。
 （`nla-extend` 三个模块的 `banner.txt` 与上游逐字节相同 —— 那是上游自己画的图案，非去品牌损伤。）
 
-### 7.3 Docker 与运行配置（9 条规则）
+### 7.3 Docker 与运行配置（11 条规则）
 
 由 `.migration/regen-support-cfg.ps1` 生成，覆盖 `script/docker/docker-compose.yml`、
 `script/docker/nginx/conf/nginx.conf`、4 个 `.run/*.run.xml`。
@@ -1372,7 +1406,9 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | | `image: nla/nla-monitor-admin:6.0.0` | → `:1.0.0` | 1 |
 | | `image: nla/nla-snailjob-server:6.0.0` | → `:1.0.0` | 1 |
 | | `image: nla/nla-snailai-server:6.0.0` | → `:1.0.0` | 1 |
-| 数据库 | `MYSQL_DATABASE: ry-vue` | → `nla-cloud` | 1 |
+| 数据库 | `MYSQL_DATABASE: ry-vue` | → `nla_system`（阶段 9 第三轮改；旧值单库 `nla-cloud` 与 7.9 分库口径冲突）| 1 |
+| | `- /docker/mysql/conf/:/etc/mysql/conf\.d/` | → 该行后追加 `- /docker/mysql/init/:/docker-entrypoint-initdb.d/`（挂载 7.9.2 的建库脚本）| 1 |
+| | `--collation-server=utf8mb4_general_ci` | → `--collation-server=utf8mb4_cs_0900_ai_ci`（对齐 7.7 全库口径）| 1 |
 | `.run` | `value="nla/nla-server:6.0.0"` | → `:1.0.0` | 1 |
 | | `value="nla/nla-monitor-admin:6.0.0"` | → `:1.0.0` | 1 |
 | | `value="nla/nla-snailjob-server:6.0.0"` | → `:1.0.0` | 1 |
@@ -1384,6 +1420,11 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 旧工程遗留的 11 个 `spring-boot-*.run.xml` 已全部删除，`ours-only = 0`。
 （旧的 11 份是**完整部署配置**：带 `containerName`、`--spring.profiles.active=prod`、
 `NACOS_SERVER_IP` 等环境变量，镜像推到腾讯云仓库 —— 与新配置的语义不同，不要照搬。）
+
+> 📌 阶段 9 第三轮给生成器加了一个 `@@NL@@` 占位：替换文本里需要新增整行时写 `@@NL@@`，
+> 生成器按**源文件的换行风格**解析（compose / nginx / `.run` 均为 CRLF），避免产出混用换行的文件。
+> 新增的这两行规则**不写中文注释**（替换串在 `.ps1` 里，受 10.1 教训 2「脚本必须纯 ASCII」约束），
+> 建库口径的说明放在 `script/sql/nla_databases.sql` 文件头与 README。
 
 ### 7.3.1 `script/docker/` 实际组成（易混淆，特此记录）
 
@@ -1418,7 +1459,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 2103 files / scanned(text)=2095  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.7 后实测；较上一基线 +62 = 本批次 `nla-common-pay` 模块 57 份（54 移植 java + 1 契约测试 + 模块 pom + 构建产生的 `.flattened-pom.xml`）+ 5 份基线设立时未登记、由其他会话后续入库的文件（`CallcenterExcelExportContractTest`、`SmsSendController` + `SmsSendControllerContractTest`、`SysAreaDataContractTest`、`nla_system_area_data.sql`）；上一次基线是第一轮后的 `2030 / 2022`，+11 = 第二轮新增的 10 个主 Java + 1 个测试类；再上一次是批次 6.5 第二轮后的 `1996 / 1988`，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`；更早是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；再早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
+**`scanning 2105 files / scanned(text)=2097  hits=0  allowlisted=5  file-exceptions=1`**（**现值**取自阶段 9 第三轮，第四/第五轮无新增入库文件故数字未变；上一基线为批次 6.7 后的 `2103 / 2095`，较再上一次 +62 = 本批次 `nla-common-pay` 模块 57 份（54 移植 java + 1 契约测试 + 模块 pom + 构建产生的 `.flattened-pom.xml`）+ 5 份基线设立时未登记、由其他会话后续入库的文件（`CallcenterExcelExportContractTest`、`SmsSendController` + `SmsSendControllerContractTest`、`SysAreaDataContractTest`、`nla_system_area_data.sql`）；上一次基线是第一轮后的 `2030 / 2022`，+11 = 第二轮新增的 10 个主 Java + 1 个测试类；再上一次是批次 6.5 第二轮后的 `1996 / 1988`，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`；更早是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；再早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
@@ -1532,8 +1573,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 ```
 
 **当前约定**：全库统一 `utf8mb4` + `utf8mb4_cs_0900_ai_ci`（用户拍板，已写入 README）。
-`nla_ai.sql` 的 22 处显式声明已由 `.migration/fix-ai-collation.ps1` 改写为该值，
-改写后 `utf8mb4_unicode_ci` 残留 **0** 处、`utf8mb4_cs_0900_ai_ci` 命中 **22** 处（23 张表中
+`nla_ai.sql` 的 22 处显式声明现为该值，**由 `regen-sql.ps1` 规则 9 在生成时直接产出**（阶段 9
+第四轮之前是靠 `.migration/fix-ai-collation.ps1` 事后改写，见 7.7.2）。改写后 `utf8mb4_unicode_ci`
+残留 **0** 处、`utf8mb4_cs_0900_ai_ci` 命中 **22** 处（23 张表中
 `sai_user` 上游本就不写 `COLLATE`，继承库默认值），`verify-encoding.ps1` 复核中文完好（cjk=1844 未变）。
 
 #### 7.7.1 更正：`cs` 是捷克语代码，不是 case-sensitive
@@ -1550,15 +1592,31 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 所以选它不影响登录、字典查询这类依赖大小写不敏感的逻辑。
 对 CJK 文本，两者都是 UCA 排序、按码点权重比较，中文排序行为实质相同。
 
-#### 7.7.2 ⚠️ `regen-sql.ps1` 尚未同步这条规则
+#### 7.7.2 ✅ 生成器已同步这条规则（阶段 9 第四轮，2026-10-14）
 
-它是 14 份 SQL 的唯一事实来源，**下次重生 SQL 会把 `nla_ai.sql` 的 22 处改回
-`utf8mb4_unicode_ci`**，静默重现 ERROR 1267。该脚本仍含中文字面量、仍靠 BOM
-（见 10.1 遗留风险），改它之前必须先转纯 ASCII。
-**在那之前：重生 SQL 后必须重跑 `fix-ai-collation.ps1 -Apply`，并用 `probe-collation.ps1` 验收。**
+登记时的状态是「⚠️ 尚未同步」：事实来源（`regen-sql.ps1`）里没有任何排序规则规则，而产物
+（`nla_ai.sql`）的 22 处靠 `fix-ai-collation.ps1` 事后打补丁 —— 谁重生一次 SQL 就会静默把 7.7 的
+决策抹回 `utf8mb4_unicode_ci`，且原有的 min 断言与 residue scan 全部照常通过，**没有任何一道网
+拦得住**。现已把规则内建到生成器，产物与来源一致，事后补丁不再是必需步骤：
+
+| 项 | 现状（实测） |
+|---|---|
+| 规则 9 | `utf8mb4_unicode_ci` → `utf8mb4_cs_0900_ai_ci`，`min=22`；上游 14 份里只有 `ry_ai.sql` 含该字串（实测 22 处，其余 13 份 0） |
+| 第二道网 | `$residue` 新增 `utf8mb4_unicode_ci`，替换漏掉时残留扫描会直接点名文件与上下文 |
+| 脚本编码 | 纯 ASCII：8896 字节 / `BOM=False` / 非 ASCII 字节 **0** / 纯 LF（10.1 教训 2 的遗留风险就此消除） |
+| CJK 字面量 | 模式侧写 `\uXXXX`（由 .NET 正则解释），替换串侧经 `U()` = `[regex]::Unescape` 还原；转义全部由 `probe-m12-cjk.ps1` 从原文件字节提取，不靠记忆 |
+| 干跑能力 | 新增 `-Ref` / `-Dst`，可整批输出到临时目录比对后再写盘 |
+| 验收 | 9 条规则命中恰为各自 `min`（4/4/4/3/1/1/1/1/22）、residue `(clean)`、`probe-m12-sql-parity.ps1` → **14/14 份 SHA256 与仓库一致（`diffs=0`）** |
+| `fix-ai-collation.ps1` | 降级为二次校验：现跑输出 `ALREADY-CONSISTENT: 0 to change, target 22` 并 `exit 0`。保留不删 —— 它可作为「产物被手工改坏」的独立复检。⚠️ **本轮顺便修了它一个自相矛盾的 bug**：文件头写着「Idempotent: already-converted files report 0」，但 `n -lt $min`（`$min=21`）会在已转好的文件上 `ABORT` + `exit 1`；现已补 `n -eq 0` 分支（同时校验 `already == 22`，数目不对仍退出失败） |
+
+**转写过程中被 min 断言当场抓住的真实错误**：第一版把规则 1 的模式写成 `疯狂的狮子 Li`（多一个
+空格），而上游种子值是无空格的 `疯狂的狮子Li` —— 干跑输出 `admin nick_name de-branded = 0 (min 4)`
+直接 `throw`、一个字节都没落盘。这是 10.2「宁可整批失败也不静默产出」设计有效性的实测证据。
 
 **阶段 4 重写业务表 DDL 时同样必须显式写 `COLLATE=utf8mb4_cs_0900_ai_ci`**，
 不要再依赖库默认值 —— 否则部署环境的库排序规则一旦不同就会重现这个问题。
+（已完成：callcenter 41 / video 12 / message 4 / face 1 共 58 处显式声明。这 4 份与 `nla_databases.sql`
+都**不在** `regen-sql.ps1` 的 14 份派生清单里，因此不受重生影响。）
 
 ### 7.8 工作流分库（WarmFlow 动态表名方案）
 
@@ -1587,7 +1645,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **动态表名拦截器** | ✅ 改写在**共享 SQL 链**上，引擎+自有 mapper 全覆盖 | 单连接原子 | **采用** |
 | 拆独立微服务 | ✅ 但监听器回调 `sys_user` 强耦合 | — | 不划算 |
 
-采用 MP `DynamicTableNameInnerInterceptor`，把 12 张表（8 引擎 + 4 自有 `flow_category`/`flow_spel`/`flow_instance_biz_ext`/`test_leave`）改写成 `nla_workflow.<表>`，`sys_*` 不加前缀落主库。同实例跨 schema 是 MySQL 原生能力：一条连接、事务原子、业务零注解。此为社区 MP 分库主流做法（掘金「动态表名的正确打开方式」：动态表名与多数据源不冲突）。
+采用 MP `DynamicTableNameInnerInterceptor`，把 **11 张表**（7 引擎 `flow_definition`/`flow_node`/`flow_skip`/`flow_instance`/`flow_task`/`flow_his_task`/`flow_user` + 4 自有 `flow_category`/`flow_spel`/`flow_instance_biz_ext`/`test_leave`）改写成 `nla_workflow.<表>`，`sys_*` 不加前缀落主库。同实例跨 schema 是 MySQL 原生能力：一条连接、事务原子、业务零注解。此为社区 MP 分库主流做法（掘金「动态表名的正确打开方式」：动态表名与多数据源不冲突）。
+
+> ⚠️ **表数口径更正（2026-10-14 实测）**：本节早期写作「12 张」，那含引擎表 `flow_form`；本工程不建该表（不用表单功能），提交 `5317dd8` 已把它从两个 profile 的 yml 白名单里删除，真实库 `nla_workflow` 也只有 11 张表（见 8.3）。**现行口径为 11 张**，下文历史描述里的「12 张」均指删除前的旧状态。
 
 #### 7.8.3 实现与配置化
 
@@ -1595,15 +1655,18 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 |---|---|
 | `config/WarmFlowConfig.java` | `InitializingBean`，把动态表名拦截器插在分页插件之前（MP 官方顺序）；`resolveTables()` 决定生效白名单 |
 | `config/WorkflowProperties.java` | `@ConfigurationProperties("nla.workflow")`，含 `schema` + `tables` |
-| `application-{dev,prod}.yml` | `nla.workflow.schema: nla_workflow` + `tables` 显式 12 张 |
+| `application-{dev,prod}.yml` | `nla.workflow.schema: nla_workflow` + `tables` 显式 11 张（序列项形式，绑定 `List<String>`）|
 
-**配置化取舍**：采纳社区「白名单放 yml」，但**不采纳 ThreadLocal 动态后缀**——那是为「按时间分表」设计，而 WarmFlow 大量异步回调（`WorkflowGlobalListener.publishEvent`、`AFTER_COMMIT` 缓存刷新），ThreadLocal 在线程切换时丢上下文会让 `flow_*` 落回主库（社区「避坑指南」亦警告）。本工程用**静态 schema 前缀**（启动固化进拦截器闭包）天然免疫。两点增强：① `tables` 留空回退内置默认 12 张（防漏配静默失效）；② 精确匹配而非社区 `startsWith`（避免误伤 `flow_xxx_bak`）。
+**配置化取舍**：采纳社区「白名单放 yml」，但**不采纳 ThreadLocal 动态后缀**——那是为「按时间分表」设计，而 WarmFlow 大量异步回调（`WorkflowGlobalListener.publishEvent`、`AFTER_COMMIT` 缓存刷新），ThreadLocal 在线程切换时丢上下文会让 `flow_*` 落回主库（社区「避坑指南」亦警告）。本工程用**静态 schema 前缀**（启动固化进拦截器闭包）天然免疫。两点增强：① 白名单全由配置决定、代码不内置默认清单（见下方更正）；② 精确匹配而非社区 `startsWith`（避免误伤 `flow_xxx_bak`）。
+
+> ⚠️ **兜底语义更正（2026-10-14）**：原设计「`tables` 留空回退内置默认 12 张」已被提交 `6a4574b`（移除 `DEFAULT_TABLES`/`ENGINE_TABLES`/`MODULE_TABLES`）取消，理由是代码里藏一份表名副本会和建表脚本漂移。但那次提交没同步注释，`WorkflowProperties` JavaDoc 与两个 yml 的注释仍在承诺默认清单——本轮已按现行行为修正注释，并补上一条防静默失效的告警：`schema` 配了而 `tables` 为空时，`WarmFlowConfig` **打印 WARN 且不再挂空拦截器**（空白名单不会命中任何表，挂上去只会让每条 SQL 多一次无意义的表名解析）。
 
 #### 7.8.4 验证
 
-- **单测 `WarmFlowConfigTest` 9/9 绿**：12 表全限定、主库表不动、增删改/join/子查询改写、同形列名不误伤、空库名回退、幂等、yml 配置覆盖默认清单。
-- **真实启动冒烟**（`@Value` 版）：`Started in 21.33s`，日志 `工作流分库已启用：12 张表限定到库 [nla_workflow]，插入拦截器链位置 1`，`sys_oss_config` 落主库成功，零异常。
-- ⚠️ **配置化后（`@ConfigurationProperties` 版）的真实 yml 绑定尚未冒烟复验**：核心逻辑已被单测覆盖，绑定 `List<String>` 为 Spring Boot 基础能力，风险低；如需实证，重启冒烟查 actuator `configprops` 的 `nla.workflow.tables`（日志「12 张」无法区分 yml 绑定与兜底，须用 configprops 或哨兵表区分）。
+- **单测 `WarmFlowConfigTest` 9/9 绿**（历史结果，源文件已由提交 `5317dd8` 删除，见 10.1 第 5 条与下表）：12 表全限定、主库表不动、增删改/join/子查询改写、同形列名不误伤、空库名回退、幂等、yml 配置覆盖默认清单。其中「默认清单」相关断言随 `6a4574b` 一同作废。
+- **现行拦截器行为**：`WarmFlowConfig` 本身已无专属单测；改写逻辑靠 `DynamicTableNameInnerInterceptor` + `TableNameParser`（MP 三方库），配置形状与内容则由 `SplitDatabaseRoutingContractTest` 直接读交付 yml 守卫（见 7.9.1）。
+- **真实启动冒烟**（`@Value` 版）：`Started in 21.33s`，日志 `工作流分库已启用：12 张表限定到库 [nla_workflow]，插入拦截器链位置 1`，`sys_oss_config` 落主库成功，零异常（当时含 `flow_form`）。
+- ✅ **配置化后的 yml 绑定已静态实证（2026-10-14）**：`SplitDatabaseRoutingContractTest` 读 dev/prod 两份交付 yml，断言 `nla.workflow.tables` 是 **11 项序列项**（而非 `- 名: 名` 映射项）、两个 profile 内容完全一致、不含 `flow_form`，并断言 `schema: nla_workflow`。与 `WorkflowProperties.tables` 的 `List<String>` 类型兼容。**仍未跑到的只是真实进程里的 configprops 快照**，需启动冒烟时顺带核对日志行应变为「11 张表限定到库 [nla_workflow]」。
 
 
 #### 7.8.5 为何只有工作流需要分库（job/ai 对照核查）
@@ -1616,7 +1679,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `nla-job` | 仅 SnailJob **客户端执行器**（`*Task`/`*Executor`）+ `BillDTO`（record，无 `@TableName`），**0 个 Mapper** | 独立进程 `nla-snailjob-server`（自带数据源 → `nla_job`） | admin 不碰 `sj_*`，无需处理 |
 | `nla-ai` | 仅 `SnailAiController`，注入 `OpenApiUserClient` **SDK**（HTTP/RPC），**0 个 Mapper** | 独立进程 `nla-snailai-server`（自带数据源 → `nla_ai`） | admin 不碰 `sai_*`，无需处理 |
 
-证据：两模块 `src` 下无任何 `@TableName`/`BaseMapperPlus`/`@DS`/`Mapper<`；`nla-snailjob-server` 的 `application-{dev,prod}.yml` 数据源为 `jdbc:mysql://localhost:3306/nla_job`，`nla-snailai-server` 为 `.../nla_ai`。**故动态表名拦截器只需覆盖 `flow_*`/`test_leave` 共 12 张，无需扩展到 `sj_*`/`sai_*`。**
+证据：两模块 `src` 下无任何 `@TableName`/`BaseMapperPlus`/`@DS`/`Mapper<`；`nla-snailjob-server` 的 `application-{dev,prod}.yml` 数据源为 `jdbc:mysql://localhost:3306/nla_job`，`nla-snailai-server` 为 `.../nla_ai`。**故动态表名拦截器只需覆盖 `flow_*`/`test_leave` 共 11 张（见 7.8.2 口径更正），无需扩展到 `sj_*`/`sai_*`。**
 
 ### 7.9 业务分库的数据源路由（dynamic-datasource `@DS`）
 
@@ -1664,6 +1727,50 @@ Tests-run 汇总 127 行、失败行 0）。其中 `SmsDataContractTest` 8/8 通
 `create table sms_`，导致 H2 里建出 0 张表。已把正则改为 `create table (?:if not exists )?sms_…`；
 callcenter / video 的数据契约测试本来就用 `create table if not exists` 正则，不受影响。
 
+#### 7.9.1 分库路由配置契约测试（新增守卫）
+
+文件：`nla-admin/src/test/java/cn/com/nla/web/config/SplitDatabaseRoutingContractTest.java`（4 项测试，不连任何数据库、不起 Spring 上下文）。
+它把四类**只在运行期或部署期才暴露**的分库错误前移到 `mvn test`：
+
+| 测试 | 断言 | 抓到的错 |
+|---|---|---|
+| `everyProfileDeclaresAllBusinessDataSourcesInStrictMode` | dev/prod 的 `spring.datasource.dynamic.datasource` 键名集恰为 `master` + 4 个分库；`primary: master`、`strict: true` 未被改掉 | 漏建某个数据源、键名拼错、关掉 strict 后静默回落主库 |
+| `everyBusinessMapperIsRoutedToItsOwnDataSource` | 扫类路径上 `cn.com.nla.{message,face,video,callcenter}.mapper` 的每个 `*Mapper` 接口，**必须有 `@DS` 且值等于自己模块的库名** | 新增 Mapper 忘记加 `@DS`（会静默查主库，而主库根本没有该表）|
+| `workflowTableWhitelistIsConsistentAcrossProfiles` | 两个 profile 的 `nla.workflow.tables` 同为 11 项、内容一致、无 `flow_form`，且是序列项而非映射项 | 只改一个环境、表名重命名后忘同步、yml 写成 `- 名: 名` 使 `List<String>` 绑定失效 |
+| `schemaScriptCreatesExactlyTheRoutedDatabases` | `script/sql/nla_databases.sql` 建出的库与「路由用到的库」互为子集：各数据源 `jdbc:mysql` URL 里的库名 + `nla.workflow.schema` + `nla_job`/`nla_ai` | 新增分库忘改建库脚本（部署时少一个库，首条该库 SQL 才报库不存在），或建出路由外的孤儿库 |
+
+第 4 项要读仓库里的 SQL，而测试只能从类路径取文件，所以 `nla-admin/pom.xml` 加了第二个 `<testResource>`
+把 `../script/sql/nla_databases.sql` 复制进 `test-classes`（与 `nla-modules/nla-message/pom.xml` 把
+`nla_message.sql` 交给 `SmsDataContractTest` 是同一手法）。副作用：**交付建库脚本一改动就直接影响全量回归**。
+
+**实现坑（实测，非推断）**：`ClassPathScanningCandidateComponentProvider` 默认的 `isCandidateComponent` 只接受**具体类**，直接扫 Mapper 接口会得到 0 个候选（表现为“没扫到 Mapper”而非报错）——必须 override 成 `isInterface() && isIndependent()`；`findCandidateComponents` 返回的是 `BeanDefinition`，取类名要用 `getBeanClassName()`（`getClassMetadata()` 在 `AnnotatedBeanDefinition` 上才有）。
+
+⚠️ **这个测试只能在 reactor 里跑**：`mvn -B test -pl nla-admin`（无 `-am`）会从本地仓库取业务模块 jar，实测那里那份 `nla-message-1.0.0.jar` 还是 2026-10-12 11:00 的**旧构建（无 `@DS`）**，导致守卫误报 `MobileMessageMapper 缺少 @DS`；带 `-am`（或全量 `clean test`）后 classpath 改用 `target/classes`，3/3 GREEN。已登记为 10.1 第 6 条。
+
+#### 7.9.2 建库脚本交付物 `script/sql/nla_databases.sql`
+
+阶段 9 第三轮新增。之前「建 8 个库」只存在于 README 的文字里，仓库内**没有任何可执行建库产物**：
+实测 `script/sql/` 原有 10 份 MySQL 脚本全部**不含 `USE` / `CREATE DATABASE`**（脚本只建表与灌数据，
+落到哪个库全靠执行者自己选对库），而 compose 的 `MYSQL_DATABASE` 只能建**一个**库，
+所以按原状部署出来的环境只有 `nla-cloud`（一个根本不存在的库），7 个分库全靠手工。
+
+- **内容**：8 条 `CREATE DATABASE IF NOT EXISTS \`nla_x\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_cs_0900_ai_ci;`
+  （幂等、可重跑），库名清单与 7.9 路由 + 8.3 实测拓扑逐项对齐。
+- **为什么建库时必须写 `COLLATE`**：`nla_system.sql` / `nla_job.sql` / `nla_workflow.sql` 本身不写 `COLLATE`，
+  完全继承库默认值（7.7）；不显式指定就会随服务器默认值漂走（compose 旧值是 `utf8mb4_general_ci`，
+  与新装的 cs_0900 表混排会直接报 `ERROR 1267 Illegal mix of collations`）。
+- **不建表、不导种子**：表结构与菜单仍按 README「导入」表的**目标库**逐份执行（菜单全落 `nla_system`）。
+- **与 compose 的关系**：compose 把 `/docker/mysql/init/` 挂到 `/docker-entrypoint-initdb.d/`（7.3），
+  官方镜像只在数据目录为空时执行一次；已有数据卷不重跑，此时需手工执行本脚本。
+  `MYSQL_DATABASE` 保留为 primary 库 `nla_system`（与其余 7 库共存不冲突：官方镜像先建该库再跑 init 脚本，
+  本脚本用的是 `IF NOT EXISTS`）。
+- **漂移保护**：库名清单 ↔ yml 数据源 URL ↔ `@DS` 键名 三者的一致性由 7.9.1 第 4 项在 `mvn test` 里看住。
+- **方言限制**：`CREATE DATABASE ... COLLATE` 是 MySQL 写法，本脚本**仅交付 MySQL 方言**（与新增的
+  message / face / video / callcenter 脚本同口径）；`script/sql/` 下的方言子目录也只有基线侧建表脚本
+  （postgres 4 份：ai/job/system/workflow；oracle 与 sqlserver 各 3 份，无 ai），**既没有对应的建库脚本，
+  也没有 4 个业务分库的方言版**；用这些方言时需按各自语法自行建库并保证字符集/排序规则等效
+  （风险点同 7.7：排序规则不一致直接报 `ERROR 1267`）。
+
 ---
 
 ## 8. 阶段进度台账
@@ -1674,14 +1781,14 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | **1** | 工程骨架 | ✅ 完成 | 根 POM、`nla-common-bom`、全部模块 POM、`NlaApplication`、9 份 admin 资源、`script/`、`.editorconfig`/`.gitattributes`/`mvnw` |
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
-| **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
+| **2.3** | starter 映射 | ✅ 完成·决策收口 | 基线侧的 10 个 `nla-common-*` 已引入 + 阶段 3 的 6 个自建封装已建成；旧 21 个 starter 的 744 Java **不做调用点批量改造** —— 它们属阶段 9 待删目录（见 9.2），且对应旧符号新侧实测 **0 命中**（`MinioUtils` / `MyBatisUtils` / `LambdaQueryWrapperX` / `QueryWrapperX` / `@ApiLog` / `@ApiModelProperty` / `ApiController` 等，逐项见 4.1 与第 5 节，取证口径见 8.8）|
 | **3** | 自建技术封装 | ✅ 完成·6/6 | **freeswitch + video + facesdk + socketio + mq + pay 全部建成**（见 5.1.1~5.1.6）；pay 为官方 IJPay 2.9.11 + fork 移植混合（54 文件），8 项契约测试 GREEN，依赖树 0 fastjson/0 jdk15on；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点、mq 真实 broker/delay/confirm、pay 真实下单/回调联调均待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭）；分库 DDL 的运行期路由已按 dynamic-datasource `@DS` 落地（见 7.9）|
-| **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程编译 GREEN（reactor 现 **50** 个模块，原记 49/49 属过期计数，见 8.8）；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭）；分库 DDL 的运行期路由已按 dynamic-datasource `@DS` 落地（见 7.9）|
+| **5** | 认证鉴权与租户 | 🟡 进行中·后端编码已收口 | **编号口径**：已交付 **阶段 5.1～5.7**（共 7 批），对应本文档的 **§5.4～5.10**（章节号与批次号不同源，不是编号错）；客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试；该批当时为 49/49 编译，reactor 现为 50，见 8.8）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
 | **7** | 工作流与调度替换 | ✅ 完成·决策收口 | 用户已确认兜底方式（见 6.13）：旧 Activiti 在途/历史流程实例数据**彻底废弃、不做承接**（与 6.1/6.2 老数据丢弃先例一致，`ACT_*` 不迁移不归档）；Activiti「重写」无承接对象——旧调用仅存于 `spring-boot-activiti`(43)+`feign-activiti`(1)+已废弃 oa(6)，基线 `nla-workflow`(129) WarmFlow 完整在位；XXL-JOB→SnailJob 基座在位（`nla-common-job`/`nla-job`/`nla-snailjob-server`），旧 `@XxlJob` handler 实测 0 个需迁；`starter-quartz`/`quartz.sql`/`sys_activiti.sql` 清理并入阶段 9（见 9.2/9.3）**本轮无代码交付、决策收口** |
 | **8** | client 聚合层扁平化 | ✅ 完成·决策收口 | **43 个 `@FeignClient` 实测全部废弃**（7 个目标服务的承接位逐个对照见 6.14：sys_* 覆盖/nla-message/nla-video/nla-face/阶段 5 认证域，oa+activiti 已废弃）；client 63 个转发 Controller 不迁（旧 `/app`、`/webapi` 外部路径废弃，能力已由 nla-* 新契约重交付）；新代码 0 处 Feign 残留（唯一命中为 JavaDoc 溯源注释）；**本轮无代码交付、决策收口** |
-| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；**业务分库运行期路由已落地**（4 数据源 + 57 Mapper `@DS`，见 7.9，全 reactor `clean test` BUILD SUCCESS）；剩余环境项：`nla-admin` 真实启动冒烟（MySQL 8 库表 + Redis 均已就位，凭据口径见 8.4）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
+| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；**业务分库运行期路由已落地**（4 数据源 + 57 Mapper `@DS`，见 7.9，全 reactor `clean test` BUILD SUCCESS）；**分库路由配置契约测试已纳入全量回归**（`SplitDatabaseRoutingContractTest` 4 项：dev/prod yml 数据源键 ↔ 57 Mapper `@DS` ↔ 工作流 11 表白名单 ↔ 建库脚本库名清单，见 7.9.1/8.5）；**分库口径已贯穿部署产物**（新增 `script/sql/nla_databases.sql` 8 库建库脚本，compose 不再建单库 `nla-cloud`，见 7.9.2/8.6）；剩余环境项：`nla-admin` 真实启动冒烟（MySQL 8 库表 + Redis 均已就位，凭据口径见 8.4）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1690,7 +1797,7 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `mvn -B -DskipTests clean install` | ✅ **BUILD SUCCESS 40/40**，`MVN_EXIT=0`，耗时 2:52 |
 | 全仓品牌残留 | ✅ `scanned(text)=993  hits=0  allowlisted=5  file-exceptions=1`（含 `.qoder` 全部 17 份与 3 份 dotfile，目录级例外已清空，见 7.6） |
 | 模块对齐上游 | ✅ 34 子模块文件数全对齐 |
-| SQL 对齐上游 | ✅ 14 份全对齐，差异全部收敛到 8 条已记录规则 |
+| SQL 对齐上游 | ✅ 14 份全对齐，差异全部收敛到已记录的偏离规则（现 **9 条**：阶段 9 第四轮新增排序规则一条，见 7.1 / 7.7.2） |
 | 支撑文件对齐 | ✅ `present=32  missing=10  ours-only=0`（missing 10 = `.gitee` 4 + `.claude` 6，均见 7.5） |
 | `nla-admin` 启动至数据源连接 | ⬜ **未验证**，需 MySQL 8 + Redis 就绪后执行 |
 
@@ -1715,10 +1822,13 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 
 1. **`nla-admin` 真实启动冒烟未完成** —— MySQL 8 库表（8 分库 139 表，见 8.3）与 Redis 均已就位；dev/prod 的
    `spring.datasource.dynamic.datasource` 现为 `master`(nla_system) + 4 个业务分库（见 7.9），
-   **不再需要、也不应再建单库 `nla-cloud`**；`script/sql/` 全部 10 份按库名归位执行。
+   **不再需要、也不应再建单库 `nla-cloud`**；`script/sql/` 共 11 份：先跑 `nla_databases.sql` 建 8 个库，
+   其余 10 份按库名归位执行。
    我这边的一次真启停在 `Access denied for user 'root'@'112.46.102.3' (using password: YES)`
    （口令为 dev 默认值、与真实库不符），随后用户定口径「你启动，我来观测」——详见 8.4。
-   ⚠️ 连带项：`script/docker/docker-compose.yml` 仍是 `MYSQL_DATABASE: nla-cloud` 单库，与分库口径不一致（见 7.3 规则），留阶段 9 部署确认时一并处理。
+   ✅ 连带项已关闭（阶段 9 第三轮）：`script/docker/docker-compose.yml` 不再建单库 `nla-cloud`，
+   改为 `MYSQL_DATABASE: nla_system` + 挂载 `/docker/mysql/init/` 执行新增的 `script/sql/nla_databases.sql`，
+   并把服务器默认排序规则对齐 7.7（见 7.3 / 7.9.2 / 8.6）。
 2. **旧 `spring-boot-*` 目录仍在仓库中** —— 用户已确认采用分级清理，
    保留到**阶段 9 部署验收后统一清理**（阶段 7 收口时落定口径，见 6.13；本轮不物理删除），清单与理由见 9.2；已删的 4 份部署产物见 9.1。
 3. **`probe-newmod-res.ps1` 有个已知 bug** —— 测试路径未把 `cn\com\nla` 反映射回 `org\dromara`，
@@ -1781,6 +1891,205 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   仓库本来就 LF/CRLF 混用（例：未改动的 `DeviceServiceImpl.java` 也是 LF），非本次引入）。
   本次工作区改动：`application-{dev,prod}.yml` 各 +26 行、57 个 Mapper +114 行（0 删除）、`SmsDataContractTest` +2/-1。
 
+### 8.5 阶段 9 第二轮：分库路由守卫 + 工作流白名单语义校正（2026-10-14）
+
+- **先登记两个被实测推翻的假设**（都是上一轮我口头汇报过的风险点，以本轮复核为准，不要重复相传）：
+  ① 「`script/sql/nla_face.sql` 有重复索引名、真实 MySQL 会 `ERROR 1061`」—— **错**：DDL 实际只有一条
+  `key idx_face_person_img_id (img_id, del_flag)`，dbx 查 `information_schema.statistics` 也实测到该索引与 `PRIMARY` 两行，与 DDL 一致。
+  ② 「dev 与 prod 的 `nla.workflow.tables` 写法形状不一致（一个映射项、一个序列项）」—— **错**：两份文件都是 11 项序列形，逐行内容一致。
+- **实测唯一的真问题（注释与代码矛盾）**：提交 `6a4574b` 有意删掉了 `WarmFlowConfig` 的内置默认白名单
+  （`DEFAULT_TABLES`/`ENGINE_TABLES`/`MODULE_TABLES`），但 `WorkflowProperties` 的 JavaDoc 与 dev/prod yml 注释仍在承诺
+  「留空则使用内置默认清单」——已按现行行为改注释，并补上防静默失效的 WARN（详 7.8.3）。
+- **新增守卫**：`nla-admin/src/test/java/cn/com/nla/web/config/SplitDatabaseRoutingContractTest.java`（332 行、3 项测试、cjk=911）
+  ——把 dev/prod 两份交付 yml 与 57 个 Mapper 的 `@DS` 关进 `mvn test`，详见 7.9.1。
+- **全量回归**：`mvn -B clean test` → **BUILD SUCCESS**，`Tests-run` 汇总 **127 行、失败行 0**，守卫 **3/3**，耗时 07:41
+  （日志 `.migration/m10-full-test.log`，入口 `m10-full-test.ps1`）。
+- **收口验收**：`audit-brand.ps1` → `scanning 2104 / scanned(text)=2096 hits=0 allowlisted=5 file-exceptions=1`（比第一轮多 1 个文件，即新测试）；
+  `verify-encoding.ps1` → `files=49 failures=0`（本轮新纳入 5 份：`application-dev.yml`、`application-prod.yml`、新测试、
+  `WarmFlowConfig.java`、`WorkflowProperties.java`）；`verify-doc-enc.ps1` → `files=6 failures=0`；`git diff --check` → `DIFF_CHECK_EXIT=0`。
+- **本轮改动量（`git diff --numstat`）**：`WarmFlowConfig.java` +12/-5（注释 + 1 处 WARN 分支）、`WorkflowProperties.java` +4/-3（纯注释）、
+  `application-{dev,prod}.yml` 各 +2/-1（纯注释）、`README.md` +8/-2（11 张口径 + `tables` 留空语义 + 分库路由约定），
+  本台账与第 10 章的登记改动另计；另新增测试文件 1 份（332 行，未跟踪）。
+- **仍未闭合**：真实启动冒烟（8.4 口径不变，本轮复查 8080 仍空闲）；启动后需核对的日志行之一是
+  「工作流分库已启用：**11** 张表限定到库 [nla_workflow]」（旧文案是 12 张，见 7.8.2 口径更正）。
+- **启动冒烟观测入口已备好**：`.migration/m10-observe-startup.ps1`（只读，不起进程、不写库）。已用历史日志自测通过，
+  实测旧日志（`nla-admin/logs/*`，时间戳 2026-10-08 12:51，即 `@Value` 版那次成功启动）的关键签名：
+  `DynamicRoutingDataSource - add a datasource named [master] success` +
+  `dynamic-datasource initial loaded [1] datasource, primary datasource named [master]` +
+  `WarmFlowConfig - 工作流分库已启用：12 张表限定到库 [nla_workflow]，插入拦截器链位置 1` +
+  `Started NlaApplication in 21.33 seconds`。
+  **改造后启动应当看到的变化**（这三行是本轮工作的运行期验收点）：
+  ① `add a datasource named [...]` 出现 **5 次**（master + 4 个分库）且 `initial loaded [5] datasource`；
+  ② 工作流行变为 **11 张表**；③ 无 `CannotFindDataSourceException`（`strict: true` 下键名错会直接报它）、
+  无 `Access denied`。若只看到 `[1] datasource`，说明跑的是旧 jar / 旧 profile 配置，不是代码问题。
+
+### 8.6 阶段 9 第三轮：分库口径贯穿部署产物（2026-10-14）
+
+- **起点：一个实测确认的交付缺口**（不是 8.2 那条连带项的全部）：`script/sql/` 原有 **10 份** MySQL 脚本
+  经 `Select-String '^\s*(use\s|create database|drop database)'` 实测 **0 命中** —— 即仓库内从来没有任何可执行
+  建库产物，“建 8 个库”只活在 README 的文字里；而 compose 的 `MYSQL_DATABASE` 只能建一个库，旧值
+  `nla-cloud` 还是个根本不在拓扑里的库名。本轮把这两处一起补实（详 7.9.2）。
+- **新增 `script/sql/nla_databases.sql`**（2534 字节 / 38 行 / cjk=228 / 纯 LF）：8 条
+  `CREATE DATABASE IF NOT EXISTS … utf8mb4 + utf8mb4_cs_0900_ai_ci`，只建库不建表不导种子。
+- **compose 走生成器改，不手工打补丁**（遵守 10.2）：`regen-support-cfg.ps1` 的 `$dbRules` 从 1 条扩到 3 条
+  （`nla-cloud`→`nla_system`、追加 init 挂载、`utf8mb4_general_ci`→`utf8mb4_cs_0900_ai_ci`），重跑后
+  命中 `1/1/1`、residue scan `(clean)`；`docker-compose.yml` 行数 177 → 178，**其余 5 份产物（nginx.conf + 4 个 `.run`）
+  重生后逐字节未变**（`git diff --stat` 仅 compose 一个文件）。新增的 `@@NL@@` 占位按源文件换行风格解析，
+  产物仍是纯 CRLF。本轮规则总数 9 → **11**（见 7.3）。
+- **守卫测试扩到 4 项**：`SplitDatabaseRoutingContractTest` 现 459 行 / cjk=1217 / 纯 LF，新增第 4 项
+  `schemaScriptCreatesExactlyTheRoutedDatabases`（建库脚本库名 ↔ 数据源 URL 库名 ↔ `nla.workflow.schema` ↔ `nla_job`/`nla_ai`，
+  双向子集），配套在 `nla-admin/pom.xml` 新增第二个 `<testResource>`（+12 行）把该 SQL 复制进 test-classes（详 7.9.1）。
+- **README 三处**：“1. 建库”从内联 SQL 改为指向脚本为唯一事实源 + 库名清单；导入表新增首行
+  `nla_databases.sql`（**先于任何表脚本执行**）；Docker 段的 ⚠️ 口径不一致警告换为 init 挂载的真实做法；
+  方言限制行补上建库脚本。
+- **全量回归**：`mvn -B clean test` → **BUILD SUCCESS，MVN_EXIT=0**，`Tests-run` 汇总 **127 行、失败行 0**，
+  守卫 **4/4**，耗时 07:46 min（日志 `.migration/m11-full-test.log`，入口 `m11-full-test.ps1`）。
+  ⚠️ **本行原文写「BUILD SUCCESS，49/49」，属误计**：第五轮 `probe-m13-reactor.ps1` 对同一份 `m11-full-test.log`
+  的 `SUCCESS [` 计数实测为 **50**（reactor 自批次 6.7 新增 `nla-common-pay` 起就是 50，上面 675 行自己已记「49→50」）；
+  此处只按日志修正自己那一个数字，其余结论未变（见 8.8）。
+- **收口验收**：`audit-brand.ps1` → `scanning 2105 / scanned(text)=2097 hits=0 allowlisted=5 file-exceptions=1`（+1 文件即新建库脚本）；
+  `verify-encoding.ps1` → **`files=52 failures=0`**（本轮 +3：`nla_databases.sql`、`nla-admin/pom.xml`，并补上长期盲点
+  `nla_message.sql`，cjk=732 完好）；`verify-doc-enc.ps1` → `files=6 failures=0`；`git diff --check` → `DIFF_CHECK_EXIT=0`。
+- **本轮改动量**：新增 2 份未跟踪文件（建库脚本、守卫测试于上轮也未跟踪）；工作区跟踪文件累计
+  **8 files / +183 / −46**（含尚未提交的第二轮改动：`WarmFlowConfig`/`WorkflowProperties`/两份 yml 注释与 README）。
+  本轮单独部分：`nla-admin/pom.xml` +12/−0、`docker-compose.yml` +3/−2、守卫测试 +131/−5、README 约 +17/−15。
+- **本轮未做（诚实登记）**：① 本机 **无 docker CLI**（`Get-Command docker` 返回 NO_DOCKER），因此 compose **没跑过
+  `docker compose config` 校验**，仅人工核对了新增行的缩进与同级列表项一致（改动只是“同缩进插一行列表项”与两个标量替换，风险低）；
+  有环境的部署验收时需补这一步。② 真实启动冒烟仍为本轮唯一运行期未闭合项（本轮复查 8080 仍空闲，观测点位见 8.5）。
+- **建库脚本本身的执行入口实测**（`probe-db-routes.ps1`，只回显掩码、不打印任何口令）：本机 `mysql` 与 `mysqldump`
+  **均不在 PATH**，所以我这边连用客户端跑 `nla_databases.sql` 的通道也没有；`.idea\dataSources.local.xml` 只有
+  `user-name`、无 password 标签；Nacos 配置 API 可达，但 `common-config-dev.yaml`（1298 字节）里**没有任何数据源键**
+  （只有 `redis-config-dev.yaml` 带 Redis 口令）—— **真实 MySQL 口令确实不在任何我可读的交付配置里**，
+  8.4 的「你启动，我来观测」口径不是推诿，是硬约束。已就位的 8 库（见 8.3）无需重跑本脚本。
+
+### 8.7 阶段 9 第四轮：SQL 生成器同步排序规则（事实来源修正，2026-10-14）
+
+本轮不新增交付物，只消除一个**已登记为风险却一直没修**的来源/产物漂移（7.7.2）：`regen-sql.ps1`
+是 14 份 SQL 的唯一事实来源，却没有任何排序规则规则，7.7 的 `utf8mb4_cs_0900_ai_ci` 决策只活在产物里 ——
+重生一次就静默回到 `utf8mb4_unicode_ci`，部署后跨库比较重现 `ERROR 1267`。
+
+- **改动全部在 `.migration/`**（该目录 gitignore，不入库）：`regen-sql.ps1` 转纯 ASCII + 加 `-Ref`/`-Dst`
+  + 规则 9 + `$residue` 项；新增 `probe-m12-cjk.ps1`（从字节取码点）、`probe-m12-sql-parity.ps1`
+  （逐文件 SHA256 比对）、回归入口 `m12-full-test.ps1`、一键收口 `m12-accept.ps1`。
+- **验证方式**：先 `-Dst .migration\tmp-sql` 干跑（不触工作树），9 条规则命中恰为各自 `min`、
+  residue `(clean)`，再与 `script/sql/` 逐字节哈希比对 → **`files=14 diffs=0`**。这条比对同时证明两件事：
+  ① 新规则产出的正是当前产物；② 纯 ASCII 转写没有把任何一条品牌规则改坏。临时目录已删除。
+- **仓库侧结果**：`script/sql/` 的 14 份**内容未变**（本轮 `git diff` 里没有 SQL 与代码），入库改动只有
+  本台账。`script/sql/` 实测 `utf8mb4_unicode_ci` = **0**、`utf8mb4_cs_0900_ai_ci` = **80**
+  （ai 22 + callcenter 41 + video 12 + message 4 + face 1）。
+- **意外发现并修掉的一个工具 bug**：`fix-ai-collation.ps1` 文件头自称幂等（“already-converted files
+  report 0”），实际 `$min = 21` 的断言会在已转好的文件上 `ABORT` + `exit 1` —— 即把它当二次校验跑
+  会得到一个假失败。已补 `n -eq 0` 分支（同时断言 `already == 22`，数目不对仍算失败），现在跑得到
+  `ALREADY-CONSISTENT: 0 to change, target 22` / `FIXAI_EXIT=0`。
+- **README 同步**：原本写的「⚠️ 重生 SQL 会把这 22 处改回旧值、重生后必须重跑事后补丁」已作废，
+  改为「该口径已是生成器规则 9，重生不会改回旧值；`fix-ai-collation.ps1` 仅作二次校验」。
+- **运行期口径不变**：真实启动冒烟仍是阶段 9 唯一未闭合的运行期项（8.2 第 1 条），本轮未触及。
+- **全量回归**：`mvn -B clean test` → **BUILD SUCCESS、`MVN_EXIT=0`**，`Tests-run` 汇总 **127 行、失败行 0**，
+  分库守卫 **4/4**（日志 `.migration/m12-full-test.log`，入口 `m12-full-test.ps1`）。
+  本轮没有任何 Java / 资源 / SQL 变化，跑全量是为了不把「应该无影响」当成结论。
+- **收口一键验收**（`m12-accept.ps1`，结果全部为实测）：
+  `probe-collation.ps1` → `files=3  editable=15  old-project=1`；逐行看这 15 处全在文档描述里
+  （`mapping.md` 12 + `README.md` 3 —— 台账与 README 必须提及旧值才能说明改了什么），
+  **`script/sql/` 下 DDL 命中 0**；`old-project=1` 是老 `tables_xxl_job.sql`，按口径不动。
+  `fix-ai-collation.ps1` → `ALREADY-CONSISTENT` / `exit 0`；重生干跑 → 9 条规则均为 min、
+  residue `(clean)`、`files=14 diffs=0`、临时目录已清除；`audit-brand.ps1` →
+  `scanning 2105 / scanned(text)=2097 hits=0 allowlisted=5 file-exceptions=1`（本轮**文件数未变**，
+  因为无新增入库文件）；`verify-encoding.ps1` → `files=52 failures=0`；`verify-doc-enc.ps1` → `files=6 failures=0`；
+  `git diff --check` → `DIFF_CHECK_EXIT=0`。
+- **本轮改动量**：入库只有 `README.md` 与 `docs/migration/mapping.md`（前者 +3/−2，即上面那条作废注释的
+  替换；后者新增 8.7 / 重写 7.7.2 / 更新 7.1 与第 10 章索引）；其余均在不入库的 `.migration/`。
+
+### 8.8 阶段 9 第五轮：台账陈旧登记重新定性（2026-10-14）
+
+本轮同样**无代码交付**，只处理一类债：从阶段 0 计划期一直没回收过的「待阶段 4/5/6」型条目。
+这些行把**旧工程侧规模**写得像**新侧待办**，谁按它开工就会去找一批根本不存在的调用点。
+全部改判以实测为准，不靠记忆也不靠上一轮汇报。
+
+- **取证方法**：`.migration/probe-m13-stale.ps1` 对 26 个符号用 `git grep -l -I -E` 分别统计
+  新侧（`nla-admin`/`nla-api`/`nla-common`/`nla-extend`/`nla-modules`）与旧侧（7 个 `spring-boot-*` + `sql/`）
+  的**文件数**，新侧命中按 `模块/子模块` 分组；命中非 0 的再逐个下钻到行区分性质
+  （`probe-m13-drill.ps1` 工具类归属、`probe-m13-date.ps1` import 与 `new Date(` 拆分、
+  `probe-m13-extra.ps1` 限流/OSS 使用点、`probe-m13-es.ps1` 旧 ES 真实调用面）。
+- **改判范围**：4.1 表 16 行全重写（列改为「旧侧实测 / 新侧实测」+ 状态按证据改判，加计划口径保留脚注）；
+  第 5 节 9 行改判（redis / mybatis / swagger / logs / minio / security-oauth / elasticsearch / cloud / sentinel）；
+  阶段进度表 **2.3** 由「🟡 基座就位、调用点改造未开始」改判为 **✅ 完成·决策收口**；
+  另按「批次记录不改正文、只加更正指针」的先例（4.5），给 **4.4 / 4.5 / 4.6 / 5.1.3 四段尾句**各补一条
+  「本句已被后续批次推翻」，因为它们仍用「仍待重写 / 仍待迁移」描述已落地的事（5.1.3 那句是本轮改后自查
+  `probe-m13-verify.ps1` 复扫时暴露出来的漏网行）。
+- **必须留在台账里的假阳性清单**（否则下次又被当成残留）：`RestResult` 新侧 4 处均为 JavaDoc 迁移说明
+  （真实类型是新写的 `RestResultEvent`）；`javax` 新侧 1 处是对 `javax.servlet` **缺席**的 `Class.forName` 断言；
+  `@Log4j2` 新侧 1 处是 `DynamicTask.java` 的 JavaDoc；`org.springframework.security` 新侧 1 处是
+  `nla-monitor-admin` 自带登录配置；`tenantId` 新侧 2 处是 `nla-common-social` 自有配置字段；
+  `@Autowired` 新侧 50 处 = video 移植 42 + demo 基线 3 + common 配置 4 + callcenter 测试 1，**业务主源码 0**；
+  `RedisUtils` 新侧 87 份在用（基线自有工具，不是旧 starter 残留）。
+- **本轮被实测推翻的两条登记**：
+  ① `starter-elasticsearch` 的「7 处调用需改造」——旧 starter **0 个 Java**（纯依赖聚合），
+  旧侧真实 ES 使用只有 **3 份文件**且全在 `spring-boot-bean`；原数字本轮无法重现，已按实测改写并
+  把「区划全文检索未承接」重新挂回 6.1.1。这是 10.1 第 7 条「不要把台账里的计划期数字当成现状」的实测实例。
+  ② 阶段 5 的「5.1～5.7 vs 5.4～5.10」被怀疑是编号错——实测**不是错**：阶段批次号（5.1~5.7）与
+  本文档章节号（§5.4~§5.10）双轨并行。已在进度行显式写明口径，避免下轮又把正确的东西「修掉」。
+- **本轮额外测出的一类过期：reactor 模块计数**（`probe-m13-reactor.ps1` + `probe-m13-reactor-claims.ps1`）：
+  `m12-full-test.log` 与 `m11-full-test.log` 的 `SUCCESS [` 计数均为 **50**，而 `README.md` 顶部状态块与
+  本台账 **8.6** 仍写「49/49」——reactor 自批次 6.7 新增 `nla-common-pay` 起就是 50（第 675 行自己就记了
+  「49→50」），属同一个文件内自相矛盾。已把**仍然「向前看」的三处**（README 状态块、8.6、进度表 4/5 行备注）
+  按实测改掉；而 4.x / 5.x / 6.x **各批次记录里的 43~49 属当时快照，一律不动**。
+  （口径提醒：50 含聚合 POM，且 `Select-String` 默认大小写不敏感，计 `SKIPPED` 会误匹 `Skipped:` 行，
+  本轮只采用 ` SUCCESS [` 这个不会误匹的计数。）
+- **`login-strategies.md` 同步**：42~45/49/61 行的「两种短信 key 未贯通」「`/resource/sms/code` 用固定
+  `config1`/4 位码」「小程序资料/手机号授权仍待迁」全部重写为已交付状态。依据是**磁盘代码**而非台账叙述：
+  `CaptchaController.smsCode` 现调 `smsLoginCodeService.send(phoneNumber)`（已无 `SmsFactory.getSmsBlend("config1")`，
+  发送前先校验账号存在且未停用），`SmsSendManager.dispatch` 按 `account.getId()` 取通道；
+  `SmsConstant.verificationCodeKey(type, mobile)`（`redis:verificationCode:{type}_{mobile}`，`TYPE_LOGIN=1`）
+  由发送侧 `cacheCode`、登录侧 `SmsAuthStrategy.validateSmsCode` 与防重发判定**三处共用**；
+  消费已按旧语义做成原子操作（`getBucket(key).compareAndSet(code, null)`，失败不签发会话）；
+  模板验证码值缺失时 `SecureRandom.nextInt(900000) + 100000` 生成 **6 位**，默认缓存 5 分钟。
+  同时把表格上方「本批不代表短信发送链路已接入」改成只限定「真实供应商发送」，并给 5.5 节那句
+  「资料/手机号/wx_mini_web 尚未等价实现」补上「本句已被后续批次推翻」的更正指针（先例见 4.5）。
+- **README 同步**（四处）：迁移进度表阶段 5 行补上两份**已存在但从未被链接**的交付文档
+  （`phone-auth.md` 阶段 5.6、`profile-auth.md` 阶段 5.7）并把状态改为「🟡 后端编码已收口」；顶部状态块的
+  「face/video/callcenter 等仍待迁移、支付暂缓」按阶段 6 已收口重写，49/49 改 50/50；模块树里三个业务模块的
+  「（未接入 admin）」按实测改掉——`nla-admin/pom.xml` 已依赖 `nla-face`/`nla-video`/`nla-callcenter`，
+  且 `cn.com.nla.NlaApplication` 的默认组件扫描覆盖 `cn.com.nla.*`（`FaceDetectorController` 等在其中）；
+  进度表阶段 4 行补「已接入 admin」。
+- **本轮未做（诚实登记）**：① 4.1 与第 5 节表只**重新定性**，不删行 —— 旧侧规模对阶段 9 物理清理（9.2）
+  仍是参照；② 第 1~3 节、第 6 节的历史叙述（含 8.1 行的 `scanned=993` 旧基线、各批次记录里的
+  43~49 模块计数）属当时快照，本轮只修正仍然「向前看」的那几行 + 按先例加更正指针，
+  不把历史记录改写成今天的样子；③ 真实启动冒烟仍是阶段 9 唯一未闭合的运行期项（8.2 第 1 条），本轮未触及。
+- **本轮顺带修掉两个工具级 bug**（均在 `.migration/`，不入库）：
+  ① `verify-doc-enc.ps1` 原本写死 6 份文档，**本轮编辑的 `login-strategies.md` 从不在守卫名单里**（与 8.6
+  那条「`nla_message.sql` 从未被守卫」同构的盲点）——已改为动态枚举 `docs\migration\*.md`，
+  守卫范围 6 → **13 份**（全绿）；② `probe-script-ledger.ps1` 的旧正则要求行首紧邻 `|`，
+  导致「一行列多份脚本」只统计第一个名字，产生假阳性的「未登记」报告——已放宽为
+  「正文任意位置出现的反引号脚本名（即名为某.ps1 的反引号引用）即算登记」。
+  ⚠️ **放宽带来的新型假条目（本轮实测踩到）**：正则不区分「真文件名」与「文档里写的占位名」，
+  我那句用反引号包住的占位写法直接被匹配成一条名为 x.ps1 的「已登记但丢失」。**台账描述不要拿反引号包占位文件名，
+  连单独的 .ps1 扩展名也不能包**（点号在字符类里，会被匹配成名为 .ps1 的假条目）；
+  已改措辞并重跑对账（结果见本节开头 blockquote）。
+  仍未登记的均为历史批次一次性 dump/build 入口，唯一「登记但真正丢失」仍为 `probe-sql-brand.ps1`。
+- **收口验收**（以下均为**本轮实测**，一键入口 `m12-accept.ps1` + `verify-doc-enc.ps1` +
+  `m12-full-test.ps1`；本轮无新增入库文件，因此审计基线不变）：
+  `probe-collation.ps1` → `editable=15 / old-project=1 / files=3`（文档描述里的提及，`script/sql/` DDL 命中 0）；
+  `fix-ai-collation.ps1` → `ALREADY-CONSISTENT` / `FIXAI_EXIT=0`；`regen-sql.ps1` 干跑 → 9 条规则均为 min、
+  residue `(clean)`、`files=14 diffs=0`、`scratch-removed=True`；`audit-brand.ps1` →
+  `scanning 2105 / scanned(text)=2097 hits=0 allowlisted=5 file-exceptions=1`（`AUDIT_EXIT=0`）；
+  `verify-encoding.ps1` → `files=52 failures=0`；`verify-doc-enc.ps1` → `files=13 failures=0`；
+  `git diff --check` → `DIFF_CHECK_EXIT=0`（只有 autocrlf 提示，无空白错误）；
+  全量 `mvn -B clean test` → `MVN_EXIT=0`、`BUILD SUCCESS lines=1`、`BUILD FAILURE lines=0`、
+  `Tests-run` 汇总 **127 行、失败行 0**、守卫 `SplitDatabaseRoutingContractTest` **4/4**
+  （日志 `.migration/m12-full-test.log`），同一日志 ` SUCCESS [` 计数 **50** —— 即上面那条
+  「reactor 是 50 不是 49」在本轮新跑上再次成立。
+  下面这几行写完后又改了台账，因此**全量回归与文档守卫在本轮末尾再跑一遍**，结果与上面完全一致
+  （`MVN_EXIT=0`、`BUILD SUCCESS lines=1`、`Tests-run` 127 行无失败、守卫 4/4、同一日志 ` SUCCESS [`=50，
+  `verify-doc-enc.ps1` 13/0）；本轮只改 markdown 与不入库的 `.ps1`，无 Java/SQL/配置变更。
+  脚本对账同步重跑为 **已登记 88 / 在盘 109**（新增两份本轮取证脚本，占位名假条目已清）。
+  `probe-m13-verify.ps1` 复查：「六条」标题类陈旧句式已清零；旧审计基线 `scanning 2103 / scanned(text)=2095` 一词**并未真正消失**，
+  改后仍命中的两处是 **8.4 批次记录里的 `scanned(text)=2095`（当时实测快照，按口径不动）** 与本轮 8.8 这条自引用说明；
+  7.6 的现值行已改为 `scanning 2105 / scanned(text)=2097`。同样，仍写着「仍待 / 待重写」的段落只剩**已加更正指针的批次记录**
+  （4.4 / 4.5 / 4.6 / 5.1.3），批次原文按口径保留不改写。
+- **本轮改动量**：入库只有 `README.md`、`docs/migration/mapping.md` 与 `docs/migration/login-strategies.md`；
+  取证脚本与两份工具修正（`verify-doc-enc.ps1`、`probe-script-ledger.ps1`）全部在不入库的 `.migration/`。
+  本轮**没动任何 Java / SQL / 配置**，所以全量回归预期无影响——仍跑了以免把「应该无影响」当成结论。
+
 ---
 
 ## 9. 旧代码清理
@@ -1841,23 +2150,33 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 
 `.migration/` 目录（未入库或按需入库），全部为 PowerShell 5.1 脚本。
 
+> ⚠️ **本节索引并不穷举**。`probe-script-ledger.ps1` 实测（阶段 9 第五轮收口时重跑）：**已登记 88 / 在盘 109**，
+> 差的那一批是历史批次的一次性 dump/build 入口（如 `dump-*.ps1`、`fs-*.ps1`、`build-one.ps1`、
+> `migrate-freeswitch-*.ps1`、`probe-m7-answer.ps1`），它们的结论已写进正文，脚本本身可再生、不登记；
+> 登记但已丢失仍为 `probe-sql-brand.ps1` 一份。本轮同时修掉了该脚本的一个**导致假阳性的 bug**：
+> 旧正则要求行首紧邻 `|`，所以「一行列多份脚本」的条目只算了第一个名字（曾把
+> `probe-m13-docs/date/es/extra/stage5` 误报为未登记）；现改为「正文任意位置出现的反引号脚本名即算登记」。
+> ⚠️ 放宽后的新坑：文档里用反引号包的**占位名**会被当成真脚本（本轮曾因此冒出一条 x.ps1 的假「丢失」，
+> 而单独的 .ps1 扩展名包上反引号也会匹配成假条目），描述匹配规则时一律不加反引号（见 8.8）。
+> **不要把「本节没有登记」当成「工具不存在/结论不可重现」**；需要重现某项判定时先跑对账脚本再下结论。
+
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
 | `build.ps1` | 唯一编译入口。设 `JAVA_HOME` + 全路径 mvn，日志落 `.migration/build.log` | ✅ |
 | `test-workflow.ps1` | 跑 `WarmFlowConfigTest` 分库契约测试（`-pl nla-modules/nla-workflow`，无 `-am`，需上游模块已 install），日志落 `.migration/test-workflow.log` | ✅ |
 | `add-bom.ps1` | 给含 CJK 字面量的脚本补 UTF-8 BOM。**PowerShell 5.1 会按 GBK 读无 BOM 的 .ps1** | ✅ |
 | `audit-brand.ps1` | 全仓品牌残留审计，带白名单与命中计数 | ✅ |
-| `regen-sql.ps1` | 14 份 SQL 的唯一事实来源（上游 → 替换链 → 8 条规则 → 校验 → 写盘） | ✅ |
-| `regen-support-cfg.ps1` | docker-compose / nginx.conf / 4 个 `.run` 的唯一事实来源 | ✅ |
+| `regen-sql.ps1` | 14 份 SQL 的唯一事实来源（上游 → 替换链 → **9 条规则** → 校验 → 写盘）。阶段 9 第四轮起：纯 ASCII（8896 字节 / `BOM=False`）且新增 `-Ref` / `-Dst`，可先干跑到临时目录用 `probe-m12-sql-parity.ps1` 比对 | ✅ |
+| `regen-support-cfg.ps1` | docker-compose / nginx.conf / 4 个 `.run` 的唯一事实来源（阶段 9 第三轮后共 **11 条规则**：4 镜像 tag + 3 compose 分库规则 + 4 `.run` tag；替换文本里的 `@@NL@@` 按源文件换行风格解析）| ✅ |
 | `probe-yml-diff.ps1` | `nla-admin` 9 份资源与上游的规范化逐行差异 | ✅ |
 | `probe-sql-diff.ps1` | 14 对 SQL 的差异 | ✅ |
-| `probe-sql-brand.ps1` | 上游 SQL 的品牌行行号定位 | — ⚠️ **已丢失**，需时从 `regen-sql.ps1` 的 8 条规则反推 |
+| `probe-sql-brand.ps1` | 上游 SQL 的品牌行行号定位 | — ⚠️ **已丢失**，需时从 `regen-sql.ps1` 的 9 条规则反推 |
 | `probe-cfg-diff.ps1` | docker-compose / nginx 的差异 | ✅ |
 | `probe-support-parity.ps1` | 支撑文件（`.run` / `.gitee` / `.claude`）的存在性对齐 | ✅ |
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对 44 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`，批次 6.6 第一轮再纳入 `nla_callcenter.sql` + `nla-callcenter` README + `AgentMapper.xml` + `FsRuntimeConfigServiceImpl`/`FsXmlController` + `CallcenterDataContractTest`，第二轮再纳入 `AgentNamespace` + `AgentInPhoneNotificationEvent` + `SendAgentMessageImpl` + `AgentSocketContractTest`，批次 6.7 再纳入 `nla-common-pay/pom.xml` + 移植 `alipay/AliPayApi.java` + `PaySdkContractTest.java`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 **52 份**关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`，批次 6.6 第一轮再纳入 `nla_callcenter.sql` + `nla-callcenter` README + `AgentMapper.xml` + `FsRuntimeConfigServiceImpl`/`FsXmlController` + `CallcenterDataContractTest`，第二轮再纳入 `AgentNamespace` + `AgentInPhoneNotificationEvent` + `SendAgentMessageImpl` + `AgentSocketContractTest`，批次 6.7 再纳入 `nla-common-pay/pom.xml` + 移植 `alipay/AliPayApi.java` + `PaySdkContractTest.java`，阶段 9 第二轮再纳入 `application-dev.yml` + `application-prod.yml` + `SplitDatabaseRoutingContractTest.java` + `WarmFlowConfig.java` + `WorkflowProperties.java`，阶段 9 第三轮再纳入 `nla_message.sql`（之前是一个真实盲点：短信交付 SQL 从未被守卫覆盖）+ `nla_databases.sql` + `nla-admin/pom.xml`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `verify-tracked.ps1` | 跟踪完整性校验：对比 `git ls-files` 与新目录的磁盘实际文件，分别列出"在盘但未跟踪"与"已跟踪但已从磁盘消失"（后者用于发现误删）。已内置 `core.quotepath=false` 与 `[Console]::OutputEncoding = UTF8` 两个必要修正，否则 CJK 路径会产生假阳性 | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 | `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
@@ -1866,7 +2185,7 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `probe-skill-brand.ps1` | 绕开审计的行内/目录白名单，对 ai-coding skill 目录做**原始**品牌暴露量化，按文件与模式列出命中（改名前的调查工具，见 7.6.1） | ✅ |
 | `rename-ai-skill.ps1` | ai-coding skill 改名与修复的唯一事实来源：目录 `ruoyi-plus-ai-coding` → `nla-plus-ai-coding`，10 条带 min 断言的替换规则，保护 2 条真实上游链接（见 7.6.1） | ✅ |
 | `probe-collation.ps1` | 全仓扫描 `utf8mb4_unicode_ci`，按文件列出命中数并**区分可改文件与老项目只读文件**（老项目命中必须保持不动，见 7.7） | ✅ |
-| `fix-ai-collation.ps1` | 把 `nla_ai.sql` 的 22 处显式 `COLLATE` 统一为 `utf8mb4_cs_0900_ai_ci`；带 min 断言与残留 0 校验，保留原 BOM 状态，`-Apply` 才写盘（见 7.7）。⚠️ `regen-sql.ps1` 重生后必须重跑 | ✅ |
+| `fix-ai-collation.ps1` | 把 `nla_ai.sql` 的 22 处显式 `COLLATE` 统一为 `utf8mb4_cs_0900_ai_ci`；带 min 断言与残留 0 校验，保留原 BOM 状态，`-Apply` 才写盘（见 7.7）。阶段 9 第四轮起该口径已内建为 `regen-sql.ps1` 规则 9，**本脚本降为二次校验**（已一致时输出 `ALREADY-CONSISTENT` 并 `exit 0`） | ✅ |
 | `build-face-biz.ps1` | 批次 6.4 编译入口：`-Targets <模块\|all>` 走 `-pl ... -am -DskipTests compile`，设 `JAVA_HOME` + 全路径 mvn，日志落 `.migration/build-face-biz.log` | ✅ |
 | `test-face-biz.ps1` | 批次 6.4 单模块测试入口：`-pl nla-modules/nla-face -am test` + `-Dtest` 过滤器（默认 `*Face*,*Person*,*Detector*`），日志落 `.migration/test-face-biz.log` | ✅ |
 | `test-face-all.ps1` | 全量回归入口：`mvn -o -B clean test`（`-Goals` 可覆盖，默认含 `clean`，见 10.1 第 5 条），日志落 `.migration/test-face-all.log` | ✅ |
@@ -1895,9 +2214,30 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `m9-smoke-package.ps1` | 阶段 9 启动冒烟第一步：`mvn -B -DskipTests package -pl nla-admin -am`，日志落 `.migration/m9-smoke-package.log` | ✅ |
 | `m9-smoke-run.ps1` | 真启冒烟：`java -jar nla-admin.jar --spring.profiles.active=dev`，日志落 `.migration/m9-smoke-run.log`，回显启动/异常/退出码行（口令错误的实测见 8.4）| ✅ |
 | `m9-ds-test.ps1` | `@DS` 改造后的全 reactor 回归入口：`mvn -B clean test`，只汇总失败行与 BUILD SUCCESS/FAILURE 计数（当前 GREEN，见 7.9）| ✅ |
-| `verify-doc-enc.ps1` | 文档编码守卫：对 README + 本台账 + 4 份分库模块 README 做严格 UTF-8 解码与字节级往返比对，并报告 BOM/LF/CRLF 计数（区别于 `verify-encoding.ps1` 的 44 份代码类交付物）| ✅ |
+| `verify-doc-enc.ps1` | 文档编码守卫：对 README + 4 份分库模块 README 做严格 UTF-8 解码与字节级往返比对，并报告 BOM/LF/CRLF 计数（区别于 `verify-encoding.ps1` 的代码类交付物）。阶段 9 第五轮起 `docs\migration\*.md` 改为**动态枚举**而不是写文件名 —— 本轮编辑的 `login-strategies.md` 从未被守卫过（硬编码清单就是盲点），现共 **13 份** | ✅ |
+| `probe-m13-reactor.ps1` / `probe-m13-reactor-claims.ps1` | reactor 计数对账：前者从 `m11/m12-full-test.log` 数 ` SUCCESS [` 行（实测 **50**）；后者列出三份文档里所有同时提到模块/编译/BUILD SUCCESS 的 `NN/NN` 声明及行号，用于区分「当时快照」与「仍向前看的过期数字」（见 8.8）| ✅ |
+| `probe-m13-verify.ps1` | 改后自查：用 `\uXXXX` 构造的中文模式在三份文档里重扫「待阶段 4/5/6」「调用点待改」「仍待迁」「旧基线 2103/2095」等应清零的陈旧句式，并暴露漏改行 | ✅ |
+| `m10-splitdb-guard-test.ps1` | 分库路由守卫测试入口：先从 `~/.m2/settings.xml` 解析真实 localRepository 并用 `javap` 回显旧 jar 时间戳，再跑 `mvn -B test -pl nla-admin -am -o -Dtest=SplitDatabaseRoutingContractTest -Dsurefire.failIfNoSpecifiedTests=false`（**必须带 `-am`**，见 7.9.1 / 10.1 第 6 条），日志落 `.migration/m10-splitdb-guard-test.log` | ✅ |
+| `m10-full-test.ps1` | 阶段 9 第二轮全量回归入口：`mvn -B clean test`，只汇总失败行与 BUILD SUCCESS/FAILURE 计数（区别于 `m9-ds-test.ps1`：日志落 `.migration/m10-full-test.log`，保留本轮可对照）| ✅ |
+| `probe-local-repo-jar.ps1` | 定位真本地仓库（读用户 `~/.m2/settings.xml` 的 `<localRepository>`，而不是 conf 默认值）并 `javap` 反编译已安装的 `nla-message-*.jar`，确认其 Mapper 是否带 `@DS`——用于区分“代码错”与“单模块构建用了过期 jar”（7.9.1）| ✅ |
+| `m10-accept.ps1` | 阶段 9 第二轮收口一键入口：依次跑 `probe-m10-log.ps1`（回归日志汇总）+ `audit-brand.ps1` + `verify-encoding.ps1` + `verify-doc-enc.ps1` + `git diff --check` + `git status --short`（结果登记于 8.5）| ✅ |
+| `probe-m10-log.ps1` | 从 `.migration/m10-full-test.log` 汇总失败行、BUILD SUCCESS/FAILURE 计数、Tests-run 行数与守卫测试行（纯 ASCII，避开 Grep 对 `.migration/` 的假阴性）| ✅ |
+| `probe-m10-size.ps1` | 本轮改动量盘点：`git diff --numstat` + 新测试文件的字节/行/CJK 计数（写 8.5 的数字依据）| ✅ |
+| `probe-mapper-jar.ps1`、`probe-local-repo.ps1` | 7.9.1 旧 jar 假设的第一轮探测（分别确认 reactor `target/classes` 带 `@DS`、以及 localRepository 真实位置）；已被 `probe-local-repo-jar.ps1` 合并覆盖，保留作可重现记录 | ✅ |
+| `m10-observe-startup.ps1` | 启动冒烟**只读**观测器（配合「你启动，我来观测」口径）：回显 java 进程数与 8080 端口状态、`nla-admin/logs/*.log` 时间戳，并按数据源/工作流分库/启动完成/失败签名抽取关键行（用 `FileShare.ReadWrite` 读，应用运行中不会被日志句柄占用坑到）——期望签名见 8.5 | ✅ |
+| `m11-full-test.ps1` | 阶段 9 第三轮全量回归入口：与 `m10-full-test.ps1` 同构（`mvn -B clean test`），日志落 `.migration/m11-full-test.log`，汇总守卫测试行（结果登记于 8.6）| ✅ |
+| `probe-m11-size.ps1` | 阶段 9 第三轮改动量盘点：新文件（守卫测试 / 建库脚本）的字节/行/CRLF/CJK 计数 + `git diff --numstat` + 未跟踪清单 + `--shortstat`（写 8.6 的数字依据；用脚本而非内联命令，因为反引号会被 Bash 工具剥掉，见 10.1 教训 1）| ✅ |
+| `probe-db-routes.ps1` | 执行建库 SQL 的可用通道探测（dbx 会拦高危 SQL，`CREATE DATABASE` 需另找入口）：`mysql`/`mysqldump` 是否在 PATH、本地仓的 connector jar、Nacos 配置 API 可达性、`.idea/dataSources*.xml` 是否存口令；**只回显口令的掩码与长度，不打印明文** | ✅ |
+| `probe-m9-open.ps1` | 未推进项盘点：把台账里的阶段进度行（非 🟢）与「剩余验收 / 尚未 / 缺失 / ⚠️」登记项按行号列出（emoji 与中文模式一律用码点构造，保持脚本纯 ASCII） | ✅ |
+| `probe-m12-cjk.ps1` | 从目标脚本字节里提取 CJK 字段的 `\uXXXX` 码点并附行号，同时回显字节数 / BOM / CRLF 计数 —— 把脚本转纯 ASCII 时不靠记忆拼转义 | ✅ |
+| `probe-m12-sql-parity.ps1` | 把一次干跑产物（默认 `.migration\tmp-sql`）与 `script/sql/` 的 14 份逐文件 SHA256 比对，输出 `MATCH`/`DIFF` 与 `diffs=` 总数 | ✅ |
+| `m12-full-test.ps1` | 阶段 9 第四轮全量回归入口：与 `m11-full-test.ps1` 同构（`mvn -B clean test`），日志落 `.migration/m12-full-test.log`（结果登记于 8.7）| ✅ |
+| `m12-accept.ps1` | 本轮收口一键入口：依次跑 `probe-collation.ps1`（新侧/老侧口径）+ SQL 干跑与哈希比对 + `audit-brand.ps1` + `verify-encoding.ps1` + `verify-doc-enc.ps1` + `git diff --check` + `git status --short` | ✅ |
+| `probe-m13-stale.ps1` | 台账陈旧登记取证（见 8.8）：26 个改造符号用 `git grep -l -I -E` 做新侧/旧侧**文件数**对照，并把新侧命中按 `模块/子模块` 分组 | ✅ |
+| `probe-m13-drill.ps1` / `probe-m13-date.ps1` / `probe-m13-extra.ps1` / `probe-m13-es.ps1` | 下钻复核（区分「JavaDoc 提及」与「真实使用」）：`RedisUtils` 归属两侧、`java.util.Date` import 与 `new Date(` 拆分、`@RateLimiter`/OSS 使用点、旧 ES 真实调用面 | ✅ |
+| `probe-m13-anchor.ps1` / `probe-m13-docs.ps1` / `probe-m13-stage5.ps1` / `probe-m13-head6.ps1` / `probe-m13-ledger-mentions.ps1` | 文档定位五件套：按正则在 mapping/README/login-strategies 里找待改行的**真实行号**（用户会在会话间改这些文件，硬编行号不可信）、`docs/migration` 清单与行数、阶段 5 批次号 ↔ 章节号对照、第 6 章标题与 facesdk/Controller 命中定位（用于确认批次 6.4 → §6.7 的对照，见 8.8）、旧对账数字（84/107、63/91）是否仍被引用 | ✅ |
 
-### 10.1 脚本编写的五条踩坑教训
+### 10.1 脚本编写的七条踩坑教训
 
 1. **不要用 Bash 工具跑内联 PowerShell** —— `$`、引号、反引号会被剥离，`&&` 不被 5.1 支持。
    一切含这些字符的逻辑写入 `.ps1`，用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 执行。
@@ -1909,8 +2249,14 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
    **永久解法：把中文字面量改写为正则 `\uXXXX` 转义**（`audit-brand.ps1` 的 `若依`
    → `\u82e5\u4f9d`，`verify-encoding.ps1` 的 9 个乱码特征字同理），用
    `probe-codepoints.ps1` 从现有文件取码点、`probe-bom.ps1` 验收 `CJK=False`。
-   ⚠️ **遗留风险**：`regen-sql.ps1`（7610 字节，`BOM=True`）仍含中文字面量、仍靠 BOM。
-   它是 14 份 SQL 的唯一事实来源，下次需要重生 SQL 前必须先把它改成纯 ASCII。
+   ✅ **原遗留风险已消除（阶段 9 第四轮）**：`regen-sql.ps1` 曾含中文字面量、靠 BOM 才能被 5.1
+   正确解析（旧值 7610 字节 / `BOM=True`），是**仍在使用的生成器**（`regen-sql` / `regen-support-cfg` /
+   `audit-brand` / `verify-encoding` / `add-ds-annotation`）里最后一份非 ASCII 的；现已全部改为
+   `\uXXXX`（替换串经 `[regex]::Unescape` 还原），实测 `BOM=False`、非 ASCII 字节 0。
+   ⚠️ **不要把这句话读成「全目录已无 CJK 脚本」**：`probe-bom.ps1` 实测仍有 3 份一次性 `.ps1` 是
+   `BOM=False + CJK=True`（`fs-strip-component.ps1`、`fs-strip-component-fix5.ps1`、`probe-m7-answer2.ps1`），
+   它们已完成使命、不再重跑；**若要重跑，先转纯 ASCII**，否则 PowerShell 5.1 会按 GBK 解析而弄坏字面量。
+   新的 CJK 字面量若需还原成人能读的中文，走 `probe-m12-cjk.ps1` 取码点。
 3. **函数定义必须在调用之前** —— PowerShell 不做前向解析，否则运行时报未识别。
 4. **不要依赖 `.migration/` 内脚本的持久性** —— 该目录已 gitignore，已确认丢失过：
    `probe-yml-diff.ps1`（被迫重写）与 `probe-sql-brand.ps1`（至今缺失）；
@@ -1922,6 +2268,19 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
    `WarmFlowConfigTest` 5 项失败，而该测试源早已被提交 `5317dd8` 删除（`Test-Path=False`），
    属于构建卫生问题而非真实回归。另：向 `& $mvn` 传多个 goal 时参数必须声明为
    `[string[]]$Goals`，用单个字符串会让 `clean test` 被当成一个 goal 而失败。
+6. **单模块 `-pl`（无 `-am`）会用本地仓库里的过期模块 jar** —— 阶段 9 第二轮实测：
+   `mvn -B test -pl nla-admin` 跑分库守卫时报 `MobileMessageMapper 缺少 @DS`，而源码与
+   `nla-modules/nla-message/target/classes` 的字节码里 `@DS(value="nla_message")` 确实在位；
+   本地仓库（真路径要从 `~/.m2/settings.xml` 的 `<localRepository>` 读，conf 默认值不是生效值）
+   里那份 `nla-message-1.0.0.jar` 时间是 2026-10-12 11:00，早于 `@DS` 提交 `dbcf502`。
+   **凡是跨模块读类路径的契约测试，必须 `-am` 或全量 reactor 跑**，否则得到的是假阳性失败。
+7. **不要把台账里的计划期数字当成现状** —— 台账一旦写下「影响 N 个文件 / 待阶段 X」，后续按模块
+   重写就会**绕过**这些条目，于是数字一直在但指向的东西已经不存在。阶段 9 第五轮实测：
+   4.1 表 16 行里 14 行仍写「待阶段 4/5/6」，而这些旧符号新侧命中多为 **0**；
+   `starter-elasticsearch` 登记的「7 处调用」在旧侧只能测到 3 份文件（且旧 starter 本身 0 个 Java）。
+   **推论**：任何“还剩多少待改”的结论都必须现取（`probe-m13-stale.ps1` 这类双向计数脚本），
+   并且区分**旧侧规模**与**新侧待办**；新侧命中还要区分「JavaDoc 提及」与「真实使用」
+   （`git grep -E` 的词边界与 GNU grep 不一致，精确复核用 `-w`）。
 
 附带四条工具级陷阱：
 
@@ -1940,7 +2299,7 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   `[IO.File]::ReadAllText` 按 LF 切得 802 段（含末尾空段），凭空少了 146 行。
   **读数、比对、写回一律显式指定 UTF-8**（`Get-Content -Encoding UTF8` 或
   `[IO.File]::ReadAllText/ReadAllBytes`）；`Set-Content` 默认编码同样会损坏中文。
-  已用 `verify-encoding.ps1` 对 24 份关键交付物做字节级往返比对，全部 `roundtrip=True`、
+  已用 `verify-encoding.ps1` 对全部关键交付物（现 49 份）做字节级往返比对，全部 `roundtrip=True`、
   无乱码特征字，确认迁移过程未发生编码损坏。
 
 ### 10.2 "从上游重建"范式
