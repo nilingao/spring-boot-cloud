@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.com.nla</groupId>
+        <artifactId>nla-common</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>nla-common-pay</artifactId>
+
+    <description>
+        nla-common-pay 支付技术封装(IJPay 官方渠道模块 + 移植旧 fork 的 QQ钱包/京东/PayPal 三渠道),项目自建
+    </description>
+
+    <dependencies>
+        <!-- 核心模块(hutool-core/http/extra 与 lombok 传递) -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-common-core</artifactId>
+        </dependency>
+
+        <!-- hutool 加密/JSON(jd 渠道签名与 paypal 报文解析,core 未传递) -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-crypto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-json</artifactId>
+        </dependency>
+
+        <!-- IJPay 核心(排除传递的 bcprov-jdk15on,统一换 jdk18on 维护线;servlet-api 为 provided 不传递) -->
+        <dependency>
+            <groupId>com.github.javen205</groupId>
+            <artifactId>IJPay-Core</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- IJPay 微信渠道(官方 artifact,替代旧 starter-pay-wxpay fork 89 文件) -->
+        <dependency>
+            <groupId>com.github.javen205</groupId>
+            <artifactId>IJPay-WxPay</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- IJPay 云闪付渠道(官方 artifact,替代旧 starter-pay-unionpay fork) -->
+        <dependency>
+            <groupId>com.github.javen205</groupId>
+            <artifactId>IJPay-UnionPay</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- IJPay X渠道(官方 artifact,替代旧 starter-pay-xpay fork) -->
+        <dependency>
+            <groupId>com.github.javen205</groupId>
+            <artifactId>IJPay-XPay</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- 支付宝官方 SDK(渠道层移植旧 fork 5 文件:hutool-json 实现,不带 fastjson/Servlet 依赖) -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+        </dependency>
+
+        <!-- bouncycastle jdk18on 维护线(IJPay 签名/加密替代 jdk15on) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

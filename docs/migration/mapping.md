@@ -508,9 +508,9 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 | `starter-rabbitmq`(2) | 自建 `nla-common-mq` | Spring AMQP4 / Jackson3；配置与客户端重写，见 5.1.5 | ✅ 已建·编译/契约测试 GREEN |
 | `starter-freeswitch`(199) | 自建 `nla-common-freeswitch` | 见 5.1.1 | ✅ 已建·编译 GREEN |
 | `starter-video`(201) | 自建 `nla-common-video` | 见 5.1.2 | ✅ 已建·编译/契约测试 GREEN |
-| `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1 | 待阶段 3 |
+| ✅ `starter-pay`(163, 8 渠道) | 自建 `nla-common-pay` | 见 5.1.6 | ✅ 已建·编译/契约测试 GREEN |
 
-### 5.1 阶段 3 的 6 个自建封装（5 已建 / 1 待建）
+### 5.1 阶段 3 的 6 个自建封装（6 已建）
 
 坐标 `cn.com.nla:nla-common-{tech}`，全部需登记进 `nla-common-bom`。
 每个遵循 `basic`（注解/枚举/POJO，无 Spring 依赖）+ `core`（配置/AOP/实现）二段式。
@@ -520,7 +520,7 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 |---|---|---|
 | ✅ `nla-common-freeswitch` | `starter-freeswitch`(199) | `freeswitch-esl 1.6.7.RELEASE` **尖峰已验：核心库 JDK21 GO（Java8 字节码、0 处 `javax/*`）；starter 是 Boot2/`spring.factories` 产物，Boot4 不自动加载 → 自建 `@AutoConfiguration` 替代；netty 4.1→4.2 需实测；见 5.2**；铁律沿用：管理接口禁止执行 FreeSWITCH CLI / 系统命令 / 文件删除 |
 | ✅ `nla-common-video` | `starter-video`(201) | **已交付，见 5.1.2**；JDK21 本机 SIP UDP 收包、TCP/UDP 端口释放与模拟 ZLM HTTP 已验；真实设备注册/心跳/点播、ZLM RTP 与 ONVIF 联调延后 |
-| `nla-common-pay` | `starter-pay`(163) | **尖峰已验 JDK21 GO（有条件），见 5.3.2**：实测外部 SDK 只有 `IJPay-Core:2.9.11`（Java8）+ `alipay-sdk-java:4.39.42.ALL`（Java6，0 处 sun/risky javax），**非旧估的 alipay-easysdk/yungouos/binarywang/weixin-popular**（那些不在 POM）；唯一迁移面 `javax.servlet`→`jakarta`（封装层不走 IJPay servlet helper 即绕过）；`bcprov-jdk15on`建议换 `jdk18on`；**金额字段约定项目内缺失**，不臆造精度方案；pay「保持暂未开发」优先级最低 |
+| ✅ `nla-common-pay` | `starter-pay`(163) | **已交付，见 5.1.6**：官方 IJPay 2.9.11（Core/WxPay/UnionPay/XPay）+ 移植 fork 独有渠道 54 文件（alipay/qq/jd/paypal/base）；尖峰结论见 5.3.2（交付时两处修正亦记录于此）；`javax.servlet` 绕过、bcprov `jdk18on` 换代、fastjson 0 泄漏均实测 GREEN；真实下单/回调联调随未来 pay 业务开发 |
 | ✅ `nla-common-facesdk` | `spring-boot-face/.../com/seeta/sdk` + pool/proxy | **已交付，见 5.1.3**：29 SDK 文件、135 个实际 native 方法签名保持；16 组对象池/代理；Windows amd64 CPU / JDK21 真实 JNI 创建与释放已验。Linux/GPU 与真实识别效果待环境；基础镜像 `seetaface_face_work` 重建留部署阶段 |
 | ✅ `nla-common-socketio` | `starter-socket-io` + `starter-netty` | **已交付，见 5.1.4**：Boot4 / JDK21 / Netty4.2 下 21 项测试通过，含真实 WebSocket/Polling/TCP；真实 Redis 多节点和代理联调延后 |
 | ✅ `nla-common-mq` | `starter-rabbitmq` + `MqConstant` | **已交付，见 5.1.5**：Boot4 / AMQP4 / Jackson3，20 项测试通过；真实 RabbitMQ、delay 插件与 confirm/return 联调延后 |
@@ -637,7 +637,28 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 - `dependency:tree -Dscope=compile` → **BUILD SUCCESS**；Boot 4.1.1 / Spring 7.0.9、Spring AMQP 4.1.1、RabbitMQ client 5.30.0、Jackson3 3.1.5、Netty 4.2.17.Final。无旧工程 starter/cloud、Boot2、Redis、Spring Web 依赖；AMQP starter 仅用于本模块测试。日志 `.migration/deps-mq.log`。
 - 文件/编码审计：6 个旧 broker 常量逐项一致；13 份交付文本严格 UTF-8 往返通过，basic 无 Spring import；旧包/静态 SpringUtil/未门控组件/尾随空白/交付二进制资产均为 0，`git diff --check` 通过。
 
-**外部验收与限制**：测试未连接真实 RabbitMQ；真实 broker 拓扑/重连、delayed-message 插件投递、confirm/return 回调、业务 ACK/DLX 与二维码登录流程尚未联调。业务消费者迁移留阶段 6，本轮不迁入 JWT/Redis/Socket.IO 调用。阶段 3 当前 **5/6**；pay 沿用最低优先级、暂未开发的约定。
+**外部验收与限制**：测试未连接真实 RabbitMQ；真实 broker 拓扑/重连、delayed-message 插件投递、confirm/return 回调、业务 ACK/DLX 与二维码登录流程尚未联调。业务消费者迁移留阶段 6，本轮不迁入 JWT/Redis/Socket.IO 调用。阶段 3 当前 **6/6**（`nla-common-pay` 已交付，见 5.1.6）。
+
+---
+
+#### 5.1.6 `nla-common-pay` 交付结果（阶段 3.6，已落地）
+
+新建 `nla-common/nla-common-pay`，登记 `nla-common` reactor、`nla-common-bom` 与根 POM（properties 新增 `ijpay.version=2.9.11`、`alipay-sdk.version=4.39.42.ALL`；DM 新增 IJPay-Core/WxPay/UnionPay/XPay + alipay-sdk-java（排除 fastjson、bcprov-jdk15on）+ bcprov-jdk18on）。交付形态 = **官方 IJPay 依赖 + fork 移植混合**：
+
+- **官方依赖替代可得的 fork**：微信 `IJPay-WxPay`、银联 `IJPay-UnionPay`、`IJPay-XPay`、`IJPay-Core`（2.9.11，`probe-ijpay.ps1` 实测镜像均可拉）——旧 fork 的 wxpay(89)/unionpay(15)/xpay(5) 源码**不移植**，直接用官方 jar（fork 本就 import 官方 `com.ijpay.core`，语义等价）。
+- **移植 fork 独有 54 文件**（`.migration/migrate-pay.ps1` 唯一事实来源，包名 `cn.com.tzy.springbootstarterpay*` → `cn.com.nla.common.pay.*`，严格 UTF-8 往返，残留审计 0）：QQ钱包 17 + 京东 23 + PayPal 8（官方 **`IJPay-QQPay:2.9.11` 中央仓不存在**——尖峰后实测修正①，移植是唯一路径）+ alipay 渠道层 5 + 共享 `BaseModel` → `pay.base`。
+- **尖峰后实测修正②：放弃官方 `IJPay-AliPay`**——jdeps 实证其 `AliPayApi` 直接引用 `com.alibaba.fastjson.JSONObject`（与 5.3.2「fastjson 出范围」结论冲突）；改移植 fork alipay 5 文件（本就 hutool-json 实现），依赖树 fastjson 0 处。
+- **javax.servlet 绕过落地**：fork alipay 的 `toMap(HttpServletRequest)` 等参数直接重写为 `jakarta.servlet.http.*`；官方 IJPay servlet-api 为 provided 不传递，契约测试实证 `javax.servlet` 缺席时 `WxPayApi`/`HttpKit` 照常加载、`HttpKit.getDelegate()` 可用（JVM 懒解析，不调 `getRequest()`/`IpKit` 即安全）。不移植旧 fork 的 `HttpKit` 包装。
+- **bcprov 换代**：模块 pom 对每个直接 IJPay 依赖 exclude `bcprov-jdk15on`（**DM 排除不下传传递路径**，必须写在直接依赖上），直依赖根 DM `bcprov-jdk18on:1.86`；`PayKit.hmacSha256` 与 JDK `Mac` 对照测试通过。alipay-sdk 的 `bcprov-jdk15on:1.62` 由 DM 排除切断。
+- 本模块为纯技术封装（无 Spring 自动配置/门控——旧 fork 亦无，是 kit/config 库），未接入 `nla-admin`。
+
+**验证（2026-10-13，Windows / JDK21）**：
+
+- 单模块 `mvn -B -pl nla-common/nla-common-pay -am compile` → **BUILD SUCCESS**；`PaySdkContractTest` **8/8 通过**（alipay/qq/jd/paypal 4 Kit 注册/线程绑定/缺配 `IllegalStateException` 拒绝、BaseModel toMap 空值剔除 + MD5 组签与 `WxPayKit.verifyNotify` 回放、官方类无 servlet 加载、`WxPayKit` XML 往返、`PayKit` HMAC 对照）。测试暴露两处契约细节：BaseModel 反射 invoke 要求商户模型类 **public**（package-private 跨包 invoke 被吞成 null）；官方 `WxPayKit.toXml` **无 CDATA** 包裹。
+- `dependency:3.7.0:tree` → IJPay 2.9.11 ×4、alipay-sdk-java 4.39.42.ALL、bcprov-jdk18on 1.86、jakarta.servlet-api 6.1.0（core 传递）；**0 处 fastjson、0 处 bcprov-jdk15on**。
+- 全 reactor `mvn -B clean test` → **50/50 模块 BUILD SUCCESS**（本轮新增 nla-common-pay，49→50），日志 `.migration/fs-full-test.log`。
+
+**剩余验收**：真实商户密钥下单/回调验签/退款等运行时联调需商户凭据 + 外网，未执行（对齐 5.3.2「尖峰未覆盖（延后）」）。旧业务层 27 文件处置见 6.12。
 
 ---
 
@@ -697,6 +718,8 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 **pay 净结论**：✅ **GO（有条件）**。alipay-sdk-java 与 IJPay-Core 字节码 JDK21 向后兼容可加载，0 处 JDK 内部 API；唯一 `javax.servlet` 面在封装层绕过即可（不走 IJPay servlet helper，改用 jakarta）。6.7 pay(0表) 无底层阻塞——但按用户决策 pay「保持暂未开发现状」，`nla-common-pay` 优先级最低。
 
 **尖峰未覆盖（延后）**：pay 的**运行时联调**（支付宝/微信真实下单、回调验签）需商户密钥 + 外网，本地无凭据，留到实际开发 pay 时冒烟。
+
+**交付时复核修正（批次 3.6，见 5.1.6）**：① 官方 `IJPay-QQPay:2.9.11` 中央仓**不存在**（`probe-ijpay.ps1` 实测），qq/jd/paypal 渠道只能移植 fork；② 官方 `IJPay-AliPay` 的 `AliPayApi` 经 jdeps 实证**直接引用 fastjson**（本表 fastjson 行「出范围」结论仅对旧 fork 成立），交付改移植 fork alipay（hutool-json 实现）绕开；③ IJPay-Core 除 bcprov 外还传递 zxing/xk-time（本表发现 3 已列），均无害。
 
 ---
 
@@ -811,9 +834,9 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 | 6.2 | ~~`oa`(6) + `Leave`~~ | **废弃·不迁移** | 请假流程已由 `nla-workflow` 的 `TestLeave`（请假 + WarmFlow）完整覆盖，功能重复；旧 `oa_leave` + Activiti 弃用，详见 6.4 | ✅ 废弃 |
 | 6.3 | `sms`(47) | `nla-modules/nla-message` | 3 表(`SmsConfig`/`MobileMessageTemplate`/`MobileMessage`) CRUD + 表驱动适配层(`DbSmsReadConfig`/`SmsChannelManager`/`SmsSendManager`)；4 SPI 供应商(dxw/swlh/wnd/wyyd)下沉 `nla-common-sms`，aliyun/tencent/cloopen 复用 sms4j 内置；创蓝网(`smsType=2`)废弃、`PublicNotice`→`SysNotice` 免迁、`Quartz`→`nla_job` 废弃、`ReadNoticeUser` 随公告已读机制暂缓；DDL 见 `script/sql/nla_message.sql`。详见 6.6.1 | ✅ 完成 |
 | 6.4 | `face`(116) | `nla-modules/nla-face` | 实测 16 Pool + 16 Proxy 对象池包装 JNI，**技术前置已就绪（见 5.1.3），Person 数据层已建（见 4.4）** | ✅ 完成（业务层见 6.7） |
-| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | 🟡 第一轮已落地（12 表 CRUD + SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8）；SIP 实时指令端点待第二轮 |
-| 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1），41 表数据层已建（见 4.7）** | 业务待推进（数据层已就绪） |
-| 6.7 | `pay`(27) | `nla-modules/nla-pay` | 依赖 `nla-common-pay`；保持"暂未开发"现状 | 待推进 |
+| 6.5 | `video`(80) | `nla-modules/nla-video` | video 设备/通道/录像/云台，**前置 `nla-common-video` 已就绪（见 5.1.2），12 表数据层已建（见 4.6）**；video.MediaServer 已消歧为 VideoMediaServer | ✅ 两轮均已落地（第一轮见 6.8；第二轮 SIP 实时指令 + SSE + WGS84 见 6.9） |
+| 6.6 | `fs`(196, 41 表) | `nla-modules/nla-callcenter` | 最大业务模块；沿用 `service/manage/{group}` 纯接口 + 构造器注入（与基线风格天然一致）；`*SaveParam`→`*Bo`；**前置 `nla-common-freeswitch` 已就绪（见 5.1.1），41 表数据层已建（见 4.7）** | ✅ 两轮均已落地（管理 CRUD + SPI + XML 拉取见 6.10；Socket.IO 坐席推送见 6.11） |
+| 6.7 | `pay`(27) | **不建业务模块** | `nla-common-pay` 封装已就绪（见 5.1.6）；旧 27 文件实测全为 IJPay demo（0 表、无调用方），“保持暂未开发”= 封装就绪即完成，demo/Bean/拦截器不迁；决策与口径见 6.12 | ✅ 完成（封装交付，业务模块有意不建） |
 
 ### 6.1 `bean_*` → `sys_*` 表映射
 
@@ -1205,6 +1228,18 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 
 **剩余验收**：真实 FreeSWITCH/SIP/Socket.IO 联调（坐席页面连接、登录、外呼、挂断、状态机、来电通知推送全链路）、`nla-admin` 启动冒烟（双开配置下的 socket-io 端口/监听验证）、`nla_callcenter.sql`（含菜单）在真实 MySQL 8 执行与前端 `fs/**` 页面均未验收。Excel 导出已由 `CallcenterExcelExportContractTest` 做本地 XLSX 响应契约验证，真实浏览器下载仍待外部验收。
 
+### 6.12 批次 6.7（pay）交付结果（已落地；业务模块有意不建）
+
+> 编号说明：批次 6.7 的实体交付物是 `nla-common-pay` 技术封装（见 5.1.6）；本节记录 6.7 收尾决策——**不建 `nla-modules/nla-pay` 业务模块**。
+
+**决策依据（侦察实证）**：旧 `spring-boot-system/spring-boot-pay` 27 个文件实测为 **0 张业务表**的 IJPay 示例层：7 个 `@ConfigurationProperties` SDK Bean（Ali/Wx/Qq/Jd/Union/PayPal/XPayBean，绑定 classpath yml/properties）、Ali/Wx 拦截器、demo Controller（AliPayController、WxPayV3Controller 等，逐一对应 IJPay 官方 demo）、`IJPayConfigurer`（注册 fastjson HttpMessageConverter，与基线 Jackson3 冲突）与只打日志的空转 `StartupRunner`；全仓无其他模块调用（Feign 侧亦无 spring-boot-feign-pay）。
+
+**决策**：台账「保持暂未开发现状」自此落定为——**封装就绪即批次 6.7 完成，demo/Bean/拦截器不迁**；未来真实支付业务开发时按 6.x 先例新建 `nla-pay`（表、权限、菜单届时设计），SDK 配置 Bean 届时改绑 `nla-cloud` 的 yml 前缀重建。类比先例：6.2 oa 整模块废弃、6.1 范围收窄。
+
+**验收口径**：批次 6.7 剩余验收 = 真实下单/回调验签联调，随未来 pay 业务开发一并进行（商户凭据 + 外网，见 5.3.2）；本轮不新增 `script/sql/nla_pay.sql`（0 表）、不新增菜单、不动 `nla-admin` 配置。旧 27 文件保留在 `spring-boot-system/spring-boot-pay/` 作对照源（分级清理政策，见 9.2）。
+
+**未提交**：批次 6.7 全部改动待用户确认后自行提交。
+
 ---
 
 ## 7. 有意偏离上游的清单
@@ -1323,7 +1358,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 ### 7.6 品牌审计白名单
 
 `.migration/audit-brand.ps1` 当前基线：
-**`scanning 2041 files / scanned(text)=2033  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.6 第二轮后实测；上一次基线是第一轮后的 `2030 / 2022`，+11 = 第二轮新增的 10 个主 Java + 1 个测试类；再上一次是批次 6.5 第二轮后的 `1996 / 1988`，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`；更早是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；再早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
+**`scanning 2103 files / scanned(text)=2095  hits=0  allowlisted=5  file-exceptions=1`**（批次 6.7 后实测；较上一基线 +62 = 本批次 `nla-common-pay` 模块 57 份（54 移植 java + 1 契约测试 + 模块 pom + 构建产生的 `.flattened-pom.xml`）+ 5 份基线设立时未登记、由其他会话后续入库的文件（`CallcenterExcelExportContractTest`、`SmsSendController` + `SmsSendControllerContractTest`、`SysAreaDataContractTest`、`nla_system_area_data.sql`）；上一次基线是第一轮后的 `2030 / 2022`，+11 = 第二轮新增的 10 个主 Java + 1 个测试类；再上一次是批次 6.5 第二轮后的 `1996 / 1988`，+34 = 新增 33 个主 Java + 2 个测试类 - 删除的 `FreeswitchConfig`；更早是第一轮后的 `1953 / 1945`，+43 来自第二轮新增的 42 个主 Java + 1 个测试类；再早是批次 6.4 后的 `1894 / 1886`，+59 来自第一轮新增的 51 个主 Java + 2 个测试类 + 6 份 Mapper XML；历史基线演变见下方两段引用）
 
 > 基线曾是 `scanned=985 / allowlisted=6`，差的 3 份是一个**已修复的真实盲点**：
 > 脚本按扩展名过滤文本文件，而 `Path.GetExtension('.gitignore')` 返回的是
@@ -1534,10 +1569,10 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.1** | common 子模块引入 | ✅ 完成 | **25 个全引入**，见第 3 节的取舍推翻记录 |
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
-| **3** | 自建技术封装 | 🟡 进行中·5/6 | **freeswitch + video + facesdk + socketio + mq 已建成**（见 5.1.1~5.1.5）；mq 20 项测试全通过，全工程 46/46 模块编译 GREEN；余 pay 待建，沿用最低优先级、暂未开发约定；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点及 mq 真实 broker/delay/confirm 验收待对应环境 |
+| **3** | 自建技术封装 | ✅ 完成·6/6 | **freeswitch + video + facesdk + socketio + mq + pay 全部建成**（见 5.1.1~5.1.6）；pay 为官方 IJPay 2.9.11 + fork 移植混合（54 文件），8 项契约测试 GREEN，依赖树 0 fastjson/0 jdk15on；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点、mq 真实 broker/delay/confirm、pay 真实下单/回调联调均待对应环境 |
 | **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
-| **6** | 业务模块迁移 | 🟡 进行中 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），余 6.7 pay 待推进 |
+| **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
 | **7** | 工作流与调度替换 | ⬜ 未开始 | Activiti → WarmFlow **重写**；XXL-JOB → SnailJob。**历史流程实例数据不可迁移，在途流程需用户确认兜底方式** |
 | **8** | client 聚合层扁平化 | ⬜ 未开始 | 43 个 `@FeignClient` 全废弃 |
 | **9** | 部署与验证 | 🟡 部分完成 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；JUnit 4 → 5 未做；全工程 `mvn -B clean test` 已在批次 6.4 / 6.5 / 6.6 五轮跑通（**49/49 BUILD SUCCESS**，6.6 两轮均未带 `-o`），但 `nla-admin` 启动冒烟与真实 MySQL/Redis 验收仍未做 |
@@ -1664,7 +1699,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-newmod-res.ps1` | 7 个新模块资源文件的逐份对齐（有已知 bug，见 8.2） | ✅ |
 | `check-admin-pwd.ps1` | 用 `BCrypt.checkpw` 实测 `sys_user` 种子哈希对应的明文密码 | ✅ |
 | `precommit-size-check.ps1` | 提交前的体积守卫：`git add -A -n` 干跑，列出最大的待入库文件、可疑二进制扩展名与按顶级目录的计数，防止人脸模型 / jar / native 库误入提交 | ✅ |
-| `verify-encoding.ps1` | 中文完整性守卫：对 41 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`，批次 6.6 第一轮再纳入 `nla_callcenter.sql` + `nla-callcenter` README + `AgentMapper.xml` + `FsRuntimeConfigServiceImpl`/`FsXmlController` + `CallcenterDataContractTest`，第二轮再纳入 `AgentNamespace` + `AgentInPhoneNotificationEvent` + `SendAgentMessageImpl` + `AgentSocketContractTest`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
+| `verify-encoding.ps1` | 中文完整性守卫：对 44 份关键交付物（批次 6.4 纳入 `nla_face.sql` + `nla-face` README + 4 个核心类，批次 6.5 第一轮再纳入 `nla_video.sql` + `nla-video` README + `DeviceChannelMapper.xml` + `DeviceServiceImpl`/`DeviceChannelVoServiceImpl`/`MediaHookController` + `VideoServiceContractTest`，批次 6.6 第一轮再纳入 `nla_callcenter.sql` + `nla-callcenter` README + `AgentMapper.xml` + `FsRuntimeConfigServiceImpl`/`FsXmlController` + `CallcenterDataContractTest`，第二轮再纳入 `AgentNamespace` + `AgentInPhoneNotificationEvent` + `SendAgentMessageImpl` + `AgentSocketContractTest`，批次 6.7 再纳入 `nla-common-pay/pom.xml` + 移植 `alipay/AliPayApi.java` + `PaySdkContractTest.java`）做三重检查——严格 UTF-8 解码 + 字节级往返比对、9 个 GBK 乱码特征字、通用的 GBK 往返双重编码探测（无需硬编码字符），失败时 `exit 1` | ✅ |
 | `verify-tracked.ps1` | 跟踪完整性校验：对比 `git ls-files` 与新目录的磁盘实际文件，分别列出"在盘但未跟踪"与"已跟踪但已从磁盘消失"（后者用于发现误删）。已内置 `core.quotepath=false` 与 `[Console]::OutputEncoding = UTF8` 两个必要修正，否则 CJK 路径会产生假阳性 | ✅ |
 | `probe-audit-blindspot.ps1` | 列出审计范围内因扩展名不被识别而**未被扫描**的文件及其扩展名直方图，用于定期反查审计盲点 | ✅ |
 | `probe-bom.ps1` | 盘点 `.migration/` 每个脚本的字节数、BOM 有无、是否含 CJK 字面量，并标出 `NEEDS-BOM`（即无 BOM 却含中文的危险脚本） | ✅ |
@@ -1686,7 +1721,9 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `verify-sys-area-data.ps1` | 校验四级 `sys_area` 数据交付脚本与源数据行数、顺序及首尾 ID 一致，防止误把五级旧数据集直接导入 | ✅ |
 | `probe-converter.ps1` | 用 `mvn help:evaluate` 定位真实本地仓库 + `javap` 反编译 mapstruct-plus `Converter` 签名，确认可子类化桩 | ✅ |
 | `fs-contract-test.ps1` | 批次 6.6 单模块测试入口：`mvn -B -pl nla-modules/nla-callcenter "-Dtest=<类列表>" test`（默认 `CallcenterDataContractTest`，当前全模块口径 150 项 = DataContract 121 + FsCommon 4 + FsRuntimeConfigRefresh 2 + AgentSocket 23），日志落 `.migration/fs-contract-test.log` | ✅ |
-| `fs-full-test.ps1` | 批次 6.6 全量回归入口：`mvn -B clean test`（无 `-o`，如需改 goal 直接编辑脚本），日志落 `.migration/fs-full-test.log` | ✅ |
+| `fs-full-test.ps1` | 批次 6.6 全量回归入口：`mvn -B clean test`（无 `-o`，如需改 goal 直接编辑脚本），批次 6.7 亦复用，日志落 `.migration/fs-full-test.log` | ✅ |
+| `probe-ijpay.ps1` | 批次 6.7 依赖可拉性探测：`dependency:3.7.0:get` 逐个试官方 IJPay 2.9.11 各渠道 artifact（实测 Core/Wx/Union/XPay/AliPay 可拉，**QQPay 中央仓不存在**，决定移植路径；需钉插件版本，`com` 前缀会被 Bash 工具吞所以必须走脚本） | ✅ |
+| `migrate-pay.ps1` | 批次 6.7 移植唯一事实来源（幂等，先删后写）：fork alipay/qqpay/jdpay/paypal + BaseModel → `nla-common-pay`（54 文件），包名/jakarta 重写，严格 UTF-8，末尾 `tzy|javax\.servlet` 残留审计 exit 1（坑：单元素嵌套数组必须逗号运算符保形，见 10.1） | ✅ |
 
 ### 10.1 脚本编写的五条踩坑教训
 

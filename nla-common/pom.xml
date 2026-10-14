@@ -47,6 +47,7 @@
         <module>nla-common-facesdk</module>
         <module>nla-common-socketio</module>
         <module>nla-common-mq</module>
+        <module>nla-common-pay</module>
     </modules>
 
 </project>

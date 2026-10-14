@@ -73,6 +73,10 @@
         <netty-socketio.version>2.0.14</netty-socketio.version>
         <!-- velocity 模板引擎(FreeSWITCH 配置生成) -->
         <velocity.version>2.3</velocity.version>
+        <!-- IJPay 支付封装(阶段3.6,官方中央仓 artifact,替代旧 starter-pay 8 个内嵌 fork 子模块) -->
+        <ijpay.version>2.9.11</ijpay.version>
+        <!-- 支付宝官方 SDK(与旧 starter-pay-alipay 版本对齐) -->
+        <alipay-sdk.version>4.39.42.ALL</alipay-sdk.version>
 
         <!-- Maven 构建插件版本 -->
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
@@ -425,6 +429,49 @@
                 <groupId>org.apache.velocity</groupId>
                 <artifactId>velocity-engine-core</artifactId>
                 <version>${velocity.version}</version>
+            </dependency>
+
+            <!-- IJPay 支付封装(渠道模块由 nla-common-pay 直接引用,排除旧 bcprov-jdk15on 换 jdk18on 维护线) -->
+            <dependency>
+                <groupId>com.github.javen205</groupId>
+                <artifactId>IJPay-Core</artifactId>
+                <version>${ijpay.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.javen205</groupId>
+                <artifactId>IJPay-WxPay</artifactId>
+                <version>${ijpay.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.javen205</groupId>
+                <artifactId>IJPay-UnionPay</artifactId>
+                <version>${ijpay.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.javen205</groupId>
+                <artifactId>IJPay-XPay</artifactId>
+                <version>${ijpay.version}</version>
+            </dependency>
+            <!-- 支付宝官方 SDK(排除 fastjson 与旧 bcprov-jdk15on,统一 hutool-json + jdk18on 维护线) -->
+            <dependency>
+                <groupId>com.alipay.sdk</groupId>
+                <artifactId>alipay-sdk-java</artifactId>
+                <version>${alipay-sdk.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.alibaba</groupId>
+                        <artifactId>fastjson</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.bouncycastle</groupId>
+                        <artifactId>bcprov-jdk15on</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
 
             <!-- Easy-Es 搜索引擎 -->

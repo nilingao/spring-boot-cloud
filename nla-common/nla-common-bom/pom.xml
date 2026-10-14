@@ -220,6 +220,12 @@
                 <artifactId>nla-common-mq</artifactId>
                 <version>${revision}</version>
             </dependency>
+            <!-- 支付技术封装(IJPay + 保留 fork 的 QQ钱包/京东/PayPal 三渠道) -->
+            <dependency>
+                <groupId>cn.com.nla</groupId>
+                <artifactId>nla-common-pay</artifactId>
+                <version>${revision}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
