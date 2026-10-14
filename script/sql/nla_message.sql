@@ -10,8 +10,7 @@
 -- ----------------------------
 -- 1、短信渠道配置表
 -- ----------------------------
-drop table if exists sms_sms_config;
-create table sms_sms_config (
+create table if not exists sms_sms_config (
     id                bigint(20)      not null                   comment '主键',
     sms_type          int(2)          default null               comment '渠道类型（1短信网 3维纳多 4商务领航 5阿里云大于 6网易易盾 7云通讯 8腾讯云；2创蓝网已废弃）',
     config_name       varchar(100)    default ''                 comment '配置名称',
@@ -37,8 +36,7 @@ create table sms_sms_config (
 -- ----------------------------
 -- 2、短信模板表
 -- ----------------------------
-drop table if exists sms_mobile_message_template;
-create table sms_mobile_message_template (
+create table if not exists sms_mobile_message_template (
     id                bigint(20)      not null                   comment '主键',
     config_id         bigint(20)      default null               comment '短信渠道配置id',
     code              varchar(255)    default ''                 comment '模板编号（多渠道模板号串，如 6:SMS_83975030,7:13824）',
@@ -62,8 +60,7 @@ create table sms_mobile_message_template (
 -- ----------------------------
 -- 3、短信发送记录表（追加型，物理删除，无 del_flag）
 -- ----------------------------
-drop table if exists sms_mobile_message;
-create table sms_mobile_message (
+create table if not exists sms_mobile_message (
     id                bigint(20)      not null                   comment '主键',
     sender_id         bigint(20)      default null               comment '发送人id（关联 sms_sms_config.id）',
     template_id       varchar(255)    default ''                 comment '模板号',

@@ -1629,12 +1629,12 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | 🟡 基座就位 | 基线侧的 10 个 `nla-common-*` 已引入；旧 starter 的 744 文件**尚未迁移**，调用点改造未开始 |
 | **3** | 自建技术封装 | ✅ 完成·6/6 | **freeswitch + video + facesdk + socketio + mq + pay 全部建成**（见 5.1.1~5.1.6）；pay 为官方 IJPay 2.9.11 + fork 移植混合（54 文件），8 项契约测试 GREEN，依赖树 0 fastjson/0 jdk15on；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点、mq 真实 broker/delay/confirm、pay 真实下单/回调联调均待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，参考数据导入/搜索评估与真实 MySQL 验收待推进 |
+| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程 49/49 编译 GREEN；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭） |
 | **5** | 认证鉴权与租户 | 🟡 进行中·5.1～5.7 已交付 | 客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试，全工程 49/49 编译）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
 | **7** | 工作流与调度替换 | ✅ 完成·决策收口 | 用户已确认兜底方式（见 6.13）：旧 Activiti 在途/历史流程实例数据**彻底废弃、不做承接**（与 6.1/6.2 老数据丢弃先例一致，`ACT_*` 不迁移不归档）；Activiti「重写」无承接对象——旧调用仅存于 `spring-boot-activiti`(43)+`feign-activiti`(1)+已废弃 oa(6)，基线 `nla-workflow`(129) WarmFlow 完整在位；XXL-JOB→SnailJob 基座在位（`nla-common-job`/`nla-job`/`nla-snailjob-server`），旧 `@XxlJob` handler 实测 0 个需迁；`starter-quartz`/`quartz.sql`/`sys_activiti.sql` 清理并入阶段 9（见 9.2/9.3）**本轮无代码交付、决策收口** |
 | **8** | client 聚合层扁平化 | ✅ 完成·决策收口 | **43 个 `@FeignClient` 实测全部废弃**（7 个目标服务的承接位逐个对照见 6.14：sys_* 覆盖/nla-message/nla-video/nla-face/阶段 5 认证域，oa+activiti 已废弃）；client 63 个转发 Controller 不迁（旧 `/app`、`/webapi` 外部路径废弃，能力已由 nla-* 新契约重交付）；新代码 0 处 Feign 残留（唯一命中为 JavaDoc 溯源注释）；**本轮无代码交付、决策收口** |
-| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**剩余均为环境阻塞项**：`nla-admin` 启动冒烟、真实 MySQL/Redis 联调、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
+| **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；剩余环境项：`nla-admin` 启动冒烟（MySQL 8 库表 + Redis 均已就位）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1684,6 +1684,35 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
    先用 `new ServerSocket(0)` 取“空闲端口”、关闭后再拿同号绑 UDP，而 **TCP 空闲不代表 UDP 空闲**。
    批次 6.5 首轮全量回归因此报 `BindException: Address already in use`（UDP 55326 被用户本机
    另一工程的 IDE 调试进程持有），重跑即绿（见 6.8）。**遇到该失败先查端口占用，不要改测试。**
+
+### 8.3 真实 MySQL 首轮验收（2026-10-14，dbx MCP 只读实测）
+
+用户已在 `1.82.217.118:3401` 初始化新库（**分库模式**：`nla_system / nla_message / nla_face / nla_video / nla_callcenter / nla_workflow / nla_job / nla_ai` 共 8 库；Redis 同在 `1.82.217.118:6379`）。本轮仅执行 `information_schema` / `SELECT` 只读查询，未对外部库写入。
+
+**通过项（首轮 136 张基表，补齐短信后合计 139 张）**：
+
+- **表数**：system 25 / callcenter 41 / video 12 / workflow 11（含 `test_leave`）/ ai 23 / job 23 / face 1，与交付 DDL 一致；菜单种子全部落 `nla_system`：短信 `...2000` 段 16 行 + 行政区划 `...2100` 段 2 行 + 人脸 `...3000` 段 + 视频 `...4000` 段 + 呼叫中心 `...5000` 段，共 108 行菜单 + 108 条 `sys_role_menu`（各模块 SQL 的菜单部分由用户定向在 nla_system 执行，分库下可行）。
+- **排序规则**：业务 6 库全部 `utf8mb4_cs_0900_ai_ci`；`nla_ai` 为预期混合态（22 表显式 cs + `sai_user` 继承库默认，即 7.7 结论）；`nla_job` 23 表继承默认 `utf8mb4_0900_ai_ci`（与上游逐字节相同的既有事实，非损伤）。
+- **逻辑删除**：`del_flag` 列全部 char(1)（callcenter 41 / video 12 / workflow 10 / face 1 / system 6）；仅 `test_demo`/`test_tree` 为基线自带 Long，与 4.3 登记一致。
+- **生成列**：`active_marker` 在真实 MySQL 8 为 `STORED GENERATED`（`case when del_flag='0' then 1 else NULL`），唯一索引包含该列：video 9 表 / callcenter 16 表（含 fs_company、fs_agent、fs_company_conference 各 2 个 UK），与 4.6/4.7 契约一致——H2 剥离项在真库补齐。
+- **字符串主键**：`video_media_server.id` / `video_platform_catalog.id` 保持 varchar 主键，`video_gb_stream.gb_stream_id` 主键列名保留（4.6 契约）。
+- **face_person**：14 列逐项对应 4.4（`extract longtext not null`、`(img_id,del_flag)` 普通索引）。
+- **sys_area**：`nla_system_ext.sql` 7 列只读参照表结构一致；参考数据 **3,256 行**已导入，与 `nla_system_area_data.sql` 交付行数一致，层级分布正常。
+- **种子与品牌**：`admin` 昵称 = `NLA管理员`、密码 `$2a$10$` BCrypt（test/test1 种子注释完好）；`sys_user`/`sys_menu`/`sys_dict_data`/`sys_notice` 品牌命中 0，无 PLUS官网行；`sys_client` 为本工程 pc/app 两条种子（grant_type 含 social）。
+- **中文完整性**：库内中文样本（菜单名/部门名/区划名）全部正常显示，无乱码——真实导入链路 UTF-8 闭环成立。
+
+**缺口（唯一）→ 已由用户补齐，同日第二轮只读复验通过**：首轮实测 `nla_message` 库存在但 0 张表
+（`sms_sms_config` / `sms_mobile_message_template` / `sms_mobile_message` 未建）。用户随后执行了
+`script/sql/nla_message.sql` 的 3 段 CREATE TABLE，第二轮 `information_schema` 复验：
+
+- **表数**：`nla_message` = 3 表，`utf8mb4_cs_0900_ai_ci`；至此 8 库 **139 张基表全部就位**（system 25 / callcenter 41 / video 12 / workflow 11 / ai 23 / job 23 / face 1 / message 3）。
+- **列**：47 列逐一对齐交付 DDL——`sms_sms_config` 16 列、`sms_mobile_message_template` 14 列（两者 `del_flag char(1) not null`），`sms_mobile_message` 17 列且**无 `del_flag`**（追加型物理删除，与 4.5 / DDL 头注释一致）；`app_id varchar(255)`（腾讯云 sdkAppId / 容联云 appId）在位。
+- **索引**：3 表共 3 PRIMARY + 7 个二级索引（`idx_sms_config_type/active`、`idx_sms_template_config/type`、`idx_sms_message_mobile/type/ct`），名称与列组合与 DDL 完全一致。
+- **表注释中文完整性**：`短信渠道配置表` / `短信模板表` / `短信发送记录表` 无乱码。
+- **数据**：三表 0 行，符合 DDL 头「不预置数据，需在管理端录入真实账号」的约定。
+- 其 `...2000` 段菜单/授权 32 行首轮已在 `nla_system` 就位，故本轮未重跑菜单部分。
+
+**结论：真实 MySQL 的 DB 层验收已无缺口**（本轮仍全程只读，未对外部库写入）。
 
 ---
 
@@ -1790,6 +1819,7 @@ SELECT CAST('abc' AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_cs_0900_ai_ci
 | `probe-m7-ledger.ps1` | 用 `Select-String` 列本台账阶段 7 相关行号与内容（纯 ASCII 正则，与 `probe-mapping-lines.ps1` 同目的） | ✅ |
 | `probe-m8-scope.ps1` | 阶段 8 收口侦察（见 6.14）：旧 client/feign 模块 Java 计数、43 个 `@FeignClient` 声明逐个清点（含 path/configuration）、client 转发 Controller 数与 URL 前缀、新侧 `FeignClient/cn.com.tzy` 残留扫描（命中 1 = JavaDoc 溯源注释） | ✅ |
 | `probe-m9-junit.ps1` | 阶段 9 尾巴项实证：新侧 `nla-*`（排除 target）JUnit4 import/`@RunWith`/pom junit 直接依赖全量扫描（均 0）+ 旧侧对照计数（9 处，属阶段 9 待删目录不动） | ✅ |
+| `probe-m9-sql.ps1` | 盘点 `script/sql/` 交付脚本清单并定位 sys_area DDL/数据文件（真实库验收 8.3 的仓库侧对照入口） | ✅ |
 
 ### 10.1 脚本编写的五条踩坑教训
 
