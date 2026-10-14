@@ -1,3 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
- cn.com.tzy.springbootstarterswagger.config.SwaggerGatewayConfig,\
- cn.com.tzy.springbootstarterswagger.config.SwaggerConfig

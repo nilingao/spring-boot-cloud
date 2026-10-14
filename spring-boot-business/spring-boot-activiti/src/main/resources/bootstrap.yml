@@ -1,9 +1,0 @@
-spring:
-  main:
-    allow-bean-definition-overriding: true
-  application:
-    name: activiti-server
-  profiles:
-    active: dev
-logging:
-  config: ${LOGGING_CONFIG:classpath:logback-test.xml}

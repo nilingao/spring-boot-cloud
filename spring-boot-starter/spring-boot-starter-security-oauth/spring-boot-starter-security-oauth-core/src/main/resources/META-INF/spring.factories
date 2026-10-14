@@ -1,6 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  cn.com.tzy.srpingbootstartersecurityoauthcore.config.server.SecurityConfig,\
-  cn.com.tzy.srpingbootstartersecurityoauthcore.config.server.AuthorizationConfig,\
-  cn.com.tzy.srpingbootstartersecurityoauthcore.store.TokenStoreConfig,\
-  cn.com.tzy.srpingbootstartersecurityoauthcore.config.client.gateway.ResourceServerConfig,\
-  cn.com.tzy.srpingbootstartersecurityoauthcore.config.server.WxConfig

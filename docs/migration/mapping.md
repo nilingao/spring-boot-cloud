@@ -1387,6 +1387,7 @@ oa 更完整、更先进。旧 `oa_leave` + Activiti 属被上游示例覆盖的
 | `name: Lion Li` | `name: TZY` | 作者基线 1.1 |
 | `email: crazylionli@163.com` | **整行删除** | 上游作者私人邮箱 |
 | `url: https://gitee.com/ruoyi/RuoYi-Vue-Plus` | **整行删除** | SpringDoc contact 的上游项目主页 |
+| `springdoc.group-configs` 上游 5 组（`1.演示模块` ~ `5.工作流模块`） | **新增 5 组**：`6.AI服务模块` / `7.短信管理模块` / `8.人脸识别模块` / `9.视频监控模块` / `10.呼叫中心模块`，`packages-to-scan` 分别 `cn.com.nla.{ai,message,face,video,callcenter}` | 上游没有这 5 个业务模块；聚合 `/v3/api-docs` 早已覆盖其全部路径，分组只影响「按组导出」。取证、代价与**尚未运行期实测**的说明见 8.11 |
 
 `application-dev.yml` / `application-prod.yml`（两文件对称，各 5 类品牌偏离；另有 2 处功能偏离：工作流分库 7.8、业务分库 4 数据源 7.9）：
 
@@ -2183,6 +2184,115 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 - **本轮只登记不改动**：待用户定方向（A 修 README 文档地址；B 是否给 4 个新业务模块补 `springdoc.group-configs`
   分组 —— 聚合入口已覆盖全部路径，优先级低，但属配置偏离需进 7.2；C 执行阶段 9 物理清理，需先 9.2.1 的硬阻塞）。
 
+> ✅ **本节的待办已在阶段 9 第八轮全部落地（见 8.11）**：A 改了 README 接口文档口径，
+> B 实际补了 **5** 组（`6.AI服务` ~ `10.呼叫中心`，上文写 4 个是当时只数了四个业务模块），
+> C 已执行 `git rm -r` 删除 7 个 `spring-boot-*` 目录 + `sql/`。批次原文不改写，只加此收口指针（先例 4.5）。
+
+### 8.11 阶段 9 第八轮：文档口径修正 + springdoc 分组补全 + 旧目录物理清理（2026-10-14）
+
+> 触发：用户对 8.10 的 A/B/C/D 四个方向全选并授权「现在提交并推送」。
+> 本轮是迁移以来**唯一真正动磁盘**的一轮，故每条数字都现场取证。
+
+**A `README.md` 接口文档口径（已交付）**
+
+- `README.md:257` 那句自造的 `swagger-ui/index.html` 改为实测口径：只输出 OpenAPI JSON、本工程无内置 UI、
+  聚合 `/v3/api-docs`、分组 `/v3/api-docs/<中文名>` 必须 URL 编码，并写明「未匹配路由返回 HTTP 200 +
+  `{"code":404}` 信封，判断端点存在性要看响应体的 `code`」（依据 8.10 实测）。
+- 同批把「旧代码」一节从「尚未迁移，计划在本分支删除」改写为「已在本分支删除」，并把 `.lib-service/`
+  **移出旧目录表**（它自始未入库，不是清理对象），补一段 `.build/` 指路说明。`git diff --numstat` = **21 增 / 7 删**。
+
+**B `application.yml` springdoc 分组（已交付，偏离登记见 7.2）**
+
+- 新增 `6.AI服务模块`~`10.呼叫中心模块` 五组，并在其上写注释指回 7.2（`+11 行`）。
+- 落地前核实三件事：`nla-admin` 依赖确实含这 5 个模块；Controller 包根实测为
+  `cn.com.nla.{ai,message,face,video,callcenter}.controller`；**全仓无任何测试断言 springdoc 分组**（改配置不会动守卫）。
+  `SnailAiController` 的 `/snail-ai` 属 `nla-admin` 自身包，不在新分组内。
+- YAML 结构复核：`probe-m15-yamlcheck.ps1`（单文件 java + snakeyaml 源码模式）对 `application.yml` + dev/prod →
+  `docs=11/10/11 ok=3 fail=0`。⚠️ 首跑三文件全 FAIL，原因是 Maven 资源过滤占位 `@monitor.username@`
+  不是合法 YAML token —— 校验前必须先把 `@[A-Za-z0-9_.\-]+@` 替换成普通词再解析（见 10.1 附带陷阱）。
+- `probe-yml-diff.ps1`：`application.yml` 变为 upstream-only **4** / current-only **25**（上一基线 4/14）。
+  分组名保持中文，与上游 1~5 组同构，未改成 ASCII 名。
+- ⚠️ **新分组尚未运行期实测**（需重启应用）。8.10 的实测只覆盖 1~5 组与聚合入口；聚合入口早已包含这 5 个模块
+  的全部路径，所以分组只影响「按组导出」，不影响接口可达性。
+
+**C1 唯一硬阻塞已解除（改 Java 守卫测试）**
+
+- `SysAreaDataContractTest` 不再读 `sql/sys_area.sql`：`findRoot()` 改锚交付文件本身，断言冻结为
+  `probe-m15-sysarea.ps1` 的实测值 —— **3,256 行 / 3,256 distinct / 严格递增 / first=1 / last=3259 /
+  单个 `INSERT INTO sys_area (` 头 / 首行 `-- sys_area reference data for nla-system`**（`+37 / -11`）。
+- 取证同时确认 legacy `sql/sys_area.sql` 的 3,256 个 id 与交付侧**逐 id 完全相同**
+  （`identical-to-delivery=True`），故冻结实测值等价于原来的双向对照；JavaDoc 已写明「源已删除、不再恢复对照」。
+- 验证 `m15-sysarea-test.ps1`（`mvn -B test -pl nla-modules/nla-system -am -o -Dtest=SysAreaDataContractTest`）
+  → **`MVN_EXIT=0` / `Tests run: 1, Failures: 0, Errors: 0` / BUILD SUCCESS**。
+- 第二个消费方 `.migration/verify-sys-area-data.ps1:2` 也硬读 `..\sql\sys_area.sql`：改为**源文件存在才对照、
+  缺失则降级为交付侧自检**（同一组 3256/distinct/1→3259/递增断言），删目录后实跑 `VSA_EXIT=0`。
+
+**C2 物理删除（已执行）**
+
+- 命令 `git rm -r` 7 个 `spring-boot-*` 目录 + `sql/` → 暂存区 **2,315 files changed, 881,606 deletions(-)**。
+- 逐目录 git blob 字节（`probe-m15-c2refs.ps1`）：
+
+  | 路径 | tracked 文件 | blob 字节 |
+  |---|---|---|
+  | `spring-boot-business/` | 743 | 1,734,362 |
+  | `spring-boot-client/` | 157 | 457,803 |
+  | `spring-boot-common/` | 221 | 428,681 |
+  | `spring-boot-feign/` | 51 | 112,472 |
+  | `spring-boot-service/` | 181 | 5,122,768 |
+  | `spring-boot-starter/` | 809 | 13,787,909 |
+  | `spring-boot-system/` | 143 | 696,051 |
+  | `sql/` | 10 | 93,067,159 |
+  | **合计** | **2,315** | **115,407,205 ≈ 110.0 MB** |
+
+- ⚠️ **与 9.2.1 的 116,207,518 不矛盾**：9.2.1 记的是**工作区文件字节**（`core.autocrlf=true` 下文本落盘为 CRLF），
+  本表记的是 **git blob 字节**（索引内 LF），差 800,313 字节 ≈ 这批文本的行数（每行少一个 `0x0D`）；文件数两口径一致。
+- 取证踩坑两条：① `git ls-files` + `git cat-file -s "HEAD:$f"` 的路径往返会在一份**文件名已是 mojibake 的旧文件**
+  （`spring-boot-starter-freeswitch` 下实测存在）上报 `path ... does not exist in 'HEAD'`，配合
+  `$ErrorActionPreference='Stop'` 直接中断整脚本 —— 改用 `git ls-tree -r -l` 取大小列；② 原生命令参数里嵌
+  双引号造成的**假阴性 0 命中**，已定位到最小复现（见 10.1 附带陷阱）。
+- 删除前引用面复核（`probe-m15-c2refs2.ps1`，逐个目录 negative pathspec）：删除集之外对 7 个旧目录的命中只有
+  `.build/jenkins/mave-build.sh:5-7`、`.gitignore:94-95`、`README.md` 旧目录表与台账文字；对 `sql/` 的
+  路径式命中 **0**（`git grep` exit=1）。即**没有任何 Java / yml / pom 引用旧目录**，与 9.2.1 结论一致。
+- 删除后磁盘残留（`probe-m15-leftover.ps1`）：7 个目录仍在盘 **14,942 个文件 / 3,764,852,358 字节 ≈ 3.5 GB**，
+  其中 **14,825 在 `target/` 下**、117 份是 gitignored 的 face native 库（`spring-boot-face/conf/`，≈400MB）与 `simsun.ttc`；
+  `sql/` 目录已完全消失；`git status` 未跟踪条目 **0** —— 残留全是忽略项。
+  **这 3.5 GB 本轮不删**：授权范围是版本库层面清理，且工具约束不允许批量删盘文件。确认无需回滚后可手工执行
+  `Remove-Item -Recurse -Force spring-boot-business, spring-boot-client, spring-boot-common, spring-boot-feign,`
+  `spring-boot-service, spring-boot-starter, spring-boot-system`，随后把 `.gitignore` 那条 face 规则一并删掉。
+- **`.build/` 本轮保留不删**：5 份脚本实测**全部**只服务这批已删除的微服务（`mave-build.sh` 硬 `find` 三个旧目录取 jar；
+  `maven-send.sh` 依赖 `/usr/local/program/spring-cloud/target/spring-cloud.tar.gz`；
+  `jenkins_restart_docker.sh:4` 指向 9.1 已删的 compose），删除后必然失效。它不在用户勾选的清单内，
+  且 `.gitignore` 明写「`.build/` 是项目 CI 脚本目录，切勿忽略」→ **留待用户定夺**（整目录删 vs 留作历史 CI 参照）。
+
+**连带同步**
+
+- `.gitignore`：那条 face 规则**没有删**，只把注释改写为「目录已从版本库删除，规则保留仅用于屏蔽本机残留的
+  native 库，物理删除目录后可一并去掉」（`+2 / -1`）—— 删掉它反而让 117 份忽略文件变成 `??` 噪声，
+  破坏「untracked and not ignored = 0」这条不变量。
+- `script/sql/nla_system_area_data.sql`：文件头 `-- Source: sql/sys_area.sql` 后**追加 3 行**，说明该路径已随阶段 9
+  移除、行契约冻结在守卫测试。该文件不在 `regen-sql.ps1` 的 14 份清单内（实测其映射表只有 `ry_*` ↔ `nla_*` 14 对），
+  手工加注释不与生成器冲突（10.2 口径）。
+
+**收口实测（本轮全 GREEN）**
+
+- 全量回归 `mvn -B clean test`：**`MVN_EXIT=0`、reactor ` SUCCESS [` = 50、BUILD FAILURE = 0、失败测试行 = 0**、
+  守卫 `SplitDatabaseRoutingContractTest` **4/4**。与删除前基线**完全一致** —— 实证 9.2.1 的
+  「构建面：旧目录已完全脱离构建」。
+- 四验收：`probe-collation.ps1` editable **15** / old-project **0**（旧基线 1，那份
+  `spring-boot-service-xxl-job\db\tables_xxl_job.sql` 已随删除消失 → **新基线 15/0**）；
+  `fix-ai-collation` `ALREADY-CONSISTENT`(22)；`regen-sql` 干跑 `files=14 diffs=0`；
+  `audit-brand` `scanning 2105 / scanned=2097 / hits=0 / allowlisted=5 / file-exceptions=1`（**数字未变**，
+  审计范围本就是新侧清单）；`verify-encoding` `files=52 failures=0`（清单为固定关键交付物）；
+  `verify-doc-enc` `files=13 failures=0`；`git diff --check` 退出 **0**。
+- ⚠️ 一条无害新告警：`git diff` 对 `SysAreaDataContractTest.java` 与 `nla_system_area_data.sql` 提示
+  「LF will be replaced by CRLF the next time Git touches it」（`core.autocrlf=true`，`.gitattributes` 只管
+  `/mvnw` 与 `*.cmd`）。`probe-m15-eol.ps1` 实测这两份工作区文件是**纯 LF**（`cr=0`）、其余改动文件纯 CRLF，
+  而 `git diff --numstat` 只有 37/11 与 3/0 的行级差异 → 索引内本就是 LF，**不存在 EOL 整体改写**，属既存状态。
+
+**本轮改动量**：入库侧 `README.md` + `application.yml` + `.gitignore` + `SysAreaDataContractTest.java` +
+`script/sql/nla_system_area_data.sql` + 删除 2,315 个旧文件；不入库的 `.migration/` 新增 10 份探针/入口脚本，
+并改了 `verify-sys-area-data.ps1`。
+
 ---
 
 ## 9. 旧代码清理
@@ -2270,6 +2380,10 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   旧侧 top-12 大文件里其余 9 份全是 `spring-boot-service-xxl-job` 的 `static/`（adminlte / echarts / codemirror 前端资源）。
 - **本轮不执行任何删除**；上表即为阶段 9 收尾时的操作依据。旧代码在 `5.0.0-dev` 分支完整保留，删除可恢复（见 9.2 口径）。
 
+> ✅ **本清单已于阶段 9 第八轮全部执行完毕（删除记录见 8.11）**：7 个 `spring-boot-*` 目录与 `sql/`
+> 已 `git rm -r`（2,315 文件）；唯一硬阻塞已先改为自足契约；`.build/` 按本清单保留待定；
+> `.gitignore` 那条死规则只改了注释、规则本身保留以屏蔽本机残留。下文保留原文作为删除时的依据存档。
+
 ### 9.3 `sql/` 为何不在本轮删除
 
 虽然用户选项里列了 `sql/`，但逐份核对后发现它是**阶段 4.3 DDL 重写的直接输入**，
@@ -2295,6 +2409,12 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 > 本节的**保留理由仍然成立**，且现已追加一条新事实：`SysAreaDataContractTest` 硬读 `sql/sys_area.sql`，
 > 即 `sql/` 不只是「对照源」，还是**当前守卫测试的输入**（批次原文不改写，只加此更正指针，先例 4.5）。
 
+> ✅ **本节的「不在本轮删除」口径已于阶段 9 第八轮作废（见 8.11）**：`sql/` 10 份脚本已全部
+> `git rm -r` 删除（blob 合计 93,067,159 字节）。上表的阶段映射仍然成立 —— 它们已被
+> `script/sql/` 侧的交付物取代；唯一仍需记住的是：`sys_area.sql` 的数据已交付为
+> `script/sql/nla_system_area_data.sql`，而行数/顺序契约现在只由 `SysAreaDataContractTest`
+> 的冻结值守护（源已不在仓库，不能再做双向 diff）。
+
 ---
 
 ## 10. 迁移脚本索引
@@ -2315,6 +2435,8 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 > 「在盘但未登记」22 份（本轮新登记的 13 份 `probe-m14-*.ps1` 已入表，其余为历史一次性 dump/build 入口）；
 > 88/109 那组数字是阶段 9 第五轮的快照，保留不改写。
 > 阶段 9 第七轮追加 `probe-m15-doc.ps1` / `probe-m15-doc2.ps1` 后重跑：**已登记 103 / 在盘 124**（同样只缺 `probe-sql-brand.ps1`）。
+> 阶段 9 第八轮追加 10 份 `probe-m15-*` / `m15-*`（见 8.11）后重跑：**已登记 113 / 在盘 134**，
+> 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」22 份（均为历史一次性 dump/build 入口）。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2404,6 +2526,15 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `probe-m14-untracked.ps1` / `probe-m14-untracked2.ps1` | 删除前风险清点：不加/加 `--exclude-standard` 两种口径的未跟踪计数（差集才是真风险）、ignored `target/` 目录枚举、旧侧磁盘文件数与 MB 体量 | ✅ |
 | `probe-m15-doc.ps1` | 接口文档面初探（见 8.10）：UI 端点存在性、`/v3/api-docs` 可达性、README 里的文档地址行定位；**区分 HTTP 状态码与响应体 `code`** | ✅ |
 | `probe-m15-doc2.ps1` | 文档面定性二探：从 `application.yml` 动态抽分组名（不硬编 CJK）后逐个拉分组 JSON 并按长度/形态判定，对聚合体做业务路径标记计数，并用 `FileShare ReadWrite` 从运行中日志取异常栈 | ✅ |
+| `probe-m15-sysarea.ps1` | 阶段 9 第八轮硬阻塞取证（见 8.11 C1）：对 `script/sql/nla_system_area_data.sql` 与 legacy `sql/sys_area.sql` 逐 id 比对（行数/distinct/递增/首尾 id/INSERT 头数/显式列序/id 长度分布），产出可冻结进守卫测试的实测值 | ✅ |
+| `probe-m15-yamlcheck.ps1` | 用 snakeyaml（单文件 java 源码模式 + 本地仓 jar 拼 classpath）验证 `application.yml`/dev/prod 可解析并能枚举 `springdoc.group-configs`；**先把 Maven 过滤占位 `@xxx@` 替换成普通词**，否则报 `found character '@' that cannot start any token` | ✅ |
+| `m15-sysarea-test.ps1` | 改写后的 `SysAreaDataContractTest` 单测入口：`mvn -B test -pl nla-modules/nla-system -am -o -Dtest=...`（必须 `-am`，见 10.1 第 6 条），日志落 `.migration/m15-sysarea-test.log` | ✅ |
+| `probe-m15-c2refs.ps1` | 删除集体积与引用面前置取证（见 8.11 C2）：用 `git ls-tree -r -l` 直接取 blob 大小列（不用 `ls-files`+`cat-file`，避开 mojibake 文件名），并回显根 pom `<modules>` | ✅ |
+| `probe-m15-c2refs2.ps1` | 上者的引用面复核：改为**逐个目录 negative pathspec** 并列 A/B/C 三段对照（单一只返 0 的人不可信） | ✅ |
+| `probe-m15-leftover.ps1` | 删除后磁盘残留盘点：按目录统计剩余文件数/字节，拆分「`target/` 下」与「非 `target/` 忽略项」清单，并验证 `git status` 未跟踪条目为 0 | ✅ |
+| `probe-m15-readme.ps1` | 定位 README 里全部仍把旧目录说成「存在」的句子（只报行号与原文，供人工改写），并列出 `docs`/`nla-*`/`script` 下的旧目录文字提及 | ✅ |
+| `probe-m15-eol.ps1` | 字节级行尾盘点：逐文件统计 `lf`/`cr`/`crlf`/`bare-lf`/BOM，并回显 `.gitattributes` 与 `core.autocrlf`，用于判断「LF will be replaced by CRLF」告警是否造成整体改写 | ✅ |
+| `probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1` | 假阴性定位两件套：对照聚合 glob vs 逐目录 negative pathspec（结论：两者等价），并定位到真因是**原生命令参数里嵌双引号**（见 10.1 附带陷阱） | ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
@@ -2480,6 +2611,15 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   `[IO.File]::ReadAllText/ReadAllBytes`）；`Set-Content` 默认编码同样会损坏中文。
   已用 `verify-encoding.ps1` 对全部关键交付物（现 49 份）做字节级往返比对，全部 `roundtrip=True`、
   无乱码特征字，确认迁移过程未发生编码损坏。
+- **给原生命令传的单个参数里不能嵌双引号** —— 阶段 9 第八轮实测：同一仓库状态下，
+  `git grep -E` 的模式串内含一个 `"` 时返回 **0 命中且 exit=1**（假阴性），把同一段拆成
+  `-e 'a' -e '"b'` 两个独立参数就正常命中 —— PowerShell 5.1 重写带引号参数时把正则弄坏了，
+  而 git 静默接受。推论：**任何「测出 0 命中」的安全判定都必须换一个写法复核一次**
+  （本轮靠 `probe-m15-c2refs2.ps1` 才揭穿，否则会把 README/.build 的连带引用当成不存在就删）；
+  能用目录前缀、字符类或拆 `-e` 表达的，就不要把引号塞进单个参数（定位脚本：`probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1`）。
+- **验证 YAML 前先洗掉 Maven 过滤占位** —— `@xxx@`（如 `@monitor.username@`）不是合法 YAML token，
+  snakeyaml 直接报错；先 `[regex]::Replace($raw,'@[A-Za-z0-9_.\-]+@','mvnPlaceholder')` 落临时副本再解析
+  （`probe-m15-yamlcheck.ps1`），否则会把「占位符」误判成配置损坏。
 
 ### 10.2 "从上游重建"范式
 

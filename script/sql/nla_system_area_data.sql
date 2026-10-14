@@ -1,5 +1,8 @@
 -- sys_area reference data for nla-system
 -- Source: sql/sys_area.sql (4-level national administrative divisions; 3,256 rows)
+--         That legacy path was removed from this branch in stage 9; the row contract
+--         (3,256 unique ids, ascending 1..3259, single explicit-column INSERT) is frozen in
+--         nla-modules/nla-system/src/test/java/cn/com/nla/system/SysAreaDataContractTest.java.
 -- This file is data-only; execute after script/sql/nla_system_ext.sql.
 INSERT INTO sys_area (area_id, area_code, area_name, level, city_code, center, parent_id) VALUES
 (1, '110000', '北京市', 1, '010', '116.407394,39.904211',null),

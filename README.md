@@ -42,7 +42,8 @@
 
 旧版 46 个子模块拆成 11 个可独立部署的服务（`.run/` 下原有 11 份部署配置），
 但实际因服务器资源不足被迫合并运行
-（`spring-boot-sms` 模块就同时承载了短信、netty-socket、job、redis 订阅四种职责）。
+（旧版的 `spring-boot-sms` 模块就同时承载了短信、netty-socket、job、redis 订阅四种职责，
+该代码现仅存于 `5.0.0-dev` 分支）。
 微服务带来的注册中心、网关、分布式事务、链路追踪成本远高于收益，因此本版收敛为单体。
 
 ## 技术栈
@@ -254,7 +255,14 @@ mvn -B -DskipTests clean install
 | `nla-snailai-server` | 8900 | AI 服务端（含 SSE / WebSocket） |
 | `nla-monitor-admin` | 9090 | 监控中心，路径 `/admin` |
 
-接口文档：`http://localhost:8080/swagger-ui/index.html`
+接口文档：SpringDoc **只输出 OpenAPI JSON，本工程无内置 UI**（上游 6.X 口径，未引入 knife4j / swagger-ui webjar），
+请用 Postman / Apifox / swagger-editor 等外部工具导入：
+
+- 聚合全量：`http://localhost:8080/v3/api-docs`
+- 按分组：`http://localhost:8080/v3/api-docs/<分组名>`，分组名为中文，**必须 URL 编码**，
+  例如系统模块 `http://localhost:8080/v3/api-docs/3.%E7%B3%BB%E7%BB%9F%E6%A8%A1%E5%9D%97`
+- 分组清单见 `application.yml` 的 `springdoc.group-configs`（未匹配到的路由会返回 HTTP 200 +
+  `{"code":404}` 信封，**判断端点存在性要看响应体的 `code`，不能只看状态码**）
 
 ### 6. 默认账号
 
@@ -344,8 +352,9 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 
 ## 旧代码
 
-以下目录是 `5.0.0-dev` 微服务版本的遗留代码，**尚未迁移，计划在本分支删除**
-（迁移完成前保留以便对照）：
+`5.0.0-dev` 微服务版本的遗留目录**已在本分支删除**（阶段 9 物理清理，2026-10-14；
+实测移除 2,315 个纳入版本管理的文件 ≈ 110 MB，逐目录体积、引用面取证与残留本机文件清单见
+[mapping.md 9.2.1 / 8.11](docs/migration/mapping.md)）：
 
 | 目录 | 内容 |
 |---|---|
@@ -356,11 +365,16 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | `spring-boot-service/` | nacos / seata / sentinel / xxl-job 本地服务端 |
 | `spring-boot-starter/` | 21 个技术封装 starter |
 | `spring-boot-system/` | gateway / pay / sso |
-| `sql/` | 10 份旧建表脚本 |
-| `.lib-service/` | allatori / rabbitmq-plugins / skywalking-agent |
+| `sql/` | 10 份旧建表脚本；其中 `sys_area.sql` 的数据已交付为 `script/sql/nla_system_area_data.sql` |
 
-共 46 个子模块、1847 个 Java 文件。各业务域到 `nla-modules/*` 的映射关系见
+需要对照旧实现请切到 `5.0.0-dev` 分支（共 46 个子模块、1847 个 Java 文件）。
+各业务域到 `nla-modules/*` 的映射关系见
 [mapping.md 第 6 节](docs/migration/mapping.md#6-业务模块映射)。
+
+> `.lib-service/`（allatori / rabbitmq-plugins / skywalking-agent）是**本机外置大文件目录**，
+> 自始未纳入版本管理（`.gitignore` 已忽略），不受上述清理影响。
+> `.build/` 下的 5 份 Jenkins / Docker 脚本原本只服务这批已删除的微服务，
+> 现行构建方式见「快速开始 → 编译」与 `nla-admin/Dockerfile`。
 
 ## 迁移进度
 
@@ -375,7 +389,7 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 | 6 | 业务模块迁移（7 批次全部收口） | ✅ |
 | 7 | 工作流与调度替换（Activiti → WarmFlow） | ✅ 决策收口 |
 | 8 | client 聚合层扁平化（废弃 43 个 Feign） | ✅ 决策收口 |
-| 9 | 部署与全量验证（DB 层验收 + 分库 `@DS` 路由已落地；启动冒烟进行中） | 🟡 进行中 |
+| 9 | 部署与全量验证（DB 层验收 + 分库 `@DS` 路由已落地；真启冒烟已通过；旧微服务目录与 `sql/` 已物理清理） | 🟡 剩余：前端适配、compose 外部机验收 |
 
 详见 [mapping.md 第 8 节](docs/migration/mapping.md#8-阶段进度台账)。
 

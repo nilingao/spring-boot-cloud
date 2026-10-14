@@ -1,4 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
- cn.com.tzy.spingbootstartermybatis.config.TenantConfiguration ,\
- cn.com.tzy.spingbootstartermybatis.config.ShardingDataSourceConfig,\
- cn.com.tzy.spingbootstartermybatis.config.MybatisPlusConfig

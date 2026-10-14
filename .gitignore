@@ -90,5 +90,6 @@ logs
 
 ### 人脸识别模型与 native 库（体积大，随部署包外置） ###
 nla-modules/nla-face/conf/
-# 旧工程同名目录在 5.0.0-dev 里同样不入库（406MB 模型），保留到阶段 6 删除前继续忽略
+# 旧目录已在阶段 9 从版本库删除（见 mapping.md 9.2.1 与 8.11）；本机磁盘仍残留这批未入库的
+# native 库与模型（约 400MB），故此规则保留以屏蔽残留，物理删除 spring-boot-business/ 后可一并去掉
 spring-boot-business/spring-boot-face/conf/

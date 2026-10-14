@@ -1,2 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
- cn.com.tzy.springbootstartervideocore.config.sip.SipConfig

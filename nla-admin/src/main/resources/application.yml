@@ -186,6 +186,17 @@ springdoc:
       packages-to-scan: cn.com.nla.gen
     - group: 5.工作流模块
       packages-to-scan: cn.com.nla.workflow
+    # 以下 5 个分组为本工程迁移新增（上游只有 1~5，偏离登记见 docs/migration/mapping.md 7.2）
+    - group: 6.AI服务模块
+      packages-to-scan: cn.com.nla.ai
+    - group: 7.短信管理模块
+      packages-to-scan: cn.com.nla.message
+    - group: 8.人脸识别模块
+      packages-to-scan: cn.com.nla.face
+    - group: 9.视频监控模块
+      packages-to-scan: cn.com.nla.video
+    - group: 10.呼叫中心模块
+      packages-to-scan: cn.com.nla.callcenter
 
 # 防止XSS攻击
 xss:

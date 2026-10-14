@@ -1,8 +1,0 @@
-spring:
-  main:
-    allow-bean-definition-overriding: true
-  application:
-    name: sso-server
-  profiles:
-    active: dev
-
