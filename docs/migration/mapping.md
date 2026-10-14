@@ -2159,6 +2159,30 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 - **本轮改动量**：只改本台账 markdown（5.1.1 更正指针 + 本节 + 9.2.1 + §10/10.1 登记），**未动任何 Java / SQL / 配置**；
   取证脚本全部在不入库的 `.migration/`（本轮额外修了其中的 `probe-collation.ps1`，同样不入库）。
 
+### 8.10 阶段 9 第七轮：接口文档面实测与 README 缺陷（2026-10-14，进行中）
+
+> 触发：8.9 登记了一句「knife4j / springdoc UI 未随交付」但未定性。本轮用实测把它查到底（仍为**只观测**，`probe-m15-doc.ps1` / `probe-m15-doc2.ps1`）。
+
+- **5 个声明分组全部可用**（同一运行实例，均 HTTP 200 + 真实 OpenAPI JSON）：
+  `/v3/api-docs/1.演示模块` 64,552B・`2.通用模块` 26,461B・`3.系统模块` 148,228B・`4.代码生成模块` 27,395B・`5.工作流模块` 87,235B；
+  聚合入口 `/v3/api-docs` HTTP 200 / **512,775B**。分组名是 `application.yml` L179-L188 的**中文带序号**，
+  访问时必须 URL 编码 —— 这就是 8.9 里 `/v3/api-docs/default` 查不到的根本原因（`default` 不是本工程分组）。
+- **迁移后的业务接口确实进了文档**（对聚合体做路径标记计数）：`/demo/` 73・`/video/` 63・`/workflow/` 56・
+  `/fs/` 34・`/sms/` 21・`/tool/` 12・`/face/` 8。即「**没有 UI**」≠「**文档内容缺失**」，8.9 的叙述无需补正，但不能被读成后者。
+  （标记里 `cn.com.nla.*` 包名计数全 0 属正常 —— springdoc JSON 不带类包名，只有 path/tag。）
+- **`/v3/api-docs/swagger-config` 不是缺陷**：HTTP 200 但体是 `code:500` 信封，日志栈
+  `org.springdoc.api.OpenApiResourceNotFoundException: No OpenAPI resource found for group: swagger-config`。
+  `swagger-config` 端点由 springdoc 的 **UI 模块**（`springdoc-openapi-starter-webmvc-ui`）提供，本工程只有 `-api`，
+  于是它被当成一个**分组名**去解析 → 查不到。
+- **上游对照结论（关键）**：在 `F:\work\java\_ref_RuoYi-Vue-Plus-6X` 全仓 `pom.xml` 里，springdoc 只有两处
+  `springdoc-openapi-starter-webmvc-api`（根依赖管理 + `ruoyi-common-doc`），**`knife4j` 0 处**，
+  上游 README 也没有任何 swagger/doc.html 地址 → 「不带 UI」是**上游 6.X 口径**，不是迁移遗漏（与 7.5 不矛盾）。
+- **发现的真实缺陷（在 README，不在代码）**：`README.md:257` 写「接口文档：`http://localhost:8080/swagger-ui/index.html`」，
+  实测该端点不存在（返回全局错误信封），且上游 6.X 也不提供 → **属本工程 README 自造错误**（旧 5.x README 的 swagger 习惯残留）。
+  正确口径应为：分组 JSON `/v3/api-docs/<分组名>`（需 URL 编码）+ 聚合 `/v3/api-docs`，无内置 UI。
+- **本轮只登记不改动**：待用户定方向（A 修 README 文档地址；B 是否给 4 个新业务模块补 `springdoc.group-configs`
+  分组 —— 聚合入口已覆盖全部路径，优先级低，但属配置偏离需进 7.2；C 执行阶段 9 物理清理，需先 9.2.1 的硬阻塞）。
+
 ---
 
 ## 9. 旧代码清理
@@ -2290,6 +2314,7 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 > 阶段 9 第六轮收口时重跑同脚本：**已登记 101 / 在盘 122**，「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，
 > 「在盘但未登记」22 份（本轮新登记的 13 份 `probe-m14-*.ps1` 已入表，其余为历史一次性 dump/build 入口）；
 > 88/109 那组数字是阶段 9 第五轮的快照，保留不改写。
+> 阶段 9 第七轮追加 `probe-m15-doc.ps1` / `probe-m15-doc2.ps1` 后重跑：**已登记 103 / 在盘 124**（同样只缺 `probe-sql-brand.ps1`）。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2377,6 +2402,8 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `probe-m14-cleanup.ps1` | 阶段 9 影响清单体积依据（见 9.2.1）：根 pom `<modules>` 实读、旧侧 tracked 文件/字节分目录计数、top-12 大文件、`sys_area_1.sql` 行数、本台账章节行号（插入点定位）| ✅ |
 | `probe-m14-legacyrefs.ps1` | 新侧到旧目录的 path-style 引用扫描（排除 Spring Boot 官方 `spring-boot-starter-*` artifactId 假阳性）+ `sql/` 裸目录引用定位 + `.build` 脚本 / README / `.gitignore` 连带引用 + ip2region 双份确认 | ✅ |
 | `probe-m14-untracked.ps1` / `probe-m14-untracked2.ps1` | 删除前风险清点：不加/加 `--exclude-standard` 两种口径的未跟踪计数（差集才是真风险）、ignored `target/` 目录枚举、旧侧磁盘文件数与 MB 体量 | ✅ |
+| `probe-m15-doc.ps1` | 接口文档面初探（见 8.10）：UI 端点存在性、`/v3/api-docs` 可达性、README 里的文档地址行定位；**区分 HTTP 状态码与响应体 `code`** | ✅ |
+| `probe-m15-doc2.ps1` | 文档面定性二探：从 `application.yml` 动态抽分组名（不硬编 CJK）后逐个拉分组 JSON 并按长度/形态判定，对聚合体做业务路径标记计数，并用 `FileShare ReadWrite` 从运行中日志取异常栈 | ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
