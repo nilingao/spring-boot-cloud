@@ -89,7 +89,9 @@ logs
 .migration/
 
 ### 人脸识别模型与 native 库（体积大，随部署包外置） ###
+### 实测当前位置：.lib-service/seetaface6 与 .lib-service/sf3.0_models（已由上面 .lib-service/ 覆盖，
+### 116 个文件 / 426,004,284 字节，见 mapping.md 8.13）。下面两条是历史/预留位置，保留以屏蔽残留。
 nla-modules/nla-face/conf/
 # 旧目录已在阶段 9 从版本库删除（见 mapping.md 9.2.1 与 8.11）；本机磁盘仍残留这批未入库的
-# native 库与模型（约 400MB），故此规则保留以屏蔽残留，物理删除 spring-boot-business/ 后可一并去掉
+# native 库与模型（约 400MB），现已拷到 .lib-service/（见 8.13），故此规则保留以屏蔽残留
 spring-boot-business/spring-boot-face/conf/

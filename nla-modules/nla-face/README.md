@@ -24,4 +24,4 @@
 
 `nla-face` 共 41 项测试（本轮新增 32 项 + 阶段 4.4 的 `PersonDataContractTest` 9 项）全部通过。`FacePipelineTest` 用真实 PNG 解码 + mock 代理验证属性映射（含右眼缺陷修正回归）、人脸数量分支与门控报错；`PersonServiceContractTest` 在 H2 上真实执行 CRUD 写路径（查重拒绝、特征落库、imgUrl 不变不重算、imgId 变更缓存迁移、脏特征回退重提取、删除清缓存）；`FaceDetectorServiceContractTest` 验证检索阈值/topN 与旧默认参数（size=1、calculate=70）；`FaceFeatureCacheTest`、`FaceImageDownloaderTest` 覆盖装载容错与地址白名单。全部测试不触碰 JNI 原生库、不连真实网络。
 
-原生算法联调（`face.enabled=true` + dll/csta 配置）、真实 MySQL 菜单脚本执行与前端页面仍需对应环境验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 为准。
+原生算法联调需 `face.enabled=true` 并把外置包指到 `face.dll-path` / `face.csta-path`：开发机实测位置是仓库内 `.lib-service/seetaface6` 与 `.lib-service/sf3.0_models`（已被 `.gitignore` 忽略、不入库）；Windows amd64 / CPU 的真实 JNI 冒烟已在该位置跑绿（`FaceSdkNativeSmokeTest` 2/2，见 mapping.md 8.13），Linux / GPU 仍需对应环境验收。真实 MySQL 菜单脚本执行与前端页面仍待验收。迁移状态以 [`docs/migration/mapping.md`](../../docs/migration/mapping.md) 为准。

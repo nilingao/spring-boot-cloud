@@ -12,13 +12,17 @@ native 方法签名和字段，提供 16 组对象池/代理及自动配置。�
 </dependency>
 ```
 
-默认关闭，应用启动不会加载 DLL/SO。启用配置：
+默认关闭，应用启动不会加载 DLL/SO。DLL、SO、`.csta` 模型与各平台目录下的 `dll.properties` 清单
+**都不打入模块 JAR、也不纳入版本管理**（单文件接近 100 MiB，入仓会使仓库膨胀且逼近 GitHub 上限），
+由部署环境单独提供。本仓库开发机的约定是把整个外置包放在 `.lib-service/` 下（`.gitignore` 已忽略，
+与 `allatori` / `rabbitmq-plugins` / `skywalking-agent` 同一惯例）。启用配置：
 
 ```yaml
 face:
   enabled: true
-  dll-path: F:/external/seetaface6
-  csta-path: F:/external/sf3.0_models
+  # 开发机：仓库内 .lib-service/（已 gitignore）；生产：拷到部署目录（相对路径按 JVM 工作目录解析）
+  dll-path: F:/work/java/spring-boot-cloud/.lib-service/seetaface6
+  csta-path: F:/work/java/spring-boot-cloud/.lib-service/sf3.0_models
   device: SEETA_DEVICE_CPU # AUTO 默认选择 CPU 库，GPU 需匹配的 amd64 库
   device-id: 0
   max-total: 8 # 每种算法独立对象池
@@ -30,8 +34,14 @@ face:
 沿用旧 `face.dll-path` / `face.csta-path`。`dll-path` 可以指向原生包根目录或含 `dll.properties` 的
 平台目录；根目录布局为 `windows/amd64` 或 `linux/{amd64,aarch64,arm}`。按 manifest 数字顺序
 加载 `base` 库、再加载 JNI 库；`tennis` 从 `base/CPU` 或 `base/GPU` 读取。
-DLL、SO、`.csta` 模型不打入模块 JAR，由部署环境单独提供。当前仓库中的 Linux 包仅含 ARM 平台，
-Linux amd64 部署须另备匹配原生库。
+
+外置包实测覆盖 Windows amd64（25 个 DLL）与 Linux amd64 / aarch64 / arm 三套（73 个 SO），
+GPU 版 `tennis` 位于 `windows/amd64/base/GPU` 与 `linux/amd64/base/GPU`；14 个 `.csta` 模型与
+4 份 `dll.properties` 随包提供（合计 116 个文件 / 426,004,284 字节）。
+⚠️ Linux **arm（32 位）** 那份 `dll.properties` 用的 key 前缀是 `linux_centos.*`，而
+`LoadNativeCore.resolveLibraries` 只识别 `so.base.N` / `so.N`，否则抛
+`Unknown native manifest entry` —— 部署到 32 位 ARM 前需把该份 manifest 的前缀改写为 `so.`
+（64 位 ARM 用 `aarch64` 那套，无需改写）。
 
 自动配置启动前检查库清单、全部库文件与默认算法使用的 10 个模型文件；缺文件、加载失败或对象池
 参数错误时启动失败，异常包含问题路径。同一 JVM 中成功加载后不能切换库目录或计算设备。
@@ -62,7 +72,7 @@ mvn -o -B -pl nla-common/nla-common-facesdk -am -Dtest=FaceSdkContractTest -Dsur
 真实 JNI 冒烟需显式传入外部路径：
 
 ```text
-mvn -o -B -pl nla-common/nla-common-facesdk -am -Dtest=FaceSdkContractTest,FaceSdkNativeSmokeTest -Dsurefire.failIfNoSpecifiedTests=false -Dface.native.path=F:/external/seetaface6 -Dface.model.path=F:/external/sf3.0_models test
+mvn -o -B -pl nla-common/nla-common-facesdk -am -Dtest=FaceSdkContractTest,FaceSdkNativeSmokeTest -Dsurefire.failIfNoSpecifiedTests=false -Dface.native.path=F:/work/java/spring-boot-cloud/.lib-service/seetaface6 -Dface.model.path=F:/work/java/spring-boot-cloud/.lib-service/sf3.0_models test
 ```
 
 已在 Windows amd64 / JDK 21 / CPU 验证 16 种算法句柄创建与释放、检测器收图、特征维度查询、

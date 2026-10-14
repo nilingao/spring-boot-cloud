@@ -625,6 +625,10 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 > ⚠️ **本句已被后续批次推翻（阶段 9 第五轮登记，见 8.8）**：Person 表 DDL 已在 **4.4** 落地（`script/sql/nla_face.sql` 表结构见该节）；
 > 人脸识别业务流程、`PersonController`（`/face/person`）+ `FaceDetectorController` 与 `face:person:*` 权限菜单已在**批次 6.4** 交付并接入
 > `nla-admin`（见 6.7）。本段仍然成立的部分只有 Linux ARM/GPU、真实识别准确率/活体与生产负载未测。批次原文不改写，只加此更正指针（先例 4.5）。
+>
+> ⚠️ **补充更正（阶段 9 第十轮，见 8.13）**：上文「剩余验收」里那句「当前仓库 Linux 原生包仅 ARM 平台，Linux amd64 需另备匹配库」**与实测不符**——
+> 外置包实际含 `windows/amd64`（25 个 DLL）+ `linux/amd64` / `aarch64` / `arm` 三套（73 个 SO），GPU 版 `tennis` 也在 `linux/amd64/base/GPU`。
+> 该错句已在 `nla-common-facesdk/README.md` 改正；同时实测确认这批 native 资产**从未入库**（全分支 `tracked=0`），唯一副本已由第十轮安顿进 `.lib-service/`。
 
 #### 5.1.4 `nla-common-socketio` 交付结果（阶段 3.4，已落地）
 
@@ -2259,6 +2263,11 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   **这 3.5 GB 本轮不删**：授权范围是版本库层面清理，且工具约束不允许批量删盘文件。确认无需回滚后可手工执行
   `Remove-Item -Recurse -Force spring-boot-business, spring-boot-client, spring-boot-common, spring-boot-feign,`
   `spring-boot-service, spring-boot-starter, spring-boot-system`，随后把 `.gitignore` 那条 face 规则一并删掉。
+
+  > ⚠️ **本条建议已由第十轮紧急更正（见 8.13）**：这 3.5 GB 残留里含 **116 个从未入库且全机唯一**的人脸
+  > native 库与 `.csta` 模型（426,004,284 字节）及 `simsun.ttc`，照上面那句话直接删会**不可逆地销毁它们**
+  > （仓库历史与其它分支都没有）。已先将 `seetaface6` / `sf3.0_models` 整树拷入 `.lib-service/` 并逐文件 SHA256 校验、
+  > 在新位置跑绿真实 JNI 冒烟；**未确认副本到位前不要执行 `Remove-Item`**。批次原文不改写，只加此更正指针（先例 4.5）。
 - **`.build/` 本轮保留不删**：5 份脚本实测**全部**只服务这批已删除的微服务（`mave-build.sh` 硬 `find` 三个旧目录取 jar；
   `maven-send.sh` 依赖 `/usr/local/program/spring-cloud/target/spring-cloud.tar.gz`；
   `jenkins_restart_docker.sh:4` 指向 9.1 已删的 compose），删除后必然失效。它不在用户勾选的清单内，
@@ -2374,7 +2383,7 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 |---|---|---|---|
 | 1 | `.build/` 5 份脚本整删还是留档 | 见 8.11：全部只服务已删除的微服务，删后必然失效；`.gitignore` 明写「CI 脚本目录，切勿忽略」 | 倾向整目录删（历史在 `5.0.0-dev` 分支可查） |
 | 2 | 是否在 `script/docker/` 补 RabbitMQ（含插件挂载）与 ES | 两侧能力均默认关闭，MQ 更无消费者；`.ez` 插件只存在于本机未入库目录 | 倾向**不补**，改为在各模块 README 写明「需自备 broker 并手工装插件」 |
-| 3 | 本机 3.5 GB 旧目录残留何时腾空 | 见 8.11：14,942 文件仍在盘且全是忽略项，`git status` 干净 | 确认无需回滚后由你手工 `Remove-Item`（工具约束禁止我批量删盘） |
+| 3 | 本机 3.5 GB 旧目录残留何时腾空 | 见 8.11：14,942 文件仍在盘且全是忽略项，`git status` 干净 | 确认无需回滚后由你手工 `Remove-Item`（工具约束禁止我批量删盘）。⚠️ **已由 8.13 更正**：删前必须先确认人脸资产已搬入 `.lib-service/`（已完成），否则不可逆丢失 |
 | 4 | 是否删掉 compose 里 6 处失效的 `ports:` 段 | 本轮实测：9 个服务全 `network_mode: "host"`，`ports:` 在 host 网络下不生效（见上） | 建议**不动**（删与不删行为一致；保留与上游同款写法便于对照，仅在验收时别把它当事实） |
 
 **本轮改动量**：入库侧只有两个文件 —— `README.md`（Docker 部署节新增一段引用块 + 阶段 9 进度行一句）
@@ -2387,6 +2396,73 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 `published ports` 为空，实为脚本正则 `^\s*-\s*(\d+:\d+)` **不容忍 compose 里的引号包裹条目**（`- "3306:3306"`）；
 而在 Bash 工具里内联跑同一条 `Select-String` 时，模式串中的 `"` 还会被 shell 剥掉 → 连正确写法也返 0 命中。
 两条均属「0 命中 ≠ 不存在」，改用 `Grep` 工具配 `Grep` 友好的模式才拿到真实清单。
+
+### 8.13 阶段 9 第十轮：SeetaFace6 外置资产定位与 facesdk 文档纠错（2026-10-14）
+
+> 触发：用户问「`seetaface6` / `sf3.0_models` 等其他依赖文件怎么没有迁移」。取证与处置脚本：
+> `probe-m16-face.ps1`（`out-m16-face.txt` 177 行）、`probe-m16-face2.ps1`（`out-m16-face2.txt` 85 行）、
+> `m16-stage-face-assets.ps1`（`out-m16-copy.txt` 16 行）、`m16-smoke.ps1`（`m16-smoke.log`）。
+
+**结论：不是漏迁，而是「从未入库 + 刻意外置」；但第八轮那条删盘建议差点把它不可逆销毁**
+
+三条硬证据（全部实测，非推断）：
+
+1. **仓库历史里没有这批文件**：对 `5.0.0-dev` / `6.0.0-nla` / `v2.0.0` 与对应 3 个 origin ref 逐个
+   `git ls-tree -r … -- spring-boot-business/spring-boot-face/conf` 全部 **`conf-tracked=0`**，
+   `git log --all -- 该路径` **0 条提交**；`git check-ignore -v` 命中 `.gitignore:95` —— 正是第八轮特意保留以屏蔽残留的那条规则。
+2. **唯一副本仍在盘**：旧 `conf/` 实测 **116 个文件 / 426,004,284 字节** —— `.so` 73/69,671,520、`.dll` 25/40,527,360、
+   `.csta` 14/315,801,896（最大 `face_recognizer.csta` 102,551,956、`face_recognizer_mask.csta` 98,444,228）、
+   `dll.properties` 4/3,508。README 示例路径 `F:/external/` 在本机 **`Test-Path=False`**，且 `*.csta` 在 F:/D:/用户主目录
+   depth≤2 范围内 **0 处副本** —— 删掉即永久丢失，仓库侧没有第二副本可恢复。
+3. **「不外置就入仓」是既有决策**：5.1.3「原生资产不入模块 JAR」、§10 里 `precommit-size-check.ps1` 的
+   「防止人脸模型 / jar / native 库误入提交」守卫、9.2.1 与 8.11 关于那条 face 忽略规则的保留理由，三处口径一致。
+
+⚠️ **本轮最重要的动作是纠正自己第八轮写的建议**：8.11 原文「确认无需回滚后可手工 `Remove-Item` 七个旧目录，随后把
+`.gitignore` 那条 face 规则一并删掉」——照做会连带销毁这 406 MB 唯一副本。已在 8.11 建议段与 8.12 决策表第 3 行
+加更正指针（批次原文不改写，先例 4.5）。
+
+**处置（用户口径：「复制到项目里在 git 中忽略，跟之前做法一致」）**
+
+- 落点选 `.lib-service/`（`.gitignore:80` 已忽略，与 `allatori` / `rabbitmq-plugins` / `skywalking-agent` 同一惯例），
+  `m16-stage-face-assets.ps1` 用 `robocopy /E /XO` **只复制、不删除**源目录（源仍在原位，等用户自己决定腾空时机）：
+  `seetaface6` **102 文件 / 110,202,388B**、`sf3.0_models` **14 文件 / 315,801,896B**，逐文件 size + SHA256 比对
+  → `shaMatch=102` / `shaMatch=14`、`mismatch=0`、`missing=0`（合计 116/116 全对）。
+- 忽略面证明：两条 `git check-ignore -v` 均命中 `.gitignore:80:.lib-service/`，`git ls-files --others --exclude-standard`
+  = **0**，`git status --porcelain` 行数不因这批文件增加 → **仓库体积增量 0**。
+- 真实可用性（只证明字节相同不够）：`m16-smoke.ps1` 把 `-Dface.native.path` / `-Dface.model.path` 指到**新位置**跑
+  `mvn -B test -pl nla-common/nla-common-facesdk -am -o` → **`MVN_EXIT=0`，`FaceSdkContractTest` 12/12 +
+  `FaceSdkNativeSmokeTest` 2/2 = `Tests run: 14, Failures: 0, Errors: 0, Skipped: 0`，BUILD SUCCESS**；
+  `Skipped: 0` 是关键 —— 该用例带 `@EnabledIfSystemProperty(named="face.native.path")`，未跳过即说明 `System.load`
+  在 `.lib-service/` 下真的加载成功并创建了 16 种算法句柄。
+
+**顺带修掉的三处文档错**（`nla-common-facesdk/README.md`，`+16/-6`）
+
+| 原文问题 | 实测事实 | 处置 |
+|---|---|---|
+| 「当前仓库中的 Linux 包仅含 ARM 平台，Linux amd64 部署须另备匹配原生库」 | 四套平台齐备：`windows/amd64`、`linux/{amd64,aarch64,arm}`；GPU `tennis` = `windows/amd64/base/GPU/tennis.dll` 34,352,128B 与 `linux/amd64/base/GPU/libtennis.so` 41,654,480B | 改为逐平台事实；台账 L623 原文不改写，只在 5.1.3 下方加 ⚠️ 指针 |
+| 示例与冒烟命令路径 `F:/external/seetaface6`（本机不存在） | 唯一实测位置是旧 `conf/`，现已另拷 `.lib-service/` | yaml 示例与冒烟命令统一改为 `F:/work/java/spring-boot-cloud/.lib-service/…` |
+| 未说明为什么不入仓 | 单文件最大 102,551,956B ≈ 97.8 MiB，逼近 GitHub 100 MiB 硬上限 | 补体积理由，并写明 `.dll` / `.so` / `.csta` / `dll.properties` **都不入库也不打进 JAR** |
+
+**新登记一条真实阻塞（只记录，不改代码、不改副本）**：`linux/arm/dll.properties`（1,069B）的 key 前缀是
+`linux_centos.base.N` / `linux_centos.N`，而 `LoadNativeCore.resolveLibraries` 只接受 `so.base.N` / `so.N`，其余条目抛
+`Unknown native manifest entry` → **部署到 32 位 ARM 必然启动失败**（另三份 manifest 829/829/781B 均为 `so.` 前缀，正常）。
+按用户口径「跟之前做法一致」= 不动 Java、不改副本，仅在 facesdk README 与本台账登记；真要上 32 位 ARM 时再改那份 manifest 前缀
+（64 位 ARM 走 `aarch64` 那套，不需要改）。
+
+**`simsun.ttc`（18,008,680B）判定**：同样是**从未入库的本机唯一副本**（旧用于 activiti 流程图字体），但新侧零引用
+（`nla-admin` 验证码用 Arial）→ **新工程不需要它**。与人脸资产的区分点：人脸库是**功能必需**、字体是**历史遗留**，
+因此字体不复制、不入库，删除时机归入 8.12 决策表第 3 行的本机磁盘决策。
+
+**同步改动**：`.gitignore` face 段补注释声明实测当前位置与体积（`+3/-1`）、`nla-modules/nla-face/README.md` 联调段改为
+「`.lib-service/` 实测位置 + Windows JNI 已在新位置跑绿」（`+1/-1`）。
+
+**本轮改动量**：入库侧 3 个文件 —— `nla-common/nla-common-facesdk/README.md`、`nla-modules/nla-face/README.md`、`.gitignore`
++ 本台账；**无 Java / yml / pom / SQL 变更**，那 426 MB 全在忽略面内（仓库体积增量 0）→ 按口径不重跑全 reactor，
+只重跑文档相关四验收 + `precommit-size-check.ps1`（实证这批大文件没有进入 `git add -A -n` 干跑清单）；
+另为稳妥，对 facesdk 单模块带 `-am` 跑了真实 JNI 冒烟（见上）。
+
+**仍需外部条件**：Linux amd64 / aarch64 / GPU 的真机加载、32 位 ARM 的 manifest 前缀修正，以及
+**`.lib-service/` 目前只是这台开发机上的单副本** —— 仓库里没有、其它机器上没有，换开发机或本机磁盘故障都需要重新获取原生包。
 
 ---
 
@@ -2421,7 +2497,7 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 | `spring-boot-starter/` | 目录 | 21 子模块，744 Java | 阶段 3 自建封装的源（见第 5 节） |
 | `spring-boot-system/` | 目录 | 3 子模块，48 Java | 阶段 5 认证重写的对照源 |
 | `sql/` | 目录 | 10 份 | **阶段 4.3 DDL 重写的输入源**，详见 9.3 |
-| `.lib-service/` | 目录 | — | `allatori` / `rabbitmq-plugins` / `skywalking-agent`；已 gitignore（`tracked=0`），不占仓库体积，阶段 3/9 评估 native 与 agent 兼容性时可能还要用（✅ 阶段 9 第九轮已逐子目录盘点并判定保留，取证与「只有 `.ez` 插件不可丢」这一发现见 8.12）|
+| `.lib-service/` | 目录 | — | `allatori` / `rabbitmq-plugins` / `skywalking-agent` + `seetaface6` / `sf3.0_models`（✅ 阶段 9 第十轮新置入的人脸 native 库与模型，116 文件 / 426,004,284 字节，见 8.13）；已 gitignore（`tracked=0`），不占仓库体积，阶段 3/9 评估 native 与 agent 兼容性时可能还要用（✅ 阶段 9 第九轮已逐子目录盘点并判定保留，取证与「只有 `.ez` 插件不可丢」这一发现见 8.12）|
 
 #### 9.2.1 阶段 9 第六轮：物理清理影响清单（只列不动，2026-10-14）
 
@@ -2534,6 +2610,8 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 > 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」22 份（均为历史一次性 dump/build 入口）。
 > 阶段 9 第九轮登记 `probe-m15-leftover-d.ps1`（见 8.12）后重跑：**已登记 114 / 在盘 135**，
 > 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份。
+> 阶段 9 第十轮登记 4 份 `probe-m16-face.ps1` / `probe-m16-face2.ps1` / `m16-stage-face-assets.ps1` / `m16-smoke.ps1`（见 8.13）后重跑：
+> **已登记 118 / 在盘 139**，「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份（均为历史一次性 dump/build 入口）。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2633,6 +2711,10 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 | `probe-m15-eol.ps1` | 字节级行尾盘点：逐文件统计 `lf`/`cr`/`crlf`/`bare-lf`/BOM，并回显 `.gitattributes` 与 `core.autocrlf`，用于判断「LF will be replaced by CRLF」告警是否造成整体改写 | ✅ |
 | `probe-m15-globtest.ps1` / `probe-m15-quotetest.ps1` | 假阴性定位两件套：对照聚合 glob vs 逐目录 negative pathspec（结论：两者等价），并定位到真因是**原生命令参数里嵌双引号**（见 10.1 附带陷阱）| ✅ |
 | `probe-m15-leftover-d.ps1` | 阶段 9 第九轮 D 方向盘点（见 8.12）：`.lib-service` 逐子目录文件数/字节/top-3 + tracked 引用面计数，compose 镜像/`context:`/`./` 绑定清单与 `.run` tag 对比，`script/sql` 全量清单（注：其 `published ports` 正则不容忍引号条目，端口清单由 `Grep` 补测）| ✅ |
+| `probe-m16-face.ps1` | 人脸外置资产定位（见 8.13）：README 示例路径 `F:/external` 是否存在、旧 `conf/` 逐扩展名文件数与字节、top 大文件、新侧 loader `MODELS` 清单与配置键、台账与文档里关于外置资产的全部提及 | ✅ |
+| `probe-m16-face2.ps1` | 「是否漏迁」定性二探：对 7 个 ref 逐个 `git ls-tree` 计数 + `git log --all` 提交数 + `check-ignore` 规则行，4 份 `dll.properties` 的 key 前缀逐份对比，全盘 depth≤2 的 `.csta` 副本搜索 | ✅ |
+| `m16-stage-face-assets.ps1` | 资产安顿唯一事实来源：`robocopy /E /XO` **只复制不删**到 `.lib-service/`，逐文件 size + SHA256 比对，末尾 `check-ignore` + `untracked-and-not-ignored` + `git status` 行数三项证明忽略面干净 | ✅ |
+| `m16-smoke.ps1` | 新位置真实 JNI 冒烟入口：`mvn -B test -pl nla-common/nla-common-facesdk -am -o -Dtest=…` 并把 `-Dface.native.path` / `-Dface.model.path` 指到 `.lib-service/`（参数用数组 splatting，不用反引号续行，见 10.1 教训 1），日志落 `.migration/m16-smoke.log` | ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
@@ -2721,6 +2803,12 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 - **验证 YAML 前先洗掉 Maven 过滤占位** —— `@xxx@`（如 `@monitor.username@`）不是合法 YAML token，
   snakeyaml 直接报错；先 `[regex]::Replace($raw,'@[A-Za-z0-9_.\-]+@','mvnPlaceholder')` 落临时副本再解析
   （`probe-m15-yamlcheck.ps1`），否则会把「占位符」误判成配置损坏。
+- **`tracked=0` / `git status` 干净只证明「仓库里没有」，不证明「文件没价值」** —— 阶段 9 第十轮差点造成不可逆损失：
+  第八/九轮把 3.5 GB 旧目录残留判为「全是忽略项、删除零风险」，但其中 `spring-boot-face/conf/` 的 116 个文件 / 426,004,284 字节
+  人脸 native 库与 `.csta` 模型**在所有分支的历史里都不存在**（7 个 ref 的 `git ls-tree` 全 0、`git log --all -- <path>` 0 条），
+  本机也无第二副本（README 示例路径 `F:/external` 不存在、depth≤2 全盘 `*.csta` 0 处）—— 照那句建议 `Remove-Item` 就是永久销毁。
+  **推论**：「忽略项 = 可再生构建产物」这个等式对**手工放置的第三方二进制资产**不成立；给任何批量删除/腾空建议前，
+  必须先跑「该目录是否含从未入库的唯一副本」这一项（历史计数 + 全盘副本搜索 + 功能必要性判断三件套），并把结论写进台账（处置见 8.13）。
 
 ### 10.2 "从上游重建"范式
 
