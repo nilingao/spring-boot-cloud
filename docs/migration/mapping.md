@@ -566,6 +566,14 @@ facesdk 的基础层保留 `com.seeta.sdk` 包名以匹配 JNI 符号，项目�
 
 **部署告诫**：`FreeswitchAutoConfiguration` 受 `@ConditionalOnProperty("freeswitch.enabled"="true")` 门控（默认关、无 `matchIfMissing`）；但 `FreeswitchConfig`（`@ComponentScan("cn.com.nla.common.freeswitch")`）与 10 个 ESL handler（`@Component` 注入 `InboundClient`）由消费方组件扫描**无条件注册** → 消费方 app **必须**设 `freeswitch.enabled=true`，否则 `InboundClient` 缺失致启动 `UnsatisfiedDependency`。SIP 侧（`SipServer`/`SipServerRunner`/`Sip*Event`）靠 `@Component` 扫描、不受门控。当前无任何 nla app 依赖本模块，迁 6.6 fs 业务时须处理此门控（备选：把 handler/FreeswitchConfig 也纳入门控以支持“依赖但停用”）。
 
+> ⚠️ **本段告诫已被批次 6.6 + 阶段 9 第六轮实测推翻（登记见 8.9）**：`nla-common-freeswitch` 现 207 个 Java 文件实测
+> `@Component` **0** / `@ComponentScan` **0**，唯一带 `@ConditionalOnProperty` 的就是经 `.imports` 注册的 `FreeswitchAutoConfiguration`
+> （`probe-m14-gating.ps1`）；消费方 `nla-modules/nla-callcenter` 那 11 个注入技术模块的类里有 13 个类自带 `@ConditionalOnProperty`（`probe-m14-preflight.ps1`），
+> 整个 6.6 交付已把 handler 一并纳入门控 —— 即上文「备选」方案就是最终落地方案。
+> 因此「消费方必须设 `freeswitch.enabled=true`，否则启动 `UnsatisfiedDependency`」**不再成立**：`nla-admin` 的 dev/prod **根本没写**
+> `freeswitch` / `video` / `socket-io` / `face` / `mq` 任何开关键，真启仍然成功（实测签名见 8.9）。本段仍然成立的部分只有
+> 「配置前缀沿用 `link.thingscloud.freeswitch.esl.inbound`」与「SIP 侧不受门控」（现已随门控整体停用）。批次原文不改写，只加此更正指针（先例 4.5）。
+
 **提交状态**：本轮 freeswitch 全部改动**未提交**（提交需用户授权）。
 
 #### 5.1.2 `nla-common-video` 交付结果（阶段 3.2，已落地）
@@ -2090,6 +2098,67 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   取证脚本与两份工具修正（`verify-doc-enc.ps1`、`probe-script-ledger.ps1`）全部在不入库的 `.migration/`。
   本轮**没动任何 Java / SQL / 配置**，所以全量回归预期无影响——仍跑了以免把「应该无影响」当成结论。
 
+### 8.9 阶段 9 第六轮：真启冒烟首次通过 + 能力门控改判 + 配置包提案（2026-10-14）
+
+> 凭据口径不变：**用户启动，我只观测**。本节不记录任何口令；探测命令行一律先掩码再打印（`probe-m14-app8080.ps1`）。
+
+- **结论：`nla-admin` 真实启动冒烟通过（历史上第一次；8.4 卡在 Access denied，8.2 遗留 1 就此闭合）**。
+  用户报「端口 8080 现在不通」，实测**是通的**：8080 的属主 pid 26696 = IDEA Debug 方式启动的 `cn.com.nla.NlaApplication`（15:45:43 创建），
+  Jetty 侧 `Started oejs.ServerConnector@...{HTTP/1.1}{0.0.0.0:8080}`；`GET http://127.0.0.1:8080/` → **200**，体为「欢迎使用NLA Cloud后台管理框架，请通过前端地址访问。」。
+  判定：「不通」只能是**在 41 秒启动窗口内探测**，或从非本机地址/端口映射探测；本机 HTTP 面可达。
+- **Web / 安全面实测**（同一实例）：`/system/user/list` → `401 认证失败'未能读取到有效 token'`（Sa-Token 拦截生效）；
+  `/resource/oss/config` → 业务 `405 Request method 'GET' is not supported`（映射存在）；`/v3/api-docs` 实际在**吐大 JSON**（我方 8s 超时中断，日志记 `AsyncRequestNotUsableException ... 连接中断`）；
+  `/v3/api-docs/default` → `OpenApiResourceNotFoundException: No OpenAPI resource found for group: default`（分组名不存在，`application.yml` L163/L178 只定义自定义 `group-configs`，**不是缺陷**）；
+  `/doc.html`、`/swagger-ui/index.html`、`/auth/tenant/list` → 业务 `404 请求地址不存在`（knife4j / springdoc UI 未随交付，多租户已关）。
+  异常栈同时证明过滤器链完整：`CryptoFilter` → `CharacterEncodingFilter` → `XssFilter` → `RepeatableFilter` → Sa-Token 四道 filter → `CorsFilter` → `DispatcherServlet`。
+- **8.5 期望的运行期签名全部命中**（`logs/sys-console.log`，15:46:04 起）：`add a datasource named` ×**5** = `master` + `nla_video` + `nla_message` + `nla_callcenter` + `nla_face`；
+  `dynamic-datasource initial loaded [5] datasource,primary datasource named [master]`；
+  `工作流分库已启用：11 张表限定到库 [nla_workflow]，插入拦截器链位置 1`；`Started NlaApplication in 41.027 seconds`；**无** `CannotFindDataSourceException`。
+  `nla_workflow` 不在这 5 个数据源里，是**设计如此**（7.8.3：WarmFlow 走动态表名拦截器复用主库连接，不建独立 DataSource），不是缺口。
+  其余装载证据：Redisson 建成 9 条连接、`【warm-flow】，加载完成`、`flow info loaded from local file,path=classpath:liteflow/*.el.xml`、
+  `已注册自定义短信供应商工厂: dxw, wnd, swlh, wyyd`、`表驱动短信通道初始化完成，当前已注册 2 个通道`、`初始化OSS配置成功`、
+  `人脸特征缓存装载完成，共 0 条`（face 模块停用状态下唯一的启动期 bean，走 `FaceFeatureCache`，不触 SDK）。
+- **同一日志里的两次失败快照（09:36:18）实测确认 8.4 卡点属于库侧而非代码侧**：`ErrorCreateDataSourceException: create datasource named [master] error`
+  → `CJException: Access denied for user 'root'@'<开发机公网IP>' (using password: YES)` → `Application run failed`；15:45 那份配置与 jar 未变、仅库侧白名单/口令调整后即成功。
+  WARN 面只有上游库自身噪音（liteflow `BeanPostProcessorChecker` ×5、MCP annotation scanner ×3），无本工程 WARN。
+- **（B）门控叙述改判**：已按实测在 5.1.1 追加更正指针（`@Component` 0 / `@ComponentScan` 0 / 仅 `FreeswitchAutoConfiguration` 带门控；
+  callcenter 13 类自带门控、video 27 类自带门控、face 的 `FacePipeline` 用 `ObjectProvider` + `require()` 延迟抛业务异常「人脸识别功能未启用」），
+  即「**依赖但停用**」成立：默认配置下面向协议模块能力不可用，但**不阻塞启动**。
+- **（C）最小可用能力开关配置包（决策就绪，本轮未落盘）**：
+  实测 dev/prod 现有 `enabled` 键只有 `boot.admin.client`、`snail-job`、`snail-ai`、`chat.ui.embed`、`open-api`、`sql-log`、`redis ssl`、`mail`；
+  四类技术模块开关键**一个都没有**（= 默认关）。若要让某个能力在 dev 可用，最小增量与代价如下，**按 10.2 一律走 `regen-support-cfg.ps1` 生成，不手改 yml**：
+  ① `socket-io.enabled: true` —— 唯一「开箱可用」项：`SocketIoProperties` 前缀 `socket-io`，port 默认 **9090**、`store=redisson`、`auto-start=true`，
+  Redis 已就绪，但这是**真绑端口**的活配置，必须同步 nginx/compose 端口口径（7.3）否则只是换个端口失败。
+  ② `nla.mq.enabled: true` —— 需真实 RabbitMQ，且消费方要自行引入 `spring-boot-starter-amqp`（5.1.5）。
+  ③ `video.enabled: true` / `freeswitch.enabled: true` —— 需真实 GB28181 设备 + ZLM / 真实 FreeSWITCH + ESL 口令，本地无机（5.2、7.12 口径）。
+  ④ `face.enabled: true` —— **当前禁止开**：`face.conf-dir` / `face.model-dir` / `face.jni-path` 实测是**死配置**
+  （`nla-common-facesdk` 内 `confDir`/`getConfigPath`/`modelDir`/`jniPath` 0 匹配，SDK 只认 `face.dll-path` / `face.csta-path`），
+  且 `nla-admin/src/main/resources` 下没有 `conf` / `models` / `jni` 资产，开启会命中「缺库预检查 → 启动失败」（5.1.3「加载失败即启动失败」）。
+  另：仓库交付 yml 里 `${key:default}` 占位写法 **0 处**，不能为了「暴露开关」凭空引入新语法。
+- **观测坑（三条，其中一条是本轮新踩的工具级坑）**：
+  ① IDEA 直跑时工作目录是**仓库根**，日志落 `logs/`（已被 `.gitignore` L77 忽略）而**不是** `nla-admin/logs/`；
+  只看 `nla-admin/logs` 会把 2026-10-08 的旧快照（单数据源 `[1] datasource`、工作流 `12 张表`）误读成新进程的输出——本轮我先踩了。
+  ② 运行中的 JVM 对 `logs/*.log` 持**独占**句柄，`File.ReadAllBytes` 抛「文件正由另一进程使用」，必须用 `FileShare ReadWrite` 打开后读。
+  ③ `.migration/` 现为 gitignored（`.gitignore` L89），**Grep 工具对整个目录返回 0 命中**（假阴性，同 7.6 里 `.qoder` 那条同构）；
+  并且 **Read 工具对刚被脚本重写的同名输出文件会返回上一次内容、甚至报「文件不存在」**——复核脚本产物必须用 `Get-Content`，不能复用 Read 的返回。
+- **收口实测（本轮跑完，不是「预期」）**：全量 `mvn -B clean test` GREEN —— ` SUCCESS [` 行 **50** /
+  `BUILD FAILURE` **0** / 失败测试行 **0** / 守卫 `SplitDatabaseRoutingContractTest` **4 项全跑**；
+  `audit-brand.ps1` `scanning 2105 / hits=0 / EXIT=0`（配合 `probe-m14-brandcheck.ps1` 确认是**真 GREEN**
+  而不是被豁免吃掉：`docs/` 下 `ruoyi`/`若依` 命中全部落在整文件豁免的 `mapping.md`，`login-strategies.md` 现 0 命中）；
+  `verify-encoding.ps1` `files=52 failures=0`；`verify-doc-enc.ps1` `files=13 failures=0`；
+  `regen-sql.ps1` 干跑 `files=14 diffs=0`（scratch 已清理）；`fix-ai-collation.ps1` `ALREADY-CONSISTENT`（目标 22）；
+  `probe-collation.ps1` 新侧 editable **15**（全部是 `mapping.md`×12 + `README.md`×3 的**文字提及**，非真实 DDL）
+  + 老项目 **1**（`spring-boot-service-xxl-job\db\tables_xxl_job.sql`，按 7.7 口径不动）；`git diff --check` 退出 0；
+  脚本对账 `probe-script-ledger.ps1` 得 101/122（见 §10）。
+- **顺带修掉一个收口脚本自身的坑（`probe-collation.ps1`）**：它用 `Get-ChildItem $root -Recurse -File -Force`
+  全仓枚举，**没排除 `logs\`**，于是把**运行中应用**正独占的 `logs/sys-console.log` 也纳进来，
+  `ReadAllBytes` 抛「正由另一进程使用」，而 `$ErrorActionPreference='Stop'` 直接终止整步验收。
+  修法：排除模式补 `logs\` + 读取改走 `FileShare ReadWrite` 共享读（即 10.1 第 8 条）。
+  **推论**：「应用运行时跑收口」是本轮才出现的新场景 —— 只要它成立，就得先假定**所有全仓枚举类脚本**
+  都可能被文件句柄咬到，而不是先假定自己 GREEN/RED。
+- **本轮改动量**：只改本台账 markdown（5.1.1 更正指针 + 本节 + 9.2.1 + §10/10.1 登记），**未动任何 Java / SQL / 配置**；
+  取证脚本全部在不入库的 `.migration/`（本轮额外修了其中的 `probe-collation.ps1`，同样不入库）。
+
 ---
 
 ## 9. 旧代码清理
@@ -2125,6 +2194,58 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `sql/` | 目录 | 10 份 | **阶段 4.3 DDL 重写的输入源**，详见 9.3 |
 | `.lib-service/` | 目录 | — | `allatori` / `rabbitmq-plugins` / `skywalking-agent`；已 gitignore（`tracked=0`），不占仓库体积，阶段 3/9 评估 native 与 agent 兼容性时可能还要用 |
 
+#### 9.2.1 阶段 9 第六轮：物理清理影响清单（只列不动，2026-10-14）
+
+> 用户选项 D 的口径是「只出影响清单，**不动文件**」。以下每条数字都是实测，不是估算；
+> 取证脚本：`probe-m14-cleanup.ps1`、`probe-m14-legacyrefs.ps1`、`probe-m14-untracked.ps1`、`probe-m14-untracked2.ps1`。
+
+- **构建面：旧目录已完全脱离构建**。根 `pom.xml` 的 `<modules>`（实测 L592-L603）只有
+  `nla-admin` / `nla-common` / `nla-extend` / `nla-modules` / `nla-api` 五项，`git ls-files` 也确认
+  7 个 `spring-boot-*` 目录与 `sql/` **一个都不是 reactor 模块** —— 删除它们不会让 `mvn -B clean test` 少编译任何模块。
+- **引用面：新侧到旧目录的 path-style 引用 = 0**。注意假阳性形态：`spring-boot-starter-amqp` /
+  `spring-boot-starter-jetty` / `spring-boot-starter-validation` 等命中全部是 **Spring Boot 官方 artifactId**（旧 starter
+  恰好同名），`probe-m14-legacyrefs.ps1` 已按目录前缀而非裸字符串排除；真正剩下的旧目录引用只在
+  旧目录**自己内部**（各 `Dockerfile` 的 `/spring-boot-sso/`、`/spring-boot-gateway/` 容器路径）。
+- **仓库体积（tracked）**：旧侧合计 **2,315 个文件 / 116,207,518 字节 ≈ 110.8 MB**。
+  | 路径 | tracked 文件 | tracked 字节 |
+  |---|---|---|
+  | `spring-boot-business/` | 743 | 1,773,254 |
+  | `spring-boot-client/` | 157 | 468,990 |
+  | `spring-boot-common/` | 221 | 443,921 |
+  | `spring-boot-feign/` | 51 | 115,105 |
+  | `spring-boot-service/` | 181 | 5,162,332 |
+  | `spring-boot-starter/` | 809 | 13,848,409 |
+  | `spring-boot-system/` | 143 | 707,384 |
+  | `sql/` | 10 | **93,688,123** |
+  即 **`sql/` 一个目录占旧侧 tracked 体积的 80.6%**，`spring-boot-*` 七个源码目录合计只有 ≈22.5 MB。
+- **磁盘体积（含 gitignore 的构建产物）**：7 个旧目录 **17,247 个文件 / ≈3,611 MB（3.5 GB）**，
+  其中 `git ls-files --others --ignored --exclude-standard --directory` 列出 **59 个忽略条目、43 个是 `*/target/`**。
+  这部分删了只影响工作区，与仓库历史无关。
+- **未提交工作丢失风险 = 0**：`git ls-files --others --exclude-standard` 在 7 个旧目录 + `sql/` 下实测
+  **0 个**（`probe-m14-untracked.ps1` 不加 `--exclude-standard` 时会报 14,942 个，其中 jar 11,104 / class 2,940，
+  全是 `target/` 产物 —— 那是忽略项不是源码，属**假风险**）。结论：物理删除不会丢任何未提交内容。
+- **唯一硬阻塞（不先改代码就删 → 全量回归变红）**：
+  `nla-modules/nla-system/src/test/java/cn/com/nla/system/SysAreaDataContractTest.java`
+  的 **L23** 用 `Files.readString(root.resolve("sql/sys_area.sql"))` **硬读**旧目录（L47 是
+  `Files.isRegularFile` 软判断，L24 读的是交付侧 `script/sql/nla_system_area_data.sql`）。
+  除它以外还有一个非入库消费方：`.migration/verify-sys-area-data.ps1:2` 也读 `..\sql\sys_area.sql`（见 6.1.1）。
+  → 真正删 `sql/` 之前必须先把这两处的输入源切到 `script/sql/` 侧，或让守卫测试改为可选跳过。
+- **连带需同步、但不会让构建变红的旧路径引用**：
+  | 文件 | 问题 |
+  |---|---|
+  | `.build/jenkins/mave-build.sh` L5-L7 | `find ${WORKSPACE}/spring-boot-business`、`spring-boot-client/spring-boot-web-api`、`spring-boot-system` 取 jar |
+  | `.build/docker/jenkins_restart_docker.sh:4` | `docker-compose -f '/usr/local/program/spring-cloud/docker/docker-compose.yml' build spring-boot-bean` —— 指向 9.1 **已删**的 compose，本就是死配置 |
+  | `.build/jenkins/startcloud.sh:14` | `JAR_PATH=${JAR_BATH}/spring-boot-*/*.jar`（同行还有变量名拼错 `JAR_BATH`） |
+  | `README.md:45` 与 `:352-358` | 旧目录职责表（business/client/common/feign/service/starter/system 七行）+「`spring-boot-sms` 同时承载四种职责」叙述 |
+  | `.gitignore` | `spring-boot-business/spring-boot-face/conf/` 是仓库里**唯一**只服务旧目录的规则，删目录后成为死规则 |
+- **可独立先删的大件**（不必等整体清理，且当前无任何代码/脚本读取）：
+  `sql/sys_area_1.sql` 实测 **93,299,908 字节 / 679,280 行**（占旧侧 tracked 体积 80.3%），
+  9.3 已说明它是「字段不同且含五级社区的另一数据集」，不被任何新代码或脚本读取；
+  legacy `ip2region.xdb`（11,070,130 字节，`spring-boot-starter-logs-core` 下）可删 ——
+  新侧已另有 `nla-admin/src/main/resources/ip2region_v4.xdb`（实测双份并存）；
+  旧侧 top-12 大文件里其余 9 份全是 `spring-boot-service-xxl-job` 的 `static/`（adminlte / echarts / codemirror 前端资源）。
+- **本轮不执行任何删除**；上表即为阶段 9 收尾时的操作依据。旧代码在 `5.0.0-dev` 分支完整保留，删除可恢复（见 9.2 口径）。
+
 ### 9.3 `sql/` 为何不在本轮删除
 
 虽然用户选项里列了 `sql/`，但逐份核对后发现它是**阶段 4.3 DDL 重写的直接输入**，
@@ -2144,6 +2265,12 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 `sys_area_1.sql`（679273 行）需单独评估是入库还是改为运行时导入 ——
 注意它当前**已在仓库里**（`sql/` 目录 `tracked=10`），阶段 4 处理时需一并决定去留。
 
+> ⚠️ **本节的行数已被阶段 9 第六轮实测校正（登记见 9.2.1）**：`sql/sys_area_1.sql` 现为
+> **679,280 行 / 93,299,908 字节**（`probe-m14-cleanup.ps1` 直接计数），上文的 679273 是阶段 4 写下时的快照；
+> 另 `sql/` 目录 tracked 字节合计 93,688,123，其中 `sys_area.sql` 238,353 字节。
+> 本节的**保留理由仍然成立**，且现已追加一条新事实：`SysAreaDataContractTest` 硬读 `sql/sys_area.sql`，
+> 即 `sql/` 不只是「对照源」，还是**当前守卫测试的输入**（批次原文不改写，只加此更正指针，先例 4.5）。
+
 ---
 
 ## 10. 迁移脚本索引
@@ -2159,6 +2286,10 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 > ⚠️ 放宽后的新坑：文档里用反引号包的**占位名**会被当成真脚本（本轮曾因此冒出一条 x.ps1 的假「丢失」，
 > 而单独的 .ps1 扩展名包上反引号也会匹配成假条目），描述匹配规则时一律不加反引号（见 8.8）。
 > **不要把「本节没有登记」当成「工具不存在/结论不可重现」**；需要重现某项判定时先跑对账脚本再下结论。
+>
+> 阶段 9 第六轮收口时重跑同脚本：**已登记 101 / 在盘 122**，「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，
+> 「在盘但未登记」22 份（本轮新登记的 13 份 `probe-m14-*.ps1` 已入表，其余为历史一次性 dump/build 入口）；
+> 88/109 那组数字是阶段 9 第五轮的快照，保留不改写。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2236,6 +2367,16 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | `probe-m13-stale.ps1` | 台账陈旧登记取证（见 8.8）：26 个改造符号用 `git grep -l -I -E` 做新侧/旧侧**文件数**对照，并把新侧命中按 `模块/子模块` 分组 | ✅ |
 | `probe-m13-drill.ps1` / `probe-m13-date.ps1` / `probe-m13-extra.ps1` / `probe-m13-es.ps1` | 下钻复核（区分「JavaDoc 提及」与「真实使用」）：`RedisUtils` 归属两侧、`java.util.Date` import 与 `new Date(` 拆分、`@RateLimiter`/OSS 使用点、旧 ES 真实调用面 | ✅ |
 | `probe-m13-anchor.ps1` / `probe-m13-docs.ps1` / `probe-m13-stage5.ps1` / `probe-m13-head6.ps1` / `probe-m13-ledger-mentions.ps1` | 文档定位五件套：按正则在 mapping/README/login-strategies 里找待改行的**真实行号**（用户会在会话间改这些文件，硬编行号不可信）、`docs/migration` 清单与行数、阶段 5 批次号 ↔ 章节号对照、第 6 章标题与 facesdk/Controller 命中定位（用于确认批次 6.4 → §6.7 的对照，见 8.8）、旧对账数字（84/107、63/91）是否仍被引用 | ✅ |
+| `probe-m14-who8080.ps1` | 「谁说 8080 不通」取证：列 java 进程创建时间与完整命令行（识别 IDEA Debug 的 `jdwp`/`captureAgent`）、`Get-NetTCPConnection` 端口属主，并统计 90 分钟内被改写的 `.log`（实测 0，据此发现日志真实落点不在 `nla-admin/logs`，见 8.9）| ✅ |
+| `probe-m14-app8080.ps1` | 进程 → 应用 → HTTP 三段确认：pid 命令行尾部的 `-classpath ... cn.com.nla.NlaApplication`、该 pid 的监听端口、`Invoke-WebRequest` 打 `127.0.0.1:8080` 与 `localhost:8080` 的状态码/长度 | ✅ |
+| `probe-m14-logloc.ps1` | 日志落点与 HTTP 面探测：仓库根 `logs/` vs `nla-admin/logs/` 的新旧对照、`application.yml` 的 `server.port`、`.run` 配置可达性，以及 `/actuator/health`、`/resource/oss/config`、`/auth/tenant/list` 等路由的实际响应 | ✅ |
+| `probe-m14-runlog.ps1` / `probe-m14-runlog2.ps1` | 从**运行中 JVM 独占**的 `logs/sys-console.log` 抽启动签名（必须 `FileShare ReadWrite` 打开，见 10.1 第 8 条）：数据源计数、工作流分库行、`Started NlaApplication`、失败 run 的 `Access denied`；第二轮定位本轮 run 的起始 index 并分离 WARN/ERROR | ✅ |
+| `probe-m14-errctx.ps1` | dump `logs/sys-error.log` 指定行段，还原异常上下文与完整过滤器链栈（CryptoFilter→Xss→Repeatable→Sa 四道→Cors→Observation→Dispatcher，Jetty ee11），用于区分「真实缺陷」与「探测噪音」 | ✅ |
+| `probe-m14-gating.ps1` / `probe-m14-preflight.ps1` | 「依赖但停用」实测（B 项依据，见 5.1.1 更正指针）：技术模块 `@Component`/`@ComponentScan`/`@ConditionalOnProperty` 逐个计数、消费方自带门控类清单、dev/prod yml 里 freeswitch/video/socket-io/face/mq 开关键是否存在 | ✅ |
+| `probe-m14-brandcheck.ps1` | 品牌审计真/假 GREEN 复核：`docs/` 下逐行定位 `ruoyi`/`若依` 命中，回显目录白名单与整文件豁免清单（用于判断 `audit-brand.ps1` 的 `hits=0` 是真空还是被豁免吃掉，见 8.9）| ✅ |
+| `probe-m14-cleanup.ps1` | 阶段 9 影响清单体积依据（见 9.2.1）：根 pom `<modules>` 实读、旧侧 tracked 文件/字节分目录计数、top-12 大文件、`sys_area_1.sql` 行数、本台账章节行号（插入点定位）| ✅ |
+| `probe-m14-legacyrefs.ps1` | 新侧到旧目录的 path-style 引用扫描（排除 Spring Boot 官方 `spring-boot-starter-*` artifactId 假阳性）+ `sql/` 裸目录引用定位 + `.build` 脚本 / README / `.gitignore` 连带引用 + ip2region 双份确认 | ✅ |
+| `probe-m14-untracked.ps1` / `probe-m14-untracked2.ps1` | 删除前风险清点：不加/加 `--exclude-standard` 两种口径的未跟踪计数（差集才是真风险）、ignored `target/` 目录枚举、旧侧磁盘文件数与 MB 体量 | ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
@@ -2281,6 +2422,17 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
    **推论**：任何“还剩多少待改”的结论都必须现取（`probe-m13-stale.ps1` 这类双向计数脚本），
    并且区分**旧侧规模**与**新侧待办**；新侧命中还要区分「JavaDoc 提及」与「真实使用」
    （`git grep -E` 的词边界与 GNU grep 不一致，精确复核用 `-w`）。
+8. **观测运行中应用的产物不能靠默认文件打开方式，也不能信 `Read` 的返回** —— 阶段 9 第六轮实测两条：
+   ① 运行中的 JVM 对 `logs/*.log` 持**独占**句柄，`[IO.File]::ReadAllBytes` 直接抛「文件正由另一进程使用」，
+   必须 `[IO.File]::Open(path, Open, Read, [IO.FileShare]::ReadWrite)` + `BinaryReader`；
+   ② 脚本用 `WriteAllText` 重写同名输出文件后，**`Read` 工具会返回上一次的内容、甚至报「文件不存在」**
+   （`out-m14-cleanup.txt` 实测已写入 175 行仍被报不存在）—— **复核脚本产物一律用 `Get-Content -Encoding UTF8`**，
+   `Read` 只用于人工确认片段。
+   另：脚本产物**不要经 `Out-File`/管道**落地（会按控制台代码页二次编码产生乱码），
+   直接在脚本里 `WriteAllText(..., UTF8 BOM)`。
+
+   > 上方标题的「七条」与下文「附带四条」都是写下时的快照计数；本节已由阶段 9 第六轮追加第 8 条，
+   > 按批次原文不改写口径保留原标题（先例 4.5）。
 
 附带四条工具级陷阱：
 
