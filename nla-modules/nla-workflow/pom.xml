@@ -36,12 +36,6 @@
             <artifactId>nla-common-mail</artifactId>
         </dependency>
 
-        <!-- 短信模块 -->
-        <dependency>
-            <groupId>cn.com.nla</groupId>
-            <artifactId>nla-common-sms</artifactId>
-        </dependency>
-
         <!-- 数据库服务 -->
         <dependency>
             <groupId>cn.com.nla</groupId>

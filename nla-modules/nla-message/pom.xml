@@ -83,6 +83,12 @@
             <artifactId>nla-common-sensitive</artifactId>
         </dependency>
 
+        <!-- api模块（对外提供 cn.com.nla.message.api.SmsService 跨模块出口） -->
+        <dependency>
+            <groupId>cn.com.nla</groupId>
+            <artifactId>nla-api</artifactId>
+        </dependency>
+
         <!-- 数据层契约测试，不进入应用运行时依赖 -->
         <dependency>
             <groupId>com.h2database</groupId>

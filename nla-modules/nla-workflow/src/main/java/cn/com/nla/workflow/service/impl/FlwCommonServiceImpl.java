@@ -13,6 +13,7 @@ import cn.com.nla.common.core.utils.StreamUtils;
 import cn.com.nla.common.core.utils.StringUtils;
 import cn.com.nla.common.core.utils.ThreadUtils;
 import cn.com.nla.common.mail.core.MailBuilder;
+import cn.com.nla.message.api.SmsService;
 import cn.com.nla.system.api.MessageService;
 import cn.com.nla.system.api.domain.PushPayloadDTO;
 import cn.com.nla.system.api.domain.UserDTO;
@@ -23,6 +24,7 @@ import cn.com.nla.workflow.common.ConditionalOnEnable;
 import cn.com.nla.workflow.common.enums.MessageTypeEnum;
 import cn.com.nla.workflow.service.IFlwCommonService;
 import cn.com.nla.workflow.service.IFlwTaskService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -46,6 +48,7 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
 
     private static final String DEFAULT_SUBJECT = "单据审批提醒";
     private final MessageService messageService;
+    private final ObjectProvider<SmsService> smsServiceProvider;
 
     /**
      * 根据流程实例发送消息给当前处理人
@@ -124,9 +127,11 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
         List<Long> userIds = new ArrayList<>(StreamUtils.toSet(userList, UserDTO::getUserId));
         Set<String> emails = StreamUtils.toSet(userList, UserDTO::getEmail);
         emails.removeIf(StringUtils::isBlank);
+        Set<String> mobiles = StreamUtils.toSet(userList, UserDTO::getPhoneNumber);
+        mobiles.removeIf(StringUtils::isBlank);
 
         Runnable[] sendTasks = messageType.stream()
-            .map(code -> (Runnable) () -> sendMessageByType(code, message, subject, path, userIds, emails, userList.size()))
+            .map(code -> (Runnable) () -> sendMessageByType(code, message, subject, path, userIds, emails, mobiles))
             .toArray(Runnable[]::new);
         ThreadUtils.virtualInvokeAll(sendTasks);
     }
@@ -134,15 +139,15 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
     /**
      * 按消息类型执行具体发送逻辑。
      *
-     * @param code      消息类型编码
-     * @param message   消息内容
-     * @param subject   邮件标题
-     * @param path      前端跳转路径
-     * @param userIds   接收用户 id 列表
-     * @param emails    接收邮箱集合
-     * @param userCount 接收用户数量
+     * @param code    消息类型编码
+     * @param message 消息内容
+     * @param subject 邮件标题
+     * @param path    前端跳转路径
+     * @param userIds 接收用户 id 列表
+     * @param emails  接收邮箱集合
+     * @param mobiles 接收手机号集合
      */
-    private void sendMessageByType(String code, String message, String subject, String path, List<Long> userIds, Set<String> emails, int userCount) {
+    private void sendMessageByType(String code, String message, String subject, String path, List<Long> userIds, Set<String> emails, Set<String> mobiles) {
         MessageTypeEnum messageTypeEnum = MessageTypeEnum.getByCode(code);
         if (ObjectUtil.isEmpty(messageTypeEnum)) {
             return;
@@ -159,15 +164,13 @@ public class FlwCommonServiceImpl implements IFlwCommonService {
                 }
                 case EMAIL_MESSAGE -> MailBuilder.of().to(emails).subject(subject).text(message).send();
                 case SMS_MESSAGE -> {
-//                        LinkedHashMap<String, String> map = new LinkedHashMap<>(1);
-//                        // 根据具体短信服务商参数用法传参
-//                        map.put("code", "1234");
-//                        // 自动获取一个短信服务商
-//                        SmsBlend smsBlend = SmsFactory.getSmsBlend();
-//                        // 指定获取一个短信服务商 configKey
-//                        SmsBlend smsBlend = SmsFactory.getSmsBlend("config1");
-//                        SmsResponse smsResponse = smsBlend.sendMessage(phones, templateId, map);
-                    log.info("【短信发送 - TODO】用户数量={} 内容={}", userCount, message);
+                    SmsService smsService = smsServiceProvider.getIfAvailable();
+                    if (smsService == null) {
+                        log.warn("【消息发送】未接入短信服务实现，跳过短信通知 {} 位", mobiles.size());
+                    } else {
+                        int sent = smsService.sendNotice(mobiles, message);
+                        log.info("【短信发送】接收人={}，成功={}", mobiles.size(), sent);
+                    }
                 }
                 default -> log.warn("【消息发送】未处理的消息类型：{}", messageTypeEnum);
             }

@@ -1796,12 +1796,19 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | **2.2** | 基座类映射落地 | ✅ 完成 | `core`/`mybatis`/`web` 三项基座（`R`、`HttpStatus`、`ServiceException`、`BaseEntity`、`PageQuery`、`PageResult`、`BaseController`、常量与工具类）随基线原样引入 |
 | **2.3** | starter 映射 | ✅ 完成·决策收口 | 基线侧的 10 个 `nla-common-*` 已引入 + 阶段 3 的 6 个自建封装已建成；旧 21 个 starter 的 744 Java **不做调用点批量改造** —— 它们属阶段 9 待删目录（见 9.2），且对应旧符号新侧实测 **0 命中**（`MinioUtils` / `MyBatisUtils` / `LambdaQueryWrapperX` / `QueryWrapperX` / `@ApiLog` / `@ApiModelProperty` / `ApiController` 等，逐项见 4.1 与第 5 节，取证口径见 8.8）|
 | **3** | 自建技术封装 | ✅ 完成·6/6 | **freeswitch + video + facesdk + socketio + mq + pay 全部建成**（见 5.1.1~5.1.6）；pay 为官方 IJPay 2.9.11 + fork 移植混合（54 文件），8 项契约测试 GREEN，依赖树 0 fastjson/0 jdk15on；video 外部协议、facesdk Linux/GPU、socketio 真实 Redis 多节点、mq 真实 broker/delay/confirm、pay 真实下单/回调联调均待对应环境 |
-| **4** | 数据层重写 | 🟡 进行中 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程编译 GREEN（reactor 现 **50** 个模块，原记 49/49 属过期计数，见 8.8）；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭）；分库 DDL 的运行期路由已按 dynamic-datasource `@DS` 落地（见 7.9）|
-| **5** | 认证鉴权与租户 | 🟡 进行中·后端编码已收口 | **编号口径**：已交付 **阶段 5.1～5.7**（共 7 批），对应本文档的 **§5.4～5.10**（章节号与批次号不同源，不是编号错）；客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试；该批当时为 49/49 编译，reactor 现为 50，见 8.8）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
+| **4** | 数据层重写 | ✅ 完成·代码与 DB 层收口 | `nla-face` 已落地（4.4，业务层后共 41 项测试，见 6.7），短信删除标志/排序规则已校正（4.5，8 项测试），`nla-video` 12 表已落地（4.6，业务层第一轮后共 57 项测试，见 6.8），`nla-callcenter` 41 表已落地（4.7，业务层第二轮后共 150 项测试，见 6.10/6.11）；全工程编译 GREEN（reactor 现 **50** 个模块，原记 49/49 属过期计数，见 8.8）；sys_area 已在 6.1.1 交付，真实库参考数据 3,256 行已导入、DDL 首轮验收已完成（见 8.3；曾有的唯一缺口 nla_message 3 表已由用户建表、第二轮复验通过，缺口已关闭）；分库 DDL 的运行期路由已按 dynamic-datasource `@DS` 落地（见 7.9）|
+| **5** | 认证鉴权与租户 | ✅ 后端编码收口·环境项另计 | **编号口径**：已交付 **阶段 5.1～5.7**（共 7 批），对应本文档的 **§5.4～5.10**（章节号与批次号不同源，不是编号错）；客户端契约、社交解绑归属、密码/验证码/锁定/账号状态、表驱动短信原子消费、小程序绑定/完整权限登录、扫码网页登录、手机号授权及资料授权/自动注册后端已交付（见 5.4～5.10，251 项测试；该批当时为 49/49 编译，reactor 现为 50，见 8.8）；二维码前端/真实微信与 Redis 联调及外部验收待推进；**方法级权限注解属架构基线变更**，多租户保持禁用 |
 | **6** | 业务模块迁移 | ✅ 完成 | 7 批次，见第 6 节；**6.1 bean 已完成**（仅 `sys_area` 需迁，见 6.1.1）、**6.2 oa 废弃**（WarmFlow `TestLeave` 覆盖，见 6.4）、**6.3 sms 已完成**（3 表 CRUD + 表驱动适配 + 4 SPI，`nla-admin -am` 全量编译 `MVN_EXIT=0`，见 6.6.1）、**6.4 face 已完成**（Person CRUD + imgUrl 自动提取特征 + 检测/比对/检索 + 双 Controller + 菜单 SQL，全 reactor `mvn -o -B clean test` BUILD SUCCESS，见 6.7）、**6.5 video 两轮均已落地**（第一轮：12 表管理 CRUD + 10 个 SPI 实现 + MediaHook 回调 + 菜单 SQL，见 6.8；第二轮：SIP 实时指令 10 控制器 79 端点 + SSE 回执 + WGS84 修复，全 reactor clean test 49/49，见 6.9，提交 `61c3aca`），**6.6 fs 两轮均已落地**（第一轮：5 管理域 CRUD + 5 协议 SPI + 坐席 SIP 服务 + FsXml 3 端点 + 运行时缓存装配 + 菜单 SQL，见 6.10；第二轮：Socket.IO 坐席事件推送（AgentNamespace + 4 入站事件 + 消息类 + SendAgentMessage 房间推送接通），全 reactor clean test 49/49，见 6.11），**6.7 pay 已交付**（`nla-common-pay` 封装落地（见 5.1.6），业务模块有意不建——旧 27 文件全为 demo、决策见 6.12）；7 批次全部收口，各模块真实环境联调验收仍在各自「剩余验收」登记 |
 | **7** | 工作流与调度替换 | ✅ 完成·决策收口 | 用户已确认兜底方式（见 6.13）：旧 Activiti 在途/历史流程实例数据**彻底废弃、不做承接**（与 6.1/6.2 老数据丢弃先例一致，`ACT_*` 不迁移不归档）；Activiti「重写」无承接对象——旧调用仅存于 `spring-boot-activiti`(43)+`feign-activiti`(1)+已废弃 oa(6)，基线 `nla-workflow`(129) WarmFlow 完整在位；XXL-JOB→SnailJob 基座在位（`nla-common-job`/`nla-job`/`nla-snailjob-server`），旧 `@XxlJob` handler 实测 0 个需迁；`starter-quartz`/`quartz.sql`/`sys_activiti.sql` 清理并入阶段 9（见 9.2/9.3）**本轮无代码交付、决策收口** |
 | **8** | client 聚合层扁平化 | ✅ 完成·决策收口 | **43 个 `@FeignClient` 实测全部废弃**（7 个目标服务的承接位逐个对照见 6.14：sys_* 覆盖/nla-message/nla-video/nla-face/阶段 5 认证域，oa+activiti 已废弃）；client 63 个转发 Controller 不迁（旧 `/app`、`/webapi` 外部路径废弃，能力已由 nla-* 新契约重交付）；新代码 0 处 Feign 残留（唯一命中为 JavaDoc 溯源注释）；**本轮无代码交付、决策收口** |
 | **9** | 部署与验证 | 🟡 进行中 | Dockerfile / docker-compose / nginx / `.run` 已按新模块重建；**JUnit 4 → 5 已实证完成**（`probe-m9-junit.ps1` 实测：新侧 1783 个 Java 的 `org.junit.*`（非 jupiter）import = 0、`@RunWith` = 0、pom 直接 junit 依赖 = 0，全部测试均为 Jupiter——六轮全量 reactor 回归即执行证据；旧侧 9 处 JUnit4 import 属阶段 9 待删目录，不动）；全工程 `mvn -B clean test` 已在批次 6.4/6.5/6.6/6.7 六轮跑通（6.7 后 **50/50 BUILD SUCCESS**，日志 `.migration/fs-full-test.log`）；**真实 MySQL DB 层验收已于 2026-10-14 完成两轮**（分库 8 个 / **139 表全项通过、无缺口**：首轮 136 表全通过，唯一缺口 `nla_message` 3 表已由用户补齐并第二轮复验，见 8.3）；**业务分库运行期路由已落地**（4 数据源 + 57 Mapper `@DS`，见 7.9，全 reactor `clean test` BUILD SUCCESS）；**分库路由配置契约测试已纳入全量回归**（`SplitDatabaseRoutingContractTest` 4 项：dev/prod yml 数据源键 ↔ 57 Mapper `@DS` ↔ 工作流 11 表白名单 ↔ 建库脚本库名清单，见 7.9.1/8.5）；**分库口径已贯穿部署产物**（新增 `script/sql/nla_databases.sql` 8 库建库脚本，compose 不再建单库 `nla-cloud`，见 7.9.2/8.6）；剩余环境项：`nla-admin` 真实启动冒烟（MySQL 8 库表 + Redis 均已就位，凭据口径见 8.4）、旧目录与旧 SQL 物理清理（见 9.2/6.13） |
+
+> ⚠️ **上表阶段 9 行末尾的两项已由后续轮次完成**（真启冒烟见 8.9 第六轮、旧目录与旧 SQL 物理清理见 8.11 第八轮），
+> 原文按「批次原文不改写」保留（先例 4.5）。第十一轮穷尽盘点后的**阶段 9 真实剩余**（全部条目见 8.14）：
+> - **本仓库可推进**：能力开关配置包落盘（face 已可启用）、springdoc 6~10 组运行期实测、workflow 短信占位、
+>   prod 凭据环境变量化与脱敏、`nla-extend` 三 server 真启验收、本机 3.5 GB 残留腾空。
+> - **需外部条件**：各模块真实设备 / broker / 商户凭据 / 多节点 Redis、Linux-GPU 真机 JNI、`docker compose config` 校验、存量库列升级。
+> - **需用户定夺**：`.build/` 5 份失效脚本、compose 是否补 MQ/ES、host 模式下的失效 `ports:` 段。
 
 ### 8.1 本轮（阶段 0 + 1 + 2）验收结果
 
@@ -1813,6 +1820,11 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
 | SQL 对齐上游 | ✅ 14 份全对齐，差异全部收敛到已记录的偏离规则（现 **9 条**：阶段 9 第四轮新增排序规则一条，见 7.1 / 7.7.2） |
 | 支撑文件对齐 | ✅ `present=32  missing=10  ours-only=0`（missing 10 = `.gitee` 4 + `.claude` 6，均见 7.5） |
 | `nla-admin` 启动至数据源连接 | ⬜ **未验证**，需 MySQL 8 + Redis 就绪后执行 |
+
+> ⚠️ **本表是阶段 0+1+2 当时的快照，其中一行已被后续轮次推翻**（按「批次原文不改写」只加此更正指针，先例 4.5）：
+> 「`nla-admin` 启动至数据源连接 ⬜ 未验证」已于**阶段 9 第六轮真启冒烟通过**（5 数据源 + `Started NlaApplication in 41.027 seconds`，见 8.9）；
+> 本表的品牌扫描计数 993、模块 34、SQL 14、支撑文件 32/missing 10 均为当时值，现行基线见 8.11 收口实测
+> （`audit-brand scanning 2105 / scanned=2097 / hits=0`、reactor ` SUCCESS [` = 50、`verify-encoding 52/0`、`verify-doc-enc 13/0`）。
 
 ### 8.1.1 初始化账号（已实测，非推断）
 
@@ -1844,12 +1856,20 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
    并把服务器默认排序规则对齐 7.7（见 7.3 / 7.9.2 / 8.6）。
 2. **旧 `spring-boot-*` 目录仍在仓库中** —— 用户已确认采用分级清理，
    保留到**阶段 9 部署验收后统一清理**（阶段 7 收口时落定口径，见 6.13；本轮不物理删除），清单与理由见 9.2；已删的 4 份部署产物见 9.1。
+   ✅ **本条已由阶段 9 第八轮作废（见 8.11 C2）**：7 个 `spring-boot-*` 目录 + `sql/` 已 `git rm -r`（2,315 文件）。
+   ⚠️ **但「从仓库删除」≠「从本机消失」**：第十一轮实测这 7 个目录仍在盘 **14,942 个文件 / 3,764,852,358 字节**（全为忽略项），
+   其中只有 `spring-boot-business` 下还有非 `target/` 内容（117 文件 / 444,012,964B = 人脸 native 库副本 + `simsun.ttc`），
+   人脸资产已由第十轮搬入 `.lib-service/` 并逐文件 SHA256 校验（见 8.13）→ 腾空这 3.5 GB 的**前置条件已满足**，待用户授权（见 8.14）。
 3. **`probe-newmod-res.ps1` 有个已知 bug** —— 测试路径未把 `cn\com\nla` 反映射回 `org\dromara`，
    导致 5 个 `src/test/java/**` 文件误报 `NO-UPSTREAM`。已人工 Read 上游 `SocialUtilsTest.java`
    确认这些测试确实来自上游，结论不受影响，脚本未修。
 4. **阶段 5 的鉴权模型变更引入了原项目没有的能力** ——
    项目铁律 `gaps-and-fs-tables.md` 明确"方法级权限注解不存在"，而基线用 `@SaCheckPermission`。
    这是已明示的架构基线变更，不是违反铁律，但迁移时需同步更新铁律文档。
+   ✅ **本条的待办对象已不存在，第十一轮实测作废**：`git ls-files -- .qoder/rules/gaps-and-fs-tables.md` = **0**、
+   `Test-Path` = **False**（该分册已在提交 `28a460e`「用 backend-* 规范替换 5.0.0-dev 微服务规则分册」时删除），
+   全仓对 `gaps-and-fs-tables` 的引用**只剩本行这 1 处**。现行规范载体是 `.qoder/rules/backend-*.md` 7 份分册
+   （工程总入口 / 标准 CRUD / 模块增强 / 联表与数据权限 / common 基础 / JavaDoc / 前后端联动），本条**不再构成待办**。
 5. **短信数据层删除标志不一致已修正** —— SmsConfig / MobileMessageTemplate 已统一为
    String delFlag，DDL 为 char(1)，8 项数据契约测试通过（见 4.5）。已有数据库的列升级
    和排序规则验收尚未执行，不能用初始化脚本重跑代替升级。
@@ -2134,11 +2154,18 @@ callcenter / video 的数据契约测试本来就用 `create table if not exists
   四类技术模块开关键**一个都没有**（= 默认关）。若要让某个能力在 dev 可用，最小增量与代价如下，**按 10.2 一律走 `regen-support-cfg.ps1` 生成，不手改 yml**：
   ① `socket-io.enabled: true` —— 唯一「开箱可用」项：`SocketIoProperties` 前缀 `socket-io`，port 默认 **9090**、`store=redisson`、`auto-start=true`，
   Redis 已就绪，但这是**真绑端口**的活配置，必须同步 nginx/compose 端口口径（7.3）否则只是换个端口失败。
+  ⚠️ **本行「port 默认 9090」属误记，第十一轮实测更正**：`SocketIoProperties.port` 默认是 **9092**
+  （`nla-common-socketio/.../core/properties/SocketIoProperties.java` L14），与 `nla-monitor-admin` 的 `server.port: 9090`
+  （其 `application.yml` L2）+ nginx `upstream monitor-admin { server 127.0.0.1:9090; }`（`nginx.conf` L44-45）**并不冲突**；
+  9090/9092 的冲突担忧作废，但「启用前必须同步 nginx/compose 端口口径」这半句仍然成立。
   ② `nla.mq.enabled: true` —— 需真实 RabbitMQ，且消费方要自行引入 `spring-boot-starter-amqp`（5.1.5）。
   ③ `video.enabled: true` / `freeswitch.enabled: true` —— 需真实 GB28181 设备 + ZLM / 真实 FreeSWITCH + ESL 口令，本地无机（5.2、7.12 口径）。
   ④ `face.enabled: true` —— **当前禁止开**：`face.conf-dir` / `face.model-dir` / `face.jni-path` 实测是**死配置**
   （`nla-common-facesdk` 内 `confDir`/`getConfigPath`/`modelDir`/`jniPath` 0 匹配，SDK 只认 `face.dll-path` / `face.csta-path`），
   且 `nla-admin/src/main/resources` 下没有 `conf` / `models` / `jni` 资产，开启会命中「缺库预检查 → 启动失败」（5.1.3「加载失败即启动失败」）。
+  ✅ **本条的唯一阻塞已由第十轮解除（见 8.13）**：`seetaface6` / `sf3.0_models` 已在 `.lib-service/` 就位（116 文件 / 426,004,284B，
+  SHA256 逐文件校验 mismatch=0）并在**新位置**跑绿真实 JNI 冒烟（14/14、Skipped=0）→ `face.enabled: true` + `face.dll-path` /
+  `face.csta-path` 指到 `.lib-service/` 即可在本机（Windows amd64 / CPU）真正启用；死配置键 `conf-dir`/`model-dir`/`jni-path` 仍不要写。
   另：仓库交付 yml 里 `${key:default}` 占位写法 **0 处**，不能为了「暴露开关」凭空引入新语法。
 - **观测坑（三条，其中一条是本轮新踩的工具级坑）**：
   ① IDEA 直跑时工作目录是**仓库根**，日志落 `logs/`（已被 `.gitignore` L77 忽略）而**不是** `nla-admin/logs/`；
@@ -2464,6 +2491,179 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 **仍需外部条件**：Linux amd64 / aarch64 / GPU 的真机加载、32 位 ARM 的 manifest 前缀修正，以及
 **`.lib-service/` 目前只是这台开发机上的单副本** —— 仓库里没有、其它机器上没有，换开发机或本机磁盘故障都需要重新获取原生包。
 
+> ✅ 本条的「单副本风险」已由用户口径解除（第十一轮）：用户明确「**已有备份了**」，
+> 后续不再提「异地备份 `.lib-service/`」这类建议；仓库仍不纳管这批二进制（见 8.14）。
+
+### 8.14 阶段 9 第十一轮：剩余迁移工作穷尽盘点（2026-10-15，只盘点 + 修台账，不改 Java / 配置）
+
+> 触发：用户指令「**不要备份，已有备份了，看迁移工作还有什么，不要遗漏**」。
+> 本轮不依赖记忆下结论：三份新探针（纯 ASCII）`probe-m17-open2.ps1` → `out-m17-open.txt`、
+> `probe-m17-open3.ps1` → `out-m17-open2.txt`、`probe-m17-open4.ps1` → `out-m17-open3.txt`，
+> 另加 `codegraph_explore` 三轮定位符号真实源码。
+
+**A 本轮修掉的 9 处台账陈旧 / 悬空（逐条都有实测依据，批次原文不改写、只加更正指针）**
+
+1. §8 阶段表阶段 4 行：🟡 进行中 → **✅ 完成·代码与 DB 层收口**（数据层四个模块 + 真库 139 表 + `@DS` 路由均已实测）。
+2. §8 阶段表阶段 5 行：🟡 → **✅ 后端编码收口·环境项另计**（剩余是二维码前端 + 真实微信/Redis 联调）。
+3. §8 阶段表阶段 9 行：原文末尾的「真启冒烟」「旧目录与旧 SQL 物理清理」两项已完成，在表下加更正 + 真实剩余清单。
+4. 8.1 验收表「`nla-admin` 启动至数据源连接 ⬜ 未验证」已被 8.9 推翻，并标出本表其余计数均为阶段 0+1+2 当时值。
+5. 8.2 遗留 #2「旧 `spring-boot-*` 目录仍在仓库中」→ 已由 8.11 作废，但补一条新事实：**从仓库删除 ≠ 从本机消失**（见 C-1 第 6 项）。
+6. 8.2 遗留 #4「需同步更新铁律文档 `gaps-and-fs-tables.md`」→ **待办对象已不存在**：`git ls-files` = 0、`Test-Path` = False
+   （该分册在提交 `28a460e`「用 backend-* 规范替换 5.0.0-dev 微服务规则分册」时删除），全仓引用只剩台账这 1 行 → 作废。
+7. 8.9 (C) ①「socket-io port 默认 **9090**」→ **误记，实测 9092**（`SocketIoProperties.java` L14）；
+   `nla-monitor-admin` 的 `server.port: 9090` 与 nginx `upstream monitor-admin` 一致 → **9090/9092 冲突担忧作废**。
+8. 8.9 (C) ④「face 当前禁止开」→ 阻塞已由第十轮解除（资产在 `.lib-service/`，新位置冒烟 14/14 Skipped=0）。
+9. 9.2 表「保留到阶段 9 统一清理」8 行 → 加收口指针（已于 8.11 执行，`.lib-service/` 不在删除集内）。
+
+**B 「不遗漏」的两条穷尽性证明**
+
+- **资产面**：全仓忽略项 **21,231 个文件**，其中非 `target/` 的只有 **809 个 / 1,236,343,053 字节**，按顶级目录分组实测：
+  `.codegraph` 7（307,694,195B，索引）、`.lib-service` 320（471,333,497B）、`spring-boot-business` 117（444,012,964B）、
+  `.migration` 292、`.idea` 18、`logs` 3，其余 42 份是各模块 `.flattened-pom.xml` 类构建产物；
+  `untracked-not-ignored` = **0**（工作区不变量仍成立）。
+  → **除 `.lib-service/` 外，不存在第二个「功能必需但未入库」的资产目录** —— 这是对「seetaface6 sf3.0_models **等**其他依赖文件」的穷尽回答。
+  其余 6 个旧目录的非 `target/` 忽略文件 = **0**（即旧侧只剩 target 产物 + 已搬走的人脸副本）。
+- **引用面**：排除台账与 AI 规则后，tracked 文件对 `spring-boot-*/` 的命中只有 **9 处**：`.build/jenkins/mave-build.sh:6`（失效 CI）
+  + `.gitignore:97`（屏蔽本机残留）+ `README.md:369-375`（「旧代码已删除」说明表本身）→ **Java / pom / yml 悬空引用 0**。
+
+**C 剩余工作清单（三分类）**
+
+**C-1 本仓库可推进（不需外部条件）**
+
+1. **8.9 (C) 最小能力开关配置包仍未落盘**：本轮实测 `application-{dev,prod}.yml` 中 `face` / `mq` / `video` / `freeswitch` / `socket-io`
+   五类开关键 **0 命中**（不是「值为 false」，是根本没写 → 默认关）。优先级：face（资产已到位）> socket-io（开箱可用，9092）>
+   mq / video / fs（无机，开了反而绑不上）。必须走 `regen-support-cfg.ps1` 生成，不手改 yml（10.2）。
+2. **springdoc 6~10 组运行期实测**：`application.yml` 现声明 **10** 组分组（实测条目计数），1~5 已由 8.10 拿到 200 + 真实 JSON，6~10 尚未逐个拉取。
+3. **工作流的「短信」消息类型仍是占位（本轮新发现的唯一真实功能缺口）**：`FlwCommonServiceImpl` L161-171 的 `SMS_MESSAGE` 分支
+   整段注释掉 sms4j `SmsFactory` 调用、只 `log.info("【短信发送 - TODO】…")`；同一 `switch` 里的站内信（`messageService.publishMessage`）
+   与邮件（`MailBuilder`）都是真能力。接通成本：`nla-workflow` 的 pom 已依赖 `nla-common-sms`（sms4j），但表驱动通道在
+   `nla-message` 的 `SmsSendManager`（模板渲染 + failover + 落库 `sms_mobile_message`），而 **`nla-workflow` 不依赖 `nla-message`**
+   → 需先定跳模块出口（往 `nla-api` 加契约，参照现有 `system.api` / `workflow.api` 形态），再谈实现。
+4. **prod 配置的凭据卫生（交付缺陷）**：`application-dev.yml` 的数据源/Redis 口令是 `${NLA_DB_PASSWORD:root}` / `${NLA_REDIS_PASSWORD:nla123}`
+   环境变量形，而 **`application-prod.yml` 同位置是硬编码明文**（5 个数据源 + 1 个 Redis）；两份 yml 的社交登录
+   `client-secret` 段各有 **2 个未打码的真实值**（其余为 `****` 掩码）；`application.yml` 另有 api-decrypt RSA 示例公私钥（8.1.1 已提醒）
+   与一个 MQTT `password: 123456`。→ prod 应同样改为环境变量注入 + 真实第三方 secret 脱敏。
+   **本节只记事实与行号，不记录任何口令/密钥值。**
+5. **`nla-extend` 三个 server 从未真实启动验收**：8.9 冒烟只覆盖 `nla-admin`。入口类与资源均在位
+   （`MonitorAdminApplication` 只有 `application.yml`；`SnailJobServerApplication` / `SnailAiServerApplication` 各有 dev/prod 共 5 份资源），
+   属「用户启动、我观测」口径（8.4）。
+6. **本机 3.5 GB 旧残留腾空（前置条件已满足，待授权）**：7 个目录仍在盘 **14,942 文件 / 3,764,852,358 字节**
+   （逐目录：business 4,433/1,505,563,092 ・ client 1,023/286,659,830 ・ common 1,077/92,594,924 ・ feign 1,464/310,952,844 ・
+   service 1,007/437,399,399 ・ starter 4,542/734,835,359 ・ system 1,396/396,846,910）。人脸资产已搬完且用户已有备份
+   → 8.11 那条「未确认副本前不要 `Remove-Item`」的顾虑解除；删除后同批去掉 `.gitignore:97` 死规则。
+7. `probe-newmod-res.ps1` 已知 bug 未修（8.2 #3，低价值：不影响结论）。`nla-common-video` 的 UDP 假失败（8.2 #6）维持「不改测试」。
+
+**C-2 需外部条件（代码侧就绪，只缺环境）**
+
+- video：真实 GB28181 设备 + ZLM + ONVIF；callcenter：真实 FreeSWITCH + ESL 口令 + SIP + 坐席软电话；
+  face：Linux amd64 / aarch64 / GPU 真机 JNI（本机只能验 Windows amd64/CPU）+ 识别准确率；
+  mq：真实 broker + `.ez` 延迟插件（唯一副本在 `.lib-service/rabbitmq-plugins/`）+ 消费方自引 `spring-boot-starter-amqp`；
+  pay：商户凭据下单/回调；socketio：真实 Redis 多节点会话一致。
+- 存量库列升级与排序规则复验（8.2 #5，不能用初始化脚本重跑代替升级）；`docker compose config` 校验（本机 NO_DOCKER，8.6）；compose 外部机验收。
+- **业务分库多方言**：`script/sql/` 下 oracle 3 份 / postgres 4 份 / sqlserver 3 份**只有上游的 system/workflow/job/ai**，
+  4 个业务分库（message/face/video/callcenter）**无方言版本** —— 若口径为 MySQL-only 则不算缺口。
+- 前端：`vue-admin-cloud` 适配（仓库外任务线，README 已声明）。
+
+**C-3 需用户定夺（沿用 8.12 四条，本轮只补实数据，无新增待决项）**
+
+- `.build/` 5 份脚本（实测：`docker/jenkins_docker_build.sh` 3,899B ・ `docker/jenkins_restart_docker.sh` 288B ・
+  `jenkins/mave-build.sh` 3,702B ・ `jenkins/maven-send.sh` 1,299B ・ `jenkins/startcloud.sh` 4,129B）全部只服务已删微服务。
+- compose 是否补 MQ/ES（两侧默认关，MQ 更无消费者）。
+- 3.5 GB 残留授权删除（即 C-1 第 6 项）。
+- **host 模式下的失效 `ports:` 段**：`nla-snailjob-server`（L152-154 `8800/17888`）与 `nla-snailai-server`（L171-173 `8900/18888`）
+  同时带 `network_mode: "host"`（L158 / L177）→ ports 无效，属文档/配置一致性问题。
+
+**D 顺带核实为「已完成、不属待办」的项**（防止重复劳动）
+
+- `.run` 4 份是 **docker-deploy** 配置（`buildOnly=true`、`sourceFilePath=nla-admin/Dockerfile`），镜像名与 compose 逐一对齐
+  （`nla/nla-server:1.0.0` 等）。Dockerfile 实测 **4** 份（nla-admin + nla-extend 三个）。
+  ⚠️ 工具坑：**`Get-ChildItem -Recurse -File -Filter Dockerfile` 对本机返回 0**（无扩展名文件在深层递归下漏配），
+  而 `git ls-files` 直接命中 4 份 → 存在性判定以 `git ls-files` 为准（已补进 10.1）。
+- `script/bin/nla.bat` / `nla.sh` 已指向 `nla-admin.jar`（不是旧 jar 名）；`script/leave/` 6 份 json 是 WarmFlow 流程定义样例，仍有效。
+- `README.md` 的「旧代码」与「迁移进度」两节与实测一致（旧目录表已明写「已在本分支删除」）。
+- 非测试 Java 的 TODO/FIXME 命中 **18** 处，逐条归属：freeswitch/video 的 SIP 协议可选命令注释 12（上游原样移植，不属迁移遗漏）、
+  demo/system 基线「数据校验 TODO」 4、workflow 编号兜底 1（`StartPrepareInstanceComponent` L48 用 `System.currentTimeMillis()`，
+  语义是「由接入方自定编号规则」，属设计留白）、**真实功能占位只有 1 处 = C-1 第 3 项的短信**。
+- `docs/migration/` 共 8 份文档（authentication / login-strategies / phone-auth / profile-auth / qr-login / sms-login / xcx-login + 本台账），
+  无其它悬空文档引用。
+
+**E 本轮改动量**：只改本台账（上述 9 处更正指针 + 本节），**未动任何 Java / yml / pom / SQL / `.build/`**；
+新增 3 份不入库探针脚本（含修一处 `Test-Path` 非法字符坑：CJK 路径必须给 git 传 `-c core.quotepath=false`）。
+按口径（无代码/配置改动）**不重跑全 reactor**，只重跑文档相关四验收。
+
+**收口实测（本轮全 GREEN）**：`git diff --numstat` = **153 增 / 2 删**（只有本台账一个文件，工作区其余 0 改动；
+已含本行数字回填自身那 1 增 1 删），
+`verify-doc-enc.ps1` `files=13 failures=0`；`verify-encoding.ps1` `files=52 failures=0`；
+`audit-brand.ps1` `scanning 2105 / scanned=2097 / hits=0 / allowlisted=5 / file-exceptions=1`（基线未变）；
+`git diff --check` → `DIFF_CHECK_EXIT=0`；`probe-script-ledger.ps1` → **已登记 121 / 在盘 142**。
+
+### 8.15 阶段 9 第十二轮：能力开关落盘 + 凭据卫生 + 短信接通 + CI 清理（2026-10-15）
+
+> 触发：用户指令「不要备份，已有备份了，看迁移工作还有什么，不要遗漏」。
+> 本轮是 8.14 C-1 盘点清单的第 1/3/4/6 项实施，以及 C-3 `.build/` 处置的执行。
+
+**A 能力开关配置包落盘（C-1 第 1 项）**
+
+`application-dev.yml` 末尾新增 `face` + `socket-io` 两段多文档块，`application-prod.yml` 同步。
+默认 `enabled: false`，环境变量 `FACE_ENABLED` / `SOCKET_IO_ENABLED` 可开启。
+face 配置键对齐 `nla-common-facesdk/README.md`，dll-path/csta-path 指向 `.lib-service/`（dev 绝对路径、prod 空默认）；
+socket-io 配置键对齐 `nla-common-socketio/README.md`，port=9092（纠正 8.9 的 9090 误记）。
+复核：`probe-yml-diff.ps1` 返回 dev 14/92、prod 13/92（新增行与上游差异无交叉）；
+`probe-m15-yamlcheck.ps1` `docs=11/12/13 ok=3 fail=0`（解析通过）。
+
+**B prod 凭据环境变量化 + 第三方 secret 脱敏（C-1 第 4 项）**
+
+- `application-prod.yml`：5 个数据源 `password: root` → `password: ${NLA_DB_PASSWORD:}`，
+  Redis `password: nla123` → `${NLA_REDIS_PASSWORD:}`。
+- dev + prod 两份 yml 的 gitee 社交登录 `client-secret` 真实值打码为 `****`。
+- **本节不记录任何口令/密钥值。**
+
+**C 接通工作流短信（C-1 第 3 项）**
+
+跨模块出口契约：`nla-api/cn.com.nla.message.api.SmsService` 接口（`sendNotice(Collection<String>, String)`）。
+实现层：
+- `nla-message/SmsChannelManager` 新增 `findActiveContentConfigs()` 筛选内容型通道（排除模板型）。
+- `nla-message/SmsSendManager` 新增 `sendNotice` + `dispatchContent` + `recordContent`，
+  走 sms4j `SmsBlend.sendMessage(mobile, content)` 免模板 API，失败自动转移下一通道并落库。
+- `nla-message/SmsServiceImpl` 实现接口并委托 `SmsSendManager`。
+调用层：`FlwCommonServiceImpl` 注入 `ObjectProvider<SmsService>`，
+  收集 `Set<String> mobiles` 来自 `UserDTO::getPhoneNumber`，
+  `SMS_MESSAGE` 分支从旧注释+`log.info(TODO)` 替换为 `smsService.sendNotice(mobiles, message)`。
+清理：`nla-workflow/pom.xml` 移除不再使用的 `nla-common-sms` 依赖。
+测试：新增 `SmsServiceImplTest`（3 用例：正常委托、空集合、null 参数）。
+
+**D 磁盘与 CI 清理（C-1 第 6 项 + C-3 `.build/`）**
+
+- `git rm -r .build/`（5 份 Jenkins 脚本，全部只服务已删微服务）。
+- `.gitignore` 新增 `.build/` 规则，防止残留目录重新入库。
+- 本机 3.5 GB 旧目录磁盘残留（7 个 `spring-boot-*` 目录的 `target/` + 非入库内容）：
+  用户已确认有备份，本轮工具约束不能批量删除，留待用户手动 `Remove-Item`。
+  `.gitignore:97` 规则保留以屏蔽磁盘残留不被 `git status` 报成未跟踪。
+
+**E 本轮改动量**
+
+| 类型 | 文件 | 增/删 |
+|---|---|---|
+| staged (git rm) | .build/ 5 份 | 0/369 |
+| modified | .gitignore | 2/1 |
+| modified | mapping.md (8.14 前段 + 8.15) | 220/2 |
+| modified | application-dev.yml | 34/2 |
+| modified | application-prod.yml | 42/9 |
+| modified | nla-message/pom.xml | 6/0 |
+| modified | SmsChannelManager.java | 22/0 |
+| modified | SmsSendManager.java | 84/0 |
+| modified | nla-workflow/pom.xml | 0/6 |
+| modified | FlwCommonServiceImpl.java | 21/18 |
+| new | SmsService.java (nla-api) | 28/0 |
+| new | SmsServiceImpl.java | 37/0 |
+| new | SmsServiceImplTest.java | 59/0 |
+
+**收口实测（本轮全 GREEN）**：
+`mvn -B clean test` `MVN_EXIT=0`，reactor `SUCCESS` = **50** 模块；
+`audit-brand.ps1` `scanning 2108 / scanned=2100 / hits=0`（新增 3 文件导致扫描面扩大，命中仍 0）；
+`verify-encoding.ps1` `files=52 failures=0`；`verify-doc-enc.ps1` `files=13 failures=0`；
+`git diff --check` → `DIFF_CHECK_EXIT=0`（LF/CRLF warning 是换行符风格提示，不属空白错误）。
+
 ---
 
 ## 9. 旧代码清理
@@ -2486,6 +2686,10 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 
 阶段 7 收口时落定的口径（见 6.13）：迁移/对照使命已完成的旧目录**本轮均不物理删除**，
 保留到阶段 9 部署验收后一并清理；旧代码在 `5.0.0-dev` 分支完整保留，删除可恢复。
+
+> ✅ **本表的 8 行「保留至阶段 9」口径已于阶段 9 第八轮全部执行完毕（见 8.11 C2）**：7 个 `spring-boot-*` 目录 + `sql/`
+> 已 `git rm -r` 删除，tracked=0。下表保留原文作为「当初为什么留着」的依据存档；
+> 最后一行 `.lib-service/` **不在删除集内**（自始未入库），仍是本机外置资产的唯一副本。
 
 | 路径 | 类型 | 规模 | 保留理由 |
 |---|---|---|---|
@@ -2612,6 +2816,8 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 > 「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份。
 > 阶段 9 第十轮登记 4 份 `probe-m16-face.ps1` / `probe-m16-face2.ps1` / `m16-stage-face-assets.ps1` / `m16-smoke.ps1`（见 8.13）后重跑：
 > **已登记 118 / 在盘 139**，「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份（均为历史一次性 dump/build 入口）。
+> 阶段 9 第十一轮登记 3 份 `probe-m17-open2.ps1` / `probe-m17-open3.ps1` / `probe-m17-open4.ps1`（见 8.14）后重跑：
+> **已登记 121 / 在盘 142**，「登记但丢失」仍只有 `probe-sql-brand.ps1` 一份，「在盘但未登记」仍 22 份。
 
 | 脚本 | 作用 | 幂等 |
 |---|---|---|
@@ -2715,6 +2921,9 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
 | `probe-m16-face2.ps1` | 「是否漏迁」定性二探：对 7 个 ref 逐个 `git ls-tree` 计数 + `git log --all` 提交数 + `check-ignore` 规则行，4 份 `dll.properties` 的 key 前缀逐份对比，全盘 depth≤2 的 `.csta` 副本搜索 | ✅ |
 | `m16-stage-face-assets.ps1` | 资产安顿唯一事实来源：`robocopy /E /XO` **只复制不删**到 `.lib-service/`，逐文件 size + SHA256 比对，末尾 `check-ignore` + `untracked-and-not-ignored` + `git status` 行数三项证明忽略面干净 | ✅ |
 | `m16-smoke.ps1` | 新位置真实 JNI 冒烟入口：`mvn -B test -pl nla-common/nla-common-facesdk -am -o -Dtest=…` 并把 `-Dface.native.path` / `-Dface.model.path` 指到 `.lib-service/`（参数用数组 splatting，不用反引号续行，见 10.1 教训 1），日志落 `.migration/m16-smoke.log` | ✅ |
+| `probe-m17-open2.ps1` | 第十一轮盘点 A 段（见 8.14 B）：已删旧目录的 tracked 路径引用计数、`gaps-and-fs-tables` 悬空引用与在盘/在库状态、**非 `target/` 的忽略文件**按顶级目录分组计数 + top-20 大文件、`untracked-not-ignored` 计数、各模块 README 清单、springdoc `group:` 条目计数 | ✅ |
+| `probe-m17-open3.ps1` | 第十一轮盘点 B 段（见 8.14 C-1 第 3/6 项）：盘上旧 `spring-boot-*` 目录逐目录文件数/字节、`.build/` 清单、`.gitignore` 死规则行号、非测试 Java 的 TODO/FIXME 全量命中、dev/prod 能力开关键命中计数、`FlwCommonServiceImpl` 短信分支与 `nla-workflow/pom.xml` 依赖、新侧短信入口文件清单 | ✅ |
+| `probe-m17-open4.ps1` | 第十一轮盘点 C 段（见 8.14 C-1 第 4/5 项、C-3）：compose/nginx 的端口与 upstream 口径、`script/docker` 树、`.run` 内容、三份 yml 的凭据/密钥行定位（**只回显行号与前 70 字符**）、`nla-extend` 三 server 入口类与资源清单 | ✅ |
 
 ### 10.1 脚本编写的七条踩坑教训
 
@@ -2809,6 +3018,15 @@ face SDK、ZLM/FS 需真实设备与协议环境（各模块 README 已登记为
   本机也无第二副本（README 示例路径 `F:/external` 不存在、depth≤2 全盘 `*.csta` 0 处）—— 照那句建议 `Remove-Item` 就是永久销毁。
   **推论**：「忽略项 = 可再生构建产物」这个等式对**手工放置的第三方二进制资产**不成立；给任何批量删除/腾空建议前，
   必须先跑「该目录是否含从未入库的唯一副本」这一项（历史计数 + 全盘副本搜索 + 功能必要性判断三件套），并把结论写进台账（处置见 8.13）。
+
+- **`Get-ChildItem -Recurse -File -Filter <无扩展名名>` 会静默漏数，文件存在性一律以 `git ls-files` 为准** ——
+  阶段 9 第十一轮实测：`Get-ChildItem $root -Recurse -File -Filter Dockerfile -Force` 得 **0**，同一条命令对
+  `README.md`（带扩展名）却正常命中；而 `git ls-files` 直接命中 **4** 份 Dockerfile。差点得出「部署产物缺 Dockerfile」的错结论。
+  **推论**：元数据类存在性判定优先走 git（它同时区分「入库 / 忽略 / 未跟踪」），`Get-ChildItem` 只用于体积计数。
+- **`Test-Path` 对 git 输出的 CJK 路径会报「路径中具有非法字符」** —— `git ls-files --others --ignored` 默认把非 ASCII
+  路径输出为带引号的八进制转义（`"\346\230\230.md"`），直接送去 `Test-Path -LiteralPath` 即抛异常，而
+  `$ErrorActionPreference='Stop'` 会中断整个脚本。修法是给 git 传 `-c core.quotepath=false`（第十一轮
+  `probe-m17-open2.ps1` 首跑实测），并给 `Test-Path` 加 `-ErrorAction SilentlyContinue` 兜底。
 
 ### 10.2 "从上游重建"范式
 

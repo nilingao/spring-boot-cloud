@@ -4,6 +4,7 @@ import cn.com.nla.message.domain.MobileMessageTemplate;
 import cn.com.nla.message.domain.SmsConfig;
 import cn.com.nla.message.mapper.MobileMessageTemplateMapper;
 import cn.com.nla.message.mapper.SmsConfigMapper;
+import cn.com.nla.message.sms.SmsChannelEnum;
 import cn.com.nla.message.sms.config.DbSmsReadConfig;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -126,6 +127,27 @@ public class SmsChannelManager {
                 .eq(SmsConfig::getIsActive, ACTIVE)
                 .in(SmsConfig::getId, configIds));
         // 随机打散做负载均衡
+        Collections.shuffle(configs);
+        return configs;
+    }
+
+    /**
+     * 取所有内容型的启用账号（免模板的通知短信用）。
+     * <p>
+     * 通知类短信不带模板编号，只能下发到「纯内容」渠道（{@link SmsChannelEnum#isTemplateBased()}
+     * 为 {@code false}）；模板型渠道缺模板编号无法发送，直接排除。结果已随机打散，
+     * 调用方按序遍历即实现「随机负载均衡 + 失败 failover」。
+     * </p>
+     *
+     * @return 可用的内容型账号列表；无则返回空列表
+     */
+    public List<SmsConfig> findActiveContentConfigs() {
+        List<SmsConfig> configs = smsConfigMapper.selectList(
+            new LambdaQueryWrapper<SmsConfig>().eq(SmsConfig::getIsActive, ACTIVE));
+        configs.removeIf(config -> {
+            SmsChannelEnum channel = SmsChannelEnum.of(config.getSmsType());
+            return channel == null || channel.isTemplateBased();
+        });
         Collections.shuffle(configs);
         return configs;
     }

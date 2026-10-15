@@ -85,8 +85,9 @@ logs
 ### rules 是 README 直接引用的交付物，skills 是随仓库交付的编码规范，
 ### 换机器或他人克隆后必须能直接拿到。若日后产生本地缓存目录，只忽略该缓存子目录。
 
-### 迁移脚手架脚本与中间产物，不入库（`.build/` 是项目 CI 脚本目录，切勿忽略） ###
+### 迁移脚手架脚本与中间产物，不入库（`.build/` 旧 Jenkins CI 脚本已在第十二轮移除，见 mapping.md 8.15） ###
 .migration/
+.build/
 
 ### 人脸识别模型与 native 库（体积大，随部署包外置） ###
 ### 实测当前位置：.lib-service/seetaface6 与 .lib-service/sf3.0_models（已由上面 .lib-service/ 覆盖，

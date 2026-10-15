@@ -314,8 +314,9 @@ justauth:
       client-secret: 1f7d08**********5b7**********29e
       redirect-uri: ${justauth.address}/social-callback?source=weibo
     gitee:
-      client-id: 91436b7940090d09c72c7daf85b959cfd5f215d67eea73acbf61b6b590751a98
-      client-secret: 02c6fcfd70342980cd8dd2f2c06c1a350645d76c754d7a264c4e125f9ba915ac
+      # 第三方应用凭据不入库，需接入时自行替换为部署方申请的值
+      client-id: 10**********6
+      client-secret: 1f7d08**********5b7**********29e
       redirect-uri: ${justauth.address}/social-callback?source=gitee
     dingtalk:
       client-id: 10**********6
@@ -367,3 +368,34 @@ justauth:
       client-id: 10**********6
       client-secret: 1f7d08**********5b7**********29e
       redirect-uri: ${justauth.address}/social-callback?source=gitea
+
+--- # 人脸识别能力开关（SeetaFace6，默认关闭）
+# 键与取值口径见 nla-common-facesdk/README.md，迁移台账 docs/migration/mapping.md 8.9 (C) ④ 与 8.13
+# native 库与 .csta 模型不入库（单文件接近 100 MiB），由部署环境提供；本机约定放在 .lib-service/ 下（已 gitignore）
+# 置 true 前须确认 dll-path / csta-path 指向的目录真实存在，否则启动期预检查会直接失败
+face:
+  enabled: ${FACE_ENABLED:false}
+  # 可指向外置包根目录（按 windows/linux + 架构自动定位），也可指向含 dll.properties 的平台目录
+  dll-path: ${FACE_DLL_PATH:F:/work/java/spring-boot-cloud/.lib-service/seetaface6}
+  csta-path: ${FACE_CSTA_PATH:F:/work/java/spring-boot-cloud/.lib-service/sf3.0_models}
+  # AUTO 会按操作系统与架构选择库；GPU 需匹配的 amd64 GPU 库
+  device: SEETA_DEVICE_CPU
+  device-id: 0
+  # 每种算法独立对象池
+  max-total: 8
+  max-idle: 8
+  min-idle: 0
+  max-wait: 30s
+
+--- # Socket.IO 能力开关（默认关闭，不绑定端口）
+# 键与默认值口径见 nla-common-socketio/README.md，迁移台账 8.9 (C) ①
+# 启用即真绑端口：反向代理需把 /socket.io/ 路由至此端口并转发 WebSocket Upgrade，
+# 且必须与 script/docker/nginx/conf/nginx.conf、docker-compose.yml 的端口口径同步（台账 7.3）
+socket-io:
+  enabled: ${SOCKET_IO_ENABLED:false}
+  host: 0.0.0.0
+  # 独立端口 9092，与 nla-monitor-admin 的 9090 不冲突
+  port: 9092
+  context: /socket.io
+  # memory 单节点即可；改 redisson 需消费方提供 RedissonClient，否则启动失败
+  store: memory

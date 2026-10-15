@@ -379,9 +379,9 @@ PostgreSQL 14.2 / PostgreSQL 13.6 四个容器，供不用 MySQL 的部署按需
 各业务域到 `nla-modules/*` 的映射关系见
 [mapping.md 第 6 节](docs/migration/mapping.md#6-业务模块映射)。
 
-> `.lib-service/`（allatori / rabbitmq-plugins / skywalking-agent）是**本机外置大文件目录**，
+> `.lib-service/`（allatori / rabbitmq-plugins / skywalking-agent / seetaface6 / sf3.0_models）是**本机外置大文件目录**，
 > 自始未纳入版本管理（`.gitignore` 已忽略），不受上述清理影响。
-> `.build/` 下的 5 份 Jenkins / Docker 脚本原本只服务这批已删除的微服务，
+> `.build/`（5 份旧 Jenkins / Docker 脚本）已在阶段 9 第十二轮一并 `git rm`（见 mapping.md 8.15 D），
 > 现行构建方式见「快速开始 → 编译」与 `nla-admin/Dockerfile`。
 
 ## 迁移进度

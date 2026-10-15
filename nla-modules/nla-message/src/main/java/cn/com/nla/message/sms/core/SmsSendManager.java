@@ -23,6 +23,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,6 +134,69 @@ public class SmsSendManager {
     }
 
     /**
+     * 批量发送通知类短信（免模板，内容原样下发）。
+     * <p>
+     * 与验证码短信的区别：不走防重发拦截、不渲染模板、不回写验证码，只在内容型渠道中
+     * 随机选道并 failover；每个手机号落库一条发送记录（成功或最后一次失败尝试）。
+     * 失败只记日志，不向调用方抛异常。
+     * </p>
+     *
+     * @param mobiles 接收手机号集合，空值与空白项会被跳过
+     * @param content 短信内容
+     * @return 实际发送成功的手机号数量；无可用通道时返回 0
+     */
+    public int sendNotice(Collection<String> mobiles, String content) {
+        if (mobiles == null || mobiles.isEmpty() || StrUtil.isBlank(content)) {
+            return 0;
+        }
+        List<SmsConfig> accounts = smsChannelManager.findActiveContentConfigs();
+        if (accounts.isEmpty()) {
+            log.warn("无可用内容型短信通道，跳过通知短信 {} 条", mobiles.size());
+            return 0;
+        }
+        int successCount = 0;
+        for (String mobile : mobiles) {
+            if (StrUtil.isBlank(mobile)) {
+                continue;
+            }
+            for (SmsConfig account : accounts) {
+                SmsResponse response = dispatchContent(account, mobile, content);
+                boolean success = response != null && response.isSuccess();
+                recordContent(mobile, account, content, response, success);
+                if (success) {
+                    successCount++;
+                    break;
+                }
+                log.warn("通知短信通道发送失败，尝试下一个: configId={}, smsType={}, resp={}",
+                    account.getId(), account.getSmsType(), response == null ? "null" : response.getData());
+            }
+        }
+        return successCount;
+    }
+
+    /**
+     * 向指定账号直接下发纯内容（通知类短信专用，不带模板编号）。
+     *
+     * @param account 账号（调用方已保证为内容型渠道）
+     * @param mobile  手机号
+     * @param content 短信内容
+     * @return sms4j 响应；通道未注册或异常返回 {@code null}
+     */
+    private SmsResponse dispatchContent(SmsConfig account, String mobile, String content) {
+        SmsBlend blend = SmsFactory.getSmsBlend(String.valueOf(account.getId()));
+        if (blend == null) {
+            log.warn("未找到已注册的短信通道: configId={}, smsType={}", account.getId(), account.getSmsType());
+            return null;
+        }
+        try {
+            return blend.sendMessage(mobile, content);
+        } catch (Exception e) {
+            log.error("通知短信通道发送异常: configId={}, smsType={}", account.getId(), account.getSmsType(), e);
+            return null;
+        }
+    }
+
+    /**
      * 渲染模板：解析变量 JSON，生成缺失的验证码/缓存分钟数，并做占位替换。
      *
      * @param template 模板
@@ -223,6 +287,26 @@ public class SmsSendManager {
         msg.setVariable(rendered.variableJson);
         // 模板号存原始多渠道编号串，与旧实现一致
         msg.setTemplateId(rendered.rawCode);
+        msg.setStatus(success ? SmsConstant.STATUS_SUCCESS : SmsConstant.STATUS_FAIL);
+        msg.setHandleTime(LocalDateTime.now());
+        if (success && response != null && response.getData() != null) {
+            msg.setMsgId(String.valueOf(response.getData()));
+        }
+        mobileMessageMapper.insert(msg);
+    }
+
+    /**
+     * 落库通知短信发送记录（{@code sms_mobile_message}）。
+     * <p>
+     * 通知类不属验证码三种消息类型，故 type/template_id/variable 均不填（DDL 默认空）。
+     * 审计字段由 {@code BaseEntity} 自动填充。
+     * </p>
+     */
+    private void recordContent(String mobile, SmsConfig account, String content, SmsResponse response, boolean success) {
+        MobileMessage msg = new MobileMessage();
+        msg.setMobile(mobile);
+        msg.setContent(content);
+        msg.setSenderId(account.getId());
         msg.setStatus(success ? SmsConstant.STATUS_SUCCESS : SmsConstant.STATUS_FAIL);
         msg.setHandleTime(LocalDateTime.now());
         if (success && response != null && response.getData() != null) {
