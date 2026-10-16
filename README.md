@@ -154,7 +154,7 @@ nla-cloud/
 ### 1. 建库
 
 本工程按**分库**部署，8 个库同一个实例即可。建库语句的唯一事实来源是
-[`script/sql/nla_databases.sql`](script/sql/nla_databases.sql)（8 条 `CREATE DATABASE IF NOT EXISTS`，
+[`script/sql/nla_databases.sql`](docs/script/sql/nla_databases.sql)（8 条 `CREATE DATABASE IF NOT EXISTS`，
 统一 `utf8mb4` + `utf8mb4_cs_0900_ai_ci`，可重复执行）：
 
 ```bash

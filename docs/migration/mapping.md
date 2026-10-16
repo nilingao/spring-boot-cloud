@@ -437,7 +437,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ### 4.6 视频监控数据层：12 张表（已落地）
 
-新建 `nla-modules/nla-video`，登记业务 reactor 和根 POM 坐标管理，交付 **48 个主 Java 文件（12 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_video.sql`](../../script/sql/nla_video.sql)，模块说明见 [`nla-video/README.md`](../../nla-modules/nla-video/README.md)。旧源码/DDL 保留，不导入旧测试数据；当时未依赖协议封装、未接入 admin，Controller/Service/权限/菜单留阶段 6.5（**第一轮已落地，见 6.8**）。
+新建 `nla-modules/nla-video`，登记业务 reactor 和根 POM 坐标管理，交付 **48 个主 Java 文件（12 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_video.sql`](../script/sql/nla_video.sql)，模块说明见 [`nla-video/README.md`](../../nla-modules/nla-video/README.md)。旧源码/DDL 保留，不导入旧测试数据；当时未依赖协议封装、未接入 admin，Controller/Service/权限/菜单留阶段 6.5（**第一轮已落地，见 6.8**）。
 
 | 旧实体 / 表 | 新实体 / 主键 | 迁移约束 |
 |---|---|---|
@@ -481,7 +481,7 @@ nla-modules/nla-gen/src/main/resources/fm/    ← FreeMarker 模板（.ftl）共
 
 ### 4.7 呼叫中心数据层：41 张表（已落地）
 
-新建 `nla-modules/nla-callcenter`，登记业务 reactor 和根 POM 坐标管理，交付 **164 个主 Java 文件（41 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_callcenter.sql`](../../script/sql/nla_callcenter.sql)，表分组、数据契约与接入约束见 [`nla-callcenter/README.md`](../../nla-modules/nla-callcenter/README.md)。本轮只迁数据层，未接入 admin 或协议封装；Controller/Service/菜单/权限/策略引擎留阶段 6.6。旧源码、旧 SQL 和 FreeSWITCH 自身运行表未改，不迁旧测试数据。
+新建 `nla-modules/nla-callcenter`，登记业务 reactor 和根 POM 坐标管理，交付 **164 个主 Java 文件（41 套 Entity/Bo/Vo/Mapper）+ 2 个 Mapper XML + 1 个测试类**。建表脚本 [`nla_callcenter.sql`](../script/sql/nla_callcenter.sql)，表分组、数据契约与接入约束见 [`nla-callcenter/README.md`](../../nla-modules/nla-callcenter/README.md)。本轮只迁数据层，未接入 admin 或协议封装；Controller/Service/菜单/权限/策略引擎留阶段 6.6。旧源码、旧 SQL 和 FreeSWITCH 自身运行表未改，不迁旧测试数据。
 
 **迁移决策**：
 
@@ -917,7 +917,7 @@ bean 独有表初判 4 张（`bean_user_set`/`bean_mini`/`bean_mini_user`/`sys_a
 
 **DDL** `script/sql/nla_system_ext.sql`（独立新文件，不追加到 91.9KB 基线 `nla_system.sql`，保持基线种子干净、便于上游再同步）：`sys_area` 建表（`area_id` 主键无自增 + 4 索引 `idx_area_code`/`idx_parent_id`/`idx_level`/`idx_area_name`）+ 菜单权限（「行政区划」C 菜单 `1761400000000002100` + 查询 F 按钮 `1761400000000002101`，挂系统管理 `1761400000000000001` 下 `order_num=12`）+ 2 条 `sys_role_menu` 授权（普通角色 `1761300000000000003`）；号段 `2100` 与短信号段 `2000`（`nla_message.sql`）无冲突。
 
-**数据导入已补齐**：新增 [`nla_system_area_data.sql`](../../script/sql/nla_system_area_data.sql)，从仓库现有四级 `sql/sys_area.sql` 生成 3,256 行、显式列序的目标表 INSERT；执行顺序为先 `nla_system_ext.sql` 建表，再执行本数据脚本。`.migration/verify-sys-area-data.ps1` 做源数据与交付数据的行数、顺序和首尾 ID 校验。旧 `sql/sys_area_1.sql` 的 679,237 行是字段不同且含五级社区的另一数据集，不直接导入四级 `sys_area`，避免层级和主键语义错配。
+**数据导入已补齐**：新增 [`nla_system_area_data.sql`](../script/sql/nla_system_area_data.sql)，从仓库现有四级 `sql/sys_area.sql` 生成 3,256 行、显式列序的目标表 INSERT；执行顺序为先 `nla_system_ext.sql` 建表，再执行本数据脚本。`.migration/verify-sys-area-data.ps1` 做源数据与交付数据的行数、顺序和首尾 ID 校验。旧 `sql/sys_area_1.sql` 的 679,237 行是字段不同且含五级社区的另一数据集，不直接导入四级 `sys_area`，避免层级和主键语义错配。
 **仍延后**：Easy-ES 全文检索（旧 `bean_sys_area` 索引）延后至阶段 4（`nla-common-elasticsearch`）再评估；真实 MySQL 执行和索引性能仍待环境验收。
 
 **验证**：`nla-modules/nla-system -am` 编译 `MVN_EXIT=0`；`SysAreaMapper` 的 IDE 自动装配告警为 MyBatis `@MapperScan` 运行时注册的静态分析假阳性，与基线全部 mapper（如 `SysPostMapper` 同样无 `@Mapper` 注解）一致。
